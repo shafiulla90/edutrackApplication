@@ -104,17 +104,39 @@ export class AuthService {
 
     const portalRole = (portal === 'teacher' ? 'TEACHER' : portal === 'parent' ? 'PARENT' : portal === 'student' ? 'STUDENT' : 'SCHOOL_ADMIN');
 
-    const tenants = await this.tenantRepo.findAll();
-    const primaryTenant = (existingUser ? tenants.find((t: any) => t.id === existingUser.tenantId) : null) || tenants[0] || { id: 'tenant-test-001', name: 'EduTrack School' };
+    if (!existingUser) {
+      if (portalRole === 'SCHOOL_ADMIN' || !portal || portal === 'admin') {
+        console.log(`[AuthService] Mobile number ${cleanedPhone} NOT FOUND in Firestore -> Redirecting to School Registration`);
+        return {
+          success: false,
+          notFound: true,
+          redirectToRegister: true,
+          portal: 'admin',
+          message: 'School Administrator account not found. Please register your school.',
+        };
+      } else {
+        console.log(`[AuthService] Mobile number ${cleanedPhone} NOT FOUND in Firestore for ${portalRole}`);
+        return {
+          success: false,
+          notFound: true,
+          redirectToRegister: false,
+          portal,
+          message: `${portal.toUpperCase()} account not found. Please contact your School Administrator.`,
+        };
+      }
+    }
 
-    const generatedOtp = '123456';
+    const tenants = await this.tenantRepo.findAll();
+    const primaryTenant = tenants.find((t: any) => t.id === existingUser.tenantId) || tenants[0] || { id: 'tenant-test-001', name: 'EduTrack School' };
+
+    const generatedOtp = Math.floor(100000 + Math.random() * 900000).toString();
     this.otpStore.set(cleanedPhone, {
       code: generatedOtp,
-      expiresAt: Date.now() + 15 * 60 * 1000,
+      expiresAt: Date.now() + 5 * 60 * 1000,
     });
 
     console.log(`\n==========================================`);
-    console.log(`[EduTrack Auth] TEST OTP FOR USER (${cleanedPhone}): 123456`);
+    console.log(`[EduTrack Auth] REAL-TIME OTP FOR REGISTERED USER (${cleanedPhone}): ${generatedOtp}`);
     console.log(`==========================================\n`);
 
     return {
@@ -122,10 +144,9 @@ export class AuthService {
       registered: true,
       schoolName: primaryTenant.name || 'EduTrack School',
       logoUrl: primaryTenant.logoUrl || null,
-      message: 'OTP sent successfully. Use test OTP 123456 to log in.',
+      message: 'OTP sent successfully to registered mobile number',
       phone: cleanedPhone,
-      code: '123456',
-      otp: '123456',
+      code: generatedOtp,
       tenantId: primaryTenant.id,
     };
   }
@@ -138,11 +159,15 @@ export class AuthService {
       existingUser = await this.userRepo.findByPhone(cleanedPhone);
     }
 
-    const tenants = await this.tenantRepo.findAll();
-    const tenant = (existingUser ? tenants.find((t: any) => t.id === existingUser.tenantId) : null) || tenants[0] || { id: 'tenant-test-001', name: 'EduTrack School' };
+    if (!existingUser) {
+      throw new UnauthorizedException('Mobile number not found. Access denied.');
+    }
 
-    const role = (existingUser?.role) || (portal === 'teacher' ? 'TEACHER' : portal === 'parent' ? 'PARENT' : 'SCHOOL_ADMIN');
-    const userId = existingUser?.id || `user-phone-${cleanedPhone}`;
+    const tenants = await this.tenantRepo.findAll();
+    const tenant = tenants.find((t: any) => t.id === existingUser.tenantId) || tenants[0] || { id: 'tenant-test-001', name: 'EduTrack School' };
+
+    const role = existingUser.role || (portal === 'teacher' ? 'TEACHER' : portal === 'parent' ? 'PARENT' : 'SCHOOL_ADMIN');
+    const userId = existingUser.id || `user-phone-${cleanedPhone}`;
 
     const payload = {
       sub: userId,
@@ -158,8 +183,8 @@ export class AuthService {
       user: {
         id: userId,
         phone: cleanedPhone,
-        email: existingUser?.email || `${portal || 'admin'}@edutrack.com`,
-        name: existingUser?.name || 'School Administrator',
+        email: existingUser.email || `${portal || 'user'}@edutrack.com`,
+        name: existingUser.name || 'School Administrator',
         role,
         tenantId: tenant.id,
         tenant,
