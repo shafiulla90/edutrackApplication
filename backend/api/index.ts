@@ -3,21 +3,15 @@ import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import express from 'express';
 import { ExpressAdapter } from '@nestjs/platform-express';
-import * as path from 'path';
 
-// Safe multi-path loader for compiled NestJS AppModule
+// Import AppModule directly from src/app.module
+// Vercel's @vercel/node builder automatically compiles and traces all NestJS TypeScript files in src/!
+// eslint-disable-next-line @typescript-eslint/no-var-requires
 let AppModule: any;
 try {
-  const imported = require('../dist/app.module');
-  AppModule = imported.AppModule || imported.default;
-} catch (e1) {
-  try {
-    const imported = require('./dist/app.module');
-    AppModule = imported.AppModule || imported.default;
-  } catch (e2) {
-    const imported = require(path.join(process.cwd(), 'dist', 'app.module'));
-    AppModule = imported.AppModule || imported.default;
-  }
+  AppModule = require('../src/app.module').AppModule;
+} catch (e) {
+  AppModule = require('./src/app.module').AppModule;
 }
 
 const server = express();
