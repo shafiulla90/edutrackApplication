@@ -3,7 +3,10 @@
   "version": "1.0.6",
   "private": true,
   "scripts": {
-    "build": "npm run build --prefix frontend",
-    "dev": "npm run dev --prefix frontend"
+    "build": "cd frontend && npm install && next build",
+    "dev": "cd frontend && next dev"
+  },
+  "dependencies": {
+    "next": "^14.1.0"
   }
 }
