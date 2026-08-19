@@ -5,8 +5,6 @@ import express from 'express';
 import { ExpressAdapter } from '@nestjs/platform-express';
 
 // Import AppModule directly from src/app.module
-// Vercel's @vercel/node builder automatically compiles and traces all NestJS TypeScript files in src/!
-// eslint-disable-next-line @typescript-eslint/no-var-requires
 let AppModule: any;
 try {
   AppModule = require('../src/app.module').AppModule;
@@ -36,6 +34,13 @@ async function bootstrap() {
 export default async function handler(req: any, res: any) {
   try {
     await bootstrap();
+    // Handle Vercel serverless request URL rewrite
+    // If req.url starts with /api, strip /api prefix so NestJS matches /, /auth, /students, etc.
+    if (req.url.startsWith('/api/')) {
+      req.url = req.url.substring(4);
+    } else if (req.url === '/api' || req.url === '/api/') {
+      req.url = '/';
+    }
     server(req, res);
   } catch (error: any) {
     console.error('CRITICAL SERVERLESS BOOTSTRAP ERROR:', error);
