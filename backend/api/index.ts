@@ -3,10 +3,22 @@ import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import express from 'express';
 import { ExpressAdapter } from '@nestjs/platform-express';
+import * as path from 'path';
 
-// Import compiled module from dist to ensure all NestJS decorator metadata is preserved!
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const { AppModule } = require('../dist/app.module');
+// Safe multi-path loader for compiled NestJS AppModule
+let AppModule: any;
+try {
+  const imported = require('../dist/app.module');
+  AppModule = imported.AppModule || imported.default;
+} catch (e1) {
+  try {
+    const imported = require('./dist/app.module');
+    AppModule = imported.AppModule || imported.default;
+  } catch (e2) {
+    const imported = require(path.join(process.cwd(), 'dist', 'app.module'));
+    AppModule = imported.AppModule || imported.default;
+  }
+}
 
 const server = express();
 let cachedApp: any;
