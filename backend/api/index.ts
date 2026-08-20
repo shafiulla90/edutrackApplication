@@ -3,12 +3,7 @@ import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import * as express from 'express';
 import { ExpressAdapter } from '@nestjs/platform-express';
-let AppModule: any;
-try {
-  AppModule = require('../dist/src/app.module').AppModule;
-} catch (e) {
-  AppModule = require('../src/app.module').AppModule;
-}
+import { AppModule } from '../src/app.module';
 
 const server = express();
 let cachedApp: any;
@@ -72,5 +67,3 @@ export default async function handler(req: any, res: any) {
 
 module.exports = handler;
 module.exports.default = handler;
-
-
