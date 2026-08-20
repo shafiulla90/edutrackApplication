@@ -1,5 +1,6 @@
 import { Controller, Get, Post, Patch, Delete, Param, Body, Request, Query } from '@nestjs/common';
 import { TimetableService } from './timetable.service';
+import { getTenantIdFromReq } from '../../common/utils/tenant.util';
 import {
   CreateClassDto,
   CreateSectionDto,
@@ -19,7 +20,7 @@ export class TimetableController {
   constructor(private readonly timetableService: TimetableService) {}
 
   private getTenantId(req: any): string {
-    return req?.user?.tenantId || 'tenant-test-001';
+    return getTenantIdFromReq(req);
   }
 
   @Get('academic-years')

@@ -1,6 +1,7 @@
-import { Controller, Get, Post, Body, Param, Request, Res } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Query, Request, Res } from '@nestjs/common';
 import { ParentPortalService } from './parent-portal.service';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
+import { getTenantIdFromReq } from '../../common/utils/tenant.util';
 
 @ApiTags('Parent Portal')
 @Controller('parent-portal')
@@ -8,16 +9,17 @@ export class ParentPortalController {
   constructor(private readonly portalService: ParentPortalService) {}
 
   @Get('dashboard')
-  async getDashboard(@Request() req: any) {
-    const userId = req?.user?.id || 'user-parent';
-    const tenantId = req?.user?.tenantId || 'tenant-test-001';
+  async getDashboard(@Request() req: any, @Query('parentId') queryParentId?: string) {
+    const userId = queryParentId || req?.user?.email || req?.user?.id || 'user-parent';
+    const tenantId = getTenantIdFromReq(req);
     return this.portalService.getDashboardStats(userId, tenantId);
   }
 
   @Get('children')
-  async getChildren(@Request() req: any) {
-    const userId = req?.user?.id || 'user-parent';
-    return this.portalService.getChildren(userId);
+  async getChildren(@Request() req: any, @Query('parentId') queryParentId?: string) {
+    const parentIdentity = queryParentId || req?.user?.email || req?.user?.id || 'user-parent';
+    const tenantId = getTenantIdFromReq(req);
+    return this.portalService.getChildren(parentIdentity, tenantId);
   }
 
   @Get('children/:studentId/dashboard')
@@ -110,7 +112,7 @@ export class ParentPortalController {
   @Post('complaints')
   async submitComplaint(@Request() req: any, @Body() data: any) {
     const userId = req?.user?.id || 'user-parent';
-    const tenantId = req?.user?.tenantId || 'tenant-test-001';
+    const tenantId = getTenantIdFromReq(req);
     return this.portalService.submitComplaint(userId, tenantId, data);
   }
 

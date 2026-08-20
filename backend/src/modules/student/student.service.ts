@@ -7,7 +7,8 @@ export class StudentService {
   constructor(@Inject('IStudentRepository') private readonly studentRepo: IStudentRepository) {}
 
   async findAll(tenantId: string, page = 1, limit = 100, filters?: any) {
-    const res = await this.studentRepo.findStudentsByTenant(tenantId || 'tenant-test-001', page, limit, filters);
+    if (!tenantId) throw new Error('tenantId is required');
+    const res = await this.studentRepo.findStudentsByTenant(tenantId, page, limit, filters);
     const items = res?.items || [];
     const total = res?.total !== undefined ? res.total : items.length;
     return {
@@ -24,11 +25,12 @@ export class StudentService {
   }
 
   async create(data: any, tenantId: string) {
+    if (!tenantId) throw new Error('tenantId is required');
     const id = data.id || randomUUID();
     return this.studentRepo.createProfile({
       ...data,
       id,
-      tenantId: tenantId || 'tenant-test-001',
+      tenantId,
       createdAt: new Date().toISOString(),
     });
   }
@@ -48,7 +50,8 @@ export class StudentService {
   }
 
   async importStudentsBulk(studentsData: any[], tenantId: string) {
-    const tid = tenantId || 'tenant-test-001';
+    if (!tenantId) throw new Error('tenantId is required');
+    const tid = tenantId;
     let importedCount = 0;
     const errors: string[] = [];
 

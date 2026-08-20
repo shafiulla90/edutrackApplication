@@ -13,8 +13,9 @@ export class DashboardService {
     @Optional() private readonly firebase?: FirebaseService,
   ) {}
 
-  async getDashboardSummary(tenantId?: string) {
-    const tid = tenantId && tenantId !== 'undefined' ? tenantId : 'tenant-test-001';
+  async getDashboardSummary(tenantId: string) {
+    if (!tenantId) throw new Error('tenantId is required');
+    const tid = tenantId;
 
     // 1. Fetch Students
     const studentRes = await this.studentRepo.findStudentsByTenant(tid, 1, 1000);
@@ -40,8 +41,9 @@ export class DashboardService {
       }
     });
 
-    // 5. Fetch Payments / Revenue & Recent Transactions
+    // 5. Fetch Payments / Revenue & Outstanding Balance
     let totalRevenue = 0;
+    let outstandingReceivables = 0;
     let recentPayments: any[] = [];
 
     if (this.firebase) {
@@ -54,7 +56,6 @@ export class DashboardService {
             const amt = d.amountCents !== undefined ? d.amountCents / 100 : Number(d.amount || 0);
             totalRevenue += amt;
 
-            // Resolve real student name or fee item description
             let matchedStudent = d.studentId ? studentMap.get(d.studentId) : null;
             if (!matchedStudent && d.rollNo) matchedStudent = studentMap.get(d.rollNo);
 
@@ -91,32 +92,23 @@ export class DashboardService {
           }
         });
 
-        if (recentPayments.length === 0) {
-          const invSnap = await db.collection('tenants').doc(tid).collection('invoices').get();
-          invSnap.docs.forEach((doc) => {
-            const d = doc.data();
+        const invSnap = await db.collection('tenants').doc(tid).collection('invoices').get();
+        invSnap.docs.forEach((doc) => {
+          const d = doc.data();
+          if (d.status !== 'PAID') {
+            outstandingReceivables += Number(d.remainingBalance || 0);
+          }
+          if (recentPayments.length === 0) {
             const paid = Number(d.paidAmount || d.amountPaid || 0);
-            totalRevenue += paid;
             if (paid > 0) {
               let matchedStudent = d.studentId ? studentMap.get(d.studentId) : null;
-              let resolvedName = matchedStudent
-                ? (matchedStudent.name || matchedStudent.user?.name)
-                : null;
-
-              if (!resolvedName && d.studentName && d.studentName.toLowerCase() !== 'student') {
-                resolvedName = d.studentName;
-              }
-
-              if (!resolvedName || resolvedName.toLowerCase() === 'student') {
-                resolvedName = `Fee Collection (${d.paymentMethod || 'CASH'})`;
-              }
-
+              let resolvedName = matchedStudent ? (matchedStudent.name || matchedStudent.user?.name) : d.studentName;
               recentPayments.push({
                 id: doc.id,
                 type: 'Fee Payment',
-                particulars: resolvedName,
-                name: resolvedName,
-                studentName: resolvedName,
+                particulars: resolvedName || 'Fee Collection',
+                name: resolvedName || 'Fee Collection',
+                studentName: resolvedName || 'Fee Collection',
                 rollNo: d.rollNo || matchedStudent?.rollNo || 'N/A',
                 amount: paid,
                 date: d.paymentDate || d.createdAt || new Date().toISOString(),
@@ -124,19 +116,24 @@ export class DashboardService {
                 status: 'COMPLETED',
               });
             }
-          });
-        }
+          }
+        });
       } catch (err) {
         console.warn('DashboardService payments fetch warning:', err);
       }
     }
 
-    // Sort recent payments descending by date
     recentPayments.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     recentPayments = recentPayments.slice(0, 10);
 
-    // 6. Recent Admissions
-    const recentAdmissions = students.slice(0, 10).map((s: any) => {
+    // 6. Recent Admissions (ordered by createdAt descending)
+    const sortedStudents = [...students].sort((a: any, b: any) => {
+      const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+      const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+      return timeB - timeA;
+    });
+
+    const recentAdmissions = sortedStudents.slice(0, 10).map((s: any) => {
       const sName = s.name || s.user?.name || s.studentName || `${s.firstName || ''} ${s.lastName || ''}`.trim() || 'Student';
       const cName = s.className || s.classSection?.class?.name || s.class || 'Grade 1';
       const secName = s.sectionName || s.classSection?.section?.name || s.section || 'Section A';
@@ -170,16 +167,17 @@ export class DashboardService {
         totalRevenue,
         totalExpenses: 0,
         netIncome: totalRevenue,
-        attendanceRate: 94.2,
+        outstandingReceivables,
+        attendanceRate: 100,
         academicAverage: 85.6,
         pendingLeaveRequests: 0,
         approvedToday: 0,
         rejectedToday: 0,
         trends: {
-          students: { value: '+5%', isUp: true },
-          revenue: { value: '+12%', isUp: true },
-          attendance: { value: '1.5%', isUp: true },
-          academic: { value: '0.8%', isUp: true },
+          students: { value: '+0%', isUp: true },
+          revenue: { value: '+0%', isUp: true },
+          attendance: { value: '0%', isUp: true },
+          academic: { value: '0%', isUp: true },
         },
       },
       recentAdmissions,
@@ -193,18 +191,14 @@ export class DashboardService {
     };
   }
 
-  async getReportsAnalytics(tenantId?: string) {
-    const tid = tenantId && tenantId !== 'undefined' ? tenantId : 'tenant-test-001';
+  async getReportsAnalytics(tenantId: string) {
+    if (!tenantId) throw new Error('tenantId is required');
+    const tid = tenantId;
 
     try {
-      // 1. Demographics calculation
-      let totalStudents = 6;
-      let students: any[] = [];
-      try {
-        const studentRes = await this.studentRepo.findStudentsByTenant(tid, 1, 1000);
-        students = studentRes?.items || [];
-        totalStudents = students.length || 6;
-      } catch (err) {}
+      const studentRes = await this.studentRepo.findStudentsByTenant(tid, 1, 1000);
+      const students = studentRes?.items || [];
+      const totalStudents = students.length;
 
       const classDistribution: Record<string, number> = {};
       students.forEach((s: any) => {
@@ -220,9 +214,8 @@ export class DashboardService {
 
       const timeline = Object.keys(dateMap).map(date => ({ date, count: dateMap[date] }));
 
-      // 2. Financials calculation from Firestore
-      let totalRevenue = 15001;
-      let outstandingReceivables = 35000;
+      let totalRevenue = 0;
+      let outstandingReceivables = 0;
 
       if (this.firebase) {
         const db = this.firebase.getFirestore();
@@ -239,7 +232,9 @@ export class DashboardService {
           const invSnap = await db.collection('tenants').doc(tid).collection('invoices').get();
           invSnap.docs.forEach((doc) => {
             const d = doc.data();
-            outstandingReceivables += Number(d.remainingBalance || 0);
+            if (d.status !== 'PAID') {
+              outstandingReceivables += Number(d.remainingBalance || 0);
+            }
           });
         } catch (err) {}
       }

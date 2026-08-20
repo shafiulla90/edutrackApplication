@@ -33,10 +33,10 @@ export class TeacherPortalService {
   }
 
   async getAssignedClasses(teacherId: string, tenantId: string) {
-    return [
-      { id: 'cs-1', name: 'Grade 10 - Section A', classId: 'c-10', sectionId: 's-A' },
-      { id: 'cs-2', name: 'Grade 9 - Section B', classId: 'c-9', sectionId: 's-B' },
-    ];
+    if (this.teacherRepo.findTeacherAssignments) {
+      return this.teacherRepo.findTeacherAssignments(teacherId, tenantId);
+    }
+    return [];
   }
 
   async getStudentsForClassSection(teacherId: string, tenantId: string, classSectionId: string) {

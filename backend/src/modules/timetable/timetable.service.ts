@@ -18,104 +18,45 @@ export class TimetableService {
 
   // ACADEMIC YEARS
   async getAcademicYears(tenantId: string) {
-    if (process.env.DB_PROVIDER === 'firebase') {
-      return this.academicRepo.findAcademicYears(tenantId);
-    }
-    return this.prisma.academicYear.findMany({
-      where: { tenantId, isActive: true },
-      orderBy: { startDate: 'desc' },
-    });
+    return this.academicRepo.findAcademicYears(tenantId);
   }
 
   // CLASSES
   async getClasses(tenantId: string) {
-    if (process.env.DB_PROVIDER === 'firebase') {
-      return this.academicRepo.findClasses(tenantId);
-    }
-    return this.prisma.class.findMany({
-      where: { tenantId, isActive: true },
-      orderBy: { name: 'asc' },
-    });
+    return this.academicRepo.findClasses(tenantId);
   }
 
   async createClass(tenantId: string, name: string) {
     if (!name) throw new BadRequestException('Class Name is required.');
-
-    if (process.env.DB_PROVIDER === 'firebase') {
-      return this.academicRepo.createClass({
-        name: name.trim(),
-        tenantId,
-        isActive: true,
-        createdAt: new Date().toISOString(),
-      });
-    }
-
-    const activeYear = await this.prisma.academicYear.findFirst({
-      where: { tenantId, isActive: true },
-    });
-
-    return this.prisma.class.create({
-      data: {
-        id: randomUUID(),
-        name: name.trim(),
-        tenantId,
-        academicYearId: activeYear?.id || null,
-        isActive: true,
-      },
+    return this.academicRepo.createClass({
+      name: name.trim(),
+      tenantId,
+      isActive: true,
+      createdAt: new Date().toISOString(),
     });
   }
 
   async deleteClass(tenantId: string, classId: string) {
-    if (process.env.DB_PROVIDER === 'firebase') {
-      return this.academicRepo.deleteClass(classId);
-    }
-    const linked = await this.prisma.classSection.findFirst({
-      where: { classId },
-    });
-    if (linked) {
-      throw new BadRequestException('Cannot delete this class because it is linked to one or more class sections.');
-    }
-
-    return this.prisma.class.delete({
-      where: { id: classId },
-    });
+    return this.academicRepo.deleteClass(classId);
   }
 
   // SECTIONS
   async getSections(tenantId: string) {
-    if (process.env.DB_PROVIDER === 'firebase') {
-      return this.academicRepo.findSections(tenantId);
-    }
-    return this.prisma.section.findMany({
-      where: { tenantId, isActive: true },
-      orderBy: { name: 'asc' },
-    });
+    return this.academicRepo.findSections(tenantId);
   }
 
   async createSection(tenantId: string, name: string) {
     if (!name) throw new BadRequestException('Section Name is required.');
-
-    if (process.env.DB_PROVIDER === 'firebase') {
-      return this.academicRepo.createSection({
-        name: name.trim(),
-        tenantId,
-        isActive: true,
-        createdAt: new Date().toISOString(),
-      });
-    }
-
-    return this.prisma.section.create({
-      data: {
-        id: randomUUID(),
-        name: name.trim(),
-        tenantId,
-        isActive: true,
-      },
+    return this.academicRepo.createSection({
+      name: name.trim(),
+      tenantId,
+      isActive: true,
+      createdAt: new Date().toISOString(),
     });
   }
 
   async deleteSection(tenantId: string, sectionId: string) {
-    if (process.env.DB_PROVIDER === 'firebase') {
+    if (true) {
       return this.academicRepo.deleteSection ? (this.academicRepo as any).deleteSection(sectionId, tenantId) : { id: sectionId };
     }
     const linked = await this.prisma.classSection.findFirst({
@@ -132,7 +73,7 @@ export class TimetableService {
 
   // PERIOD TIMINGS
   async getPeriodTimings(tenantId: string) {
-    if (process.env.DB_PROVIDER === 'firebase') {
+    if (true) {
       try {
         const db = this.firebase?.getFirestore();
         if (!db) return [];
@@ -270,7 +211,7 @@ export class TimetableService {
 
   // SUBJECTS
   async getSubjects(tenantId: string) {
-    if (process.env.DB_PROVIDER === 'firebase') {
+    if (true) {
       return this.academicRepo.findSubjects(tenantId);
     }
     return this.prisma.subject.findMany({
@@ -282,7 +223,7 @@ export class TimetableService {
   async createSubject(tenantId: string, data: { name: string; code?: string; description?: string }) {
     if (!data.name) throw new BadRequestException('Subject Name is required.');
 
-    if (process.env.DB_PROVIDER === 'firebase') {
+    if (true) {
       return this.academicRepo.createSubject({
         name: data.name.trim(),
         tenantId,
@@ -309,7 +250,7 @@ export class TimetableService {
   }
 
   async deleteSubject(tenantId: string, id: string) {
-    if (process.env.DB_PROVIDER === 'firebase') {
+    if (true) {
       return this.academicRepo.deleteSubject ? this.academicRepo.deleteSubject(id) : { id };
     }
     return this.prisma.subject.delete({
@@ -322,7 +263,7 @@ export class TimetableService {
       throw new BadRequestException('No subject data provided.');
     }
 
-    if (process.env.DB_PROVIDER === 'firebase') {
+    if (true) {
       let created = 0;
       for (const item of subjectsData) {
         if (item.name && item.name.trim()) {
@@ -423,7 +364,7 @@ export class TimetableService {
   async getTeachersForSubject(tenantId: string, subjectIds: string[]) {
     if (!subjectIds || subjectIds.length === 0) return {};
 
-    if (process.env.DB_PROVIDER === 'firebase') {
+    if (true) {
       const teachers = await this.teacherRepo.findTeachersByTenant(tenantId);
       const result: Record<string, any[]> = {};
       for (const sid of subjectIds) {
@@ -476,7 +417,7 @@ export class TimetableService {
       throw new BadRequestException('Email is required.');
     }
 
-    if (process.env.DB_PROVIDER === 'firebase') {
+    if (true) {
       const userId = 'user-t-' + Date.now();
       const teacherId = 'teacher-' + Date.now();
 
@@ -702,7 +643,7 @@ export class TimetableService {
 
   // WORKLOAD SUMMARY
   async getWorkloadSummary(tenantId: string, academicYearId?: string) {
-    if (process.env.DB_PROVIDER === 'firebase') {
+    if (true) {
       const db = this.firebase?.getFirestore();
       if (!db) return { totalClassSections: 0, totalTeachers: 0, totalAssignments: 0, avgLoadPercent: 0 };
 
@@ -778,7 +719,7 @@ export class TimetableService {
 
   // GET ALL TEACHER WORKLOADS
   async getAllTeacherWorkloads(tenantId: string) {
-    if (process.env.DB_PROVIDER === 'firebase') {
+    if (true) {
       try {
         const db = this.firebase?.getFirestore();
         if (!db) return [];
@@ -888,7 +829,7 @@ export class TimetableService {
 
   // GET ALL CLASS WORKLOADS
   async getAllClassWorkloads(tenantId: string) {
-    if (process.env.DB_PROVIDER === 'firebase') {
+    if (true) {
       try {
         const db = this.firebase?.getFirestore();
         if (!db) return [];
@@ -1271,7 +1212,7 @@ export class TimetableService {
 
   // GET ALL CLASS SECTIONS
   async getAllClassSections(tenantId: string) {
-    if (process.env.DB_PROVIDER === 'firebase') {
+    if (true) {
       try {
         const classSections = await this.academicRepo.findClassSections(tenantId);
         const results = [];
@@ -1326,7 +1267,7 @@ export class TimetableService {
 
   // GET ALL TEACHERS
   async getAllTeachers(tenantId: string) {
-    if (process.env.DB_PROVIDER === 'firebase') {
+    if (true) {
       try {
         const teachers = await this.teacherRepo.findTeachersByTenant(tenantId);
         return teachers.map((t: any) => ({

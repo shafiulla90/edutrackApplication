@@ -39,7 +39,8 @@ export class FirestoreExamRepository implements IExamRepository {
   }
 
   async upsertExamMark(data: any): Promise<any> {
-    const tenantId = data.tenantId || 'tenant-test-001';
+    if (!data.tenantId) throw new Error('tenantId is required');
+    const tenantId = data.tenantId;
     const docId = data.id || DeterministicKey.examMark(data.examId, data.studentId, data.subjectId);
 
     const examSnap = await this.db.collectionGroup('exams').where('id', '==', data.examId).limit(1).get();
@@ -62,7 +63,8 @@ export class FirestoreExamRepository implements IExamRepository {
   }
 
   async createExam(data: any): Promise<any> {
-    const tenantId = data.tenantId || 'tenant-test-001';
+    if (!data.tenantId) throw new Error('tenantId is required');
+    const tenantId = data.tenantId;
     const ref = data.id ? this.db.collection('tenants').doc(tenantId).collection('exams').doc(data.id) : this.db.collection('tenants').doc(tenantId).collection('exams').doc();
     const payload = {
       ...data,

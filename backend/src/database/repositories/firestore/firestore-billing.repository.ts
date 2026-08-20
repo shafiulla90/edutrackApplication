@@ -27,7 +27,30 @@ export class FirestoreBillingRepository implements IBillingRepository {
     });
   }
 
-  async findInvoiceById(id: string): Promise<any | null> {
+  async findInvoiceById(id: string, tenantId?: string): Promise<any | null> {
+    if (tenantId) {
+      const doc = await this.db.collection('tenants').doc(tenantId).collection('invoices').doc(id).get();
+      if (doc.exists) {
+        const data = doc.data() || {};
+        const itemsSnap = await doc.ref.collection('items').get();
+        return {
+          id: doc.id,
+          ...data,
+          totalAmount: data.totalAmountCents !== undefined ? fromCents(data.totalAmountCents) : Number(data.totalAmount || 0),
+          paidAmount: data.paidAmountCents !== undefined ? fromCents(data.paidAmountCents) : Number(data.paidAmount || 0),
+          remainingBalance: data.remainingBalanceCents !== undefined ? fromCents(data.remainingBalanceCents) : Number(data.remainingBalance || 0),
+          InvoiceItem: itemsSnap.docs.map((itemDoc) => {
+            const itemData = itemDoc.data();
+            return {
+              id: itemDoc.id,
+              ...itemData,
+              amount: itemData.amountCents !== undefined ? fromCents(itemData.amountCents) : Number(itemData.amount || 0),
+            };
+          }),
+        };
+      }
+    }
+
     const snap = await this.db.collectionGroup('invoices').where('id', '==', id).limit(1).get();
     if (snap.empty) return null;
     const doc = snap.docs[0];
@@ -66,7 +89,8 @@ export class FirestoreBillingRepository implements IBillingRepository {
   }
 
   async createInvoice(invoiceData: any, items: any[]): Promise<any> {
-    const tenantId = invoiceData.tenantId || 'tenant-test-001';
+    if (!invoiceData.tenantId) throw new Error('tenantId is required');
+    const tenantId = invoiceData.tenantId;
     const invRef = invoiceData.id ? this.db.collection('tenants').doc(tenantId).collection('invoices').doc(invoiceData.id) : this.db.collection('tenants').doc(tenantId).collection('invoices').doc();
 
     const batch = this.db.batch();
@@ -119,36 +143,97 @@ export class FirestoreBillingRepository implements IBillingRepository {
   }
 
   async createPayment(paymentData: any): Promise<any> {
-    const tenantId = paymentData.tenantId || 'tenant-test-001';
+    if (!paymentData.tenantId) throw new Error('tenantId is required');
+    const tenantId = paymentData.tenantId;
+    const paymentAmount = Number(paymentData.amount || 0);
+    const amountCents = toCents(paymentAmount);
+
     const ref = paymentData.id
       ? this.db.collection('tenants').doc(tenantId).collection('payments').doc(paymentData.id)
       : this.db.collection('tenants').doc(tenantId).collection('payments').doc();
+
     const payload = {
       ...paymentData,
       id: ref.id,
       tenantId,
-      amount: Number(paymentData.amount || 0),
-      amountCents: toCents(paymentData.amount || 0),
+      amount: paymentAmount,
+      amountCents,
       createdAt: paymentData.createdAt || new Date().toISOString(),
     };
-    await ref.set(payload, { merge: true });
+
+    await this.db.runTransaction(async (transaction) => {
+      let invoiceRef: FirebaseFirestore.DocumentReference | null = null;
+      let currentInvoiceData: any = null;
+      if (paymentData.invoiceId) {
+        invoiceRef = this.db.collection('tenants').doc(tenantId).collection('invoices').doc(paymentData.invoiceId);
+        const invSnap = await transaction.get(invoiceRef);
+        if (invSnap.exists) {
+          currentInvoiceData = invSnap.data();
+        }
+      }
+
+      let studentRef: FirebaseFirestore.DocumentReference | null = null;
+      let currentStudentData: any = null;
+      if (paymentData.studentId) {
+        studentRef = this.db.collection('studentProfiles').doc(paymentData.studentId);
+        const sSnap = await transaction.get(studentRef);
+        if (sSnap.exists) {
+          currentStudentData = sSnap.data();
+        }
+      }
+
+      transaction.set(ref, payload, { merge: true });
+
+      if (invoiceRef && currentInvoiceData) {
+        const prevPaidCents = currentInvoiceData.paidAmountCents !== undefined ? currentInvoiceData.paidAmountCents : toCents(currentInvoiceData.paidAmount || 0);
+        const totalCents = currentInvoiceData.totalAmountCents !== undefined ? currentInvoiceData.totalAmountCents : toCents(currentInvoiceData.totalAmount || 0);
+
+        const newPaidCents = prevPaidCents + amountCents;
+        const newRemainingCents = Math.max(0, totalCents - newPaidCents);
+        const newStatus = newRemainingCents <= 0 ? 'PAID' : newPaidCents > 0 ? 'PARTIAL' : 'UNPAID';
+
+        transaction.set(invoiceRef, {
+          paidAmountCents: newPaidCents,
+          paidAmount: fromCents(newPaidCents),
+          remainingBalanceCents: newRemainingCents,
+          remainingBalance: fromCents(newRemainingCents),
+          status: newStatus,
+          updatedAt: new Date().toISOString(),
+        }, { merge: true });
+      }
+
+      if (studentRef && currentStudentData) {
+        const prevPaid = Number(currentStudentData.paidAmount || 0);
+        const prevBalance = Number(currentStudentData.balanceDue || 0);
+
+        transaction.set(studentRef, {
+          paidAmount: prevPaid + paymentAmount,
+          balanceDue: Math.max(0, prevBalance - paymentAmount),
+          financialStatus: (prevBalance - paymentAmount) <= 0 ? 'Paid' : 'Partial',
+          updatedAt: new Date().toISOString(),
+        }, { merge: true });
+      }
+    });
+
     return payload;
   }
 
   async findPaymentById(id: string, tenantId?: string): Promise<any | null> {
-    const tid = tenantId || 'tenant-test-001';
+    if (!tenantId) throw new Error('tenantId is required');
+    const tid = tenantId;
     const doc = await this.db.collection('tenants').doc(tid).collection('payments').doc(id).get();
     if (doc.exists) return { id: doc.id, ...doc.data() };
 
     const snap = await this.db.collectionGroup('payments').where('id', '==', id).limit(1).get();
-    if (!snap.empty) {
+    if (!snap.empty && snap.docs[0].data()?.tenantId === tid) {
       return { id: snap.docs[0].id, ...snap.docs[0].data() };
     }
     return null;
   }
 
   async getRecentPayments(tenantId: string, limit = 50): Promise<any[]> {
-    const tid = tenantId || 'tenant-test-001';
+    if (!tenantId) throw new Error('tenantId is required');
+    const tid = tenantId;
     const snap = await this.db.collection('tenants').doc(tid).collection('payments').limit(limit).get();
     
     const studentIds = Array.from(new Set(snap.docs.map(doc => doc.data().studentId).filter(Boolean)));

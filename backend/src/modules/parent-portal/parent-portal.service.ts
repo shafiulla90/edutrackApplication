@@ -1,25 +1,30 @@
 import { Injectable, Inject } from '@nestjs/common';
 import { IBillingRepository } from '../../common/interfaces/billing.repository.interface';
 import { IOperationsRepository } from '../../common/interfaces/operations.repository.interface';
+import { IStudentRepository } from '../../common/interfaces/student.repository.interface';
 
 @Injectable()
 export class ParentPortalService {
   constructor(
     @Inject('IBillingRepository') private readonly billingRepo: IBillingRepository,
     @Inject('IOperationsRepository') private readonly opsRepo: IOperationsRepository,
+    @Inject('IStudentRepository') private readonly studentRepo: IStudentRepository,
   ) {}
 
   async getDashboardStats(userId: string, tenantId: string) {
-    return { childrenCount: 1, pendingFees: 0, newAnnouncements: 0 };
+    const children = await this.getChildren(userId, tenantId);
+    return { childrenCount: children.length, pendingFees: 0, newAnnouncements: 0 };
   }
 
-  async getChildren(userId: string) {
-    return [
-      { id: 'student-1', name: 'Alex Smith', class: 'Grade 10', rollNo: '101' },
-    ];
+  async getChildren(userId: string, tenantId?: string) {
+    if (!tenantId) throw new Error('tenantId is required');
+    if (this.studentRepo.findStudentsByParent) {
+      return this.studentRepo.findStudentsByParent(userId, tenantId);
+    }
+    return [];
   }
 
-  async getChildDashboard(userId: string, studentId: string) {
+  async getChildDashboard(userId: string, studentId: string, tenantId?: string) {
     return { studentId, name: 'Alex Smith', attendancePercentage: 92, pendingFees: 0 };
   }
 

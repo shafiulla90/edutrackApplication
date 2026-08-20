@@ -1,6 +1,7 @@
 import { Controller, Get, Post, Patch, Delete, Body, Param, Query, Request } from '@nestjs/common';
 import { AcademicsService } from './academics.service';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
+import { getTenantIdFromReq } from '../../common/utils/tenant.util';
 
 @ApiTags('Academics')
 @Controller('academics')
@@ -16,28 +17,28 @@ export class AcademicsController {
     @Body('isActive') isActive: boolean,
     @Request() req: any,
   ) {
-    const tenantId = req?.user?.tenantId || 'tenant-test-001';
+    const tenantId = getTenantIdFromReq(req);
     return this.academicsService.createAcademicYear(name, startDate, endDate, isActive, tenantId);
   }
 
   @Get('academic-years')
   @ApiOperation({ summary: 'Get all academic year terms' })
   async getYears(@Request() req: any) {
-    const tenantId = req?.user?.tenantId || 'tenant-test-001';
+    const tenantId = getTenantIdFromReq(req);
     return this.academicsService.getAcademicYears(tenantId);
   }
 
   @Patch('academic-years/:id/toggle')
   @ApiOperation({ summary: 'Toggle active status of academic year' })
   async toggleYearActive(@Param('id') id: string, @Request() req: any) {
-    const tenantId = req?.user?.tenantId || 'tenant-test-001';
+    const tenantId = getTenantIdFromReq(req);
     return this.academicsService.toggleAcademicYearActive(id, tenantId);
   }
 
   @Patch('academic-years/:id/active')
   @ApiOperation({ summary: 'Set active status of academic year' })
   async setYearActive(@Param('id') id: string, @Request() req: any) {
-    const tenantId = req?.user?.tenantId || 'tenant-test-001';
+    const tenantId = getTenantIdFromReq(req);
     return this.academicsService.toggleAcademicYearActive(id, tenantId);
   }
 
@@ -48,20 +49,21 @@ export class AcademicsController {
     @Body('academicYearId') academicYearId: string,
     @Request() req: any,
   ) {
-    const tenantId = req?.user?.tenantId || 'tenant-test-001';
+    const tenantId = getTenantIdFromReq(req);
     return this.academicsService.createClass(name, academicYearId, tenantId);
   }
 
   @Get('classes')
   @ApiOperation({ summary: 'Get classes' })
   async getClasses(@Query('academicYearId') academicYearId?: string, @Request() req?: any) {
-    const tenantId = req?.user?.tenantId || 'tenant-test-001';
+    const tenantId = getTenantIdFromReq(req);
     return this.academicsService.getClasses(academicYearId, tenantId);
   }
 
   @Get('classes/:id/student-count')
-  async getClassStudentCount(@Param('id') id: string) {
-    return this.academicsService.getClassStudentCount(id);
+  async getClassStudentCount(@Param('id') id: string, @Request() req: any) {
+    const tenantId = getTenantIdFromReq(req);
+    return this.academicsService.getClassStudentCount(id, tenantId);
   }
 
   @Delete('classes/:id')
@@ -71,13 +73,13 @@ export class AcademicsController {
 
   @Post('sections')
   async createSection(@Body('name') name: string, @Request() req?: any) {
-    const tenantId = req?.user?.tenantId || 'tenant-test-001';
+    const tenantId = getTenantIdFromReq(req);
     return this.academicsService.createSection(name, tenantId);
   }
 
   @Get('sections')
   async getSections(@Request() req?: any) {
-    const tenantId = req?.user?.tenantId || 'tenant-test-001';
+    const tenantId = getTenantIdFromReq(req);
     return this.academicsService.getSections(tenantId);
   }
 
@@ -93,25 +95,25 @@ export class AcademicsController {
     @Body('teacherId') teacherId?: string,
     @Request() req?: any,
   ) {
-    const tenantId = req?.user?.tenantId || 'tenant-test-001';
+    const tenantId = getTenantIdFromReq(req);
     return this.academicsService.createClassSection(classId, sectionId, teacherId, tenantId);
   }
 
   @Get('class-sections')
   async getClassSections(@Request() req?: any) {
-    const tenantId = req?.user?.tenantId || 'tenant-test-001';
+    const tenantId = getTenantIdFromReq(req);
     return this.academicsService.getClassSections(tenantId);
   }
 
   @Post('subjects')
   async createSubject(@Body('name') name: string, @Request() req?: any) {
-    const tenantId = req?.user?.tenantId || 'tenant-test-001';
+    const tenantId = getTenantIdFromReq(req);
     return this.academicsService.createSubject(name, tenantId);
   }
 
   @Get('subjects')
   async getSubjects(@Request() req?: any) {
-    const tenantId = req?.user?.tenantId || 'tenant-test-001';
+    const tenantId = getTenantIdFromReq(req);
     return this.academicsService.getSubjects(tenantId);
   }
 

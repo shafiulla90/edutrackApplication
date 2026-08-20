@@ -20,7 +20,8 @@ export class AttendanceService {
   }
 
   async getSession(tenantId: string, classSectionId: string, date: string) {
-    const tid = tenantId || 'tenant-test-001';
+    if (!tenantId) throw new Error('tenantId is required');
+    const tid = tenantId;
     try {
       const docId = `${classSectionId}_${date}`.replace(/[^a-zA-Z0-9_-]/g, '_');
       const docRef = this.db.collection('tenants').doc(tid).collection('attendanceSessions').doc(docId);
@@ -73,7 +74,8 @@ export class AttendanceService {
     totalStudents?: number;
     absentStudentIds: string[];
   }) {
-    const tid = tenantId || 'tenant-test-001';
+    if (!tenantId) throw new Error('tenantId is required');
+    const tid = tenantId;
     const docId = `${data.classSectionId}_${data.date}`.replace(/[^a-zA-Z0-9_-]/g, '_');
     const docRef = this.db.collection('tenants').doc(tid).collection('attendanceSessions').doc(docId);
 
@@ -97,7 +99,8 @@ export class AttendanceService {
   }
 
   async getClassReport(tenantId: string, classSectionId?: string, date?: string) {
-    const tid = tenantId || 'tenant-test-001';
+    if (!tenantId) throw new Error('tenantId is required');
+    const tid = tenantId;
     let query: FirebaseFirestore.Query = this.db.collection('tenants').doc(tid).collection('attendanceSessions');
     if (classSectionId) {
       query = query.where('classSectionId', '==', classSectionId);
@@ -119,7 +122,7 @@ export class AttendanceService {
       absentSum += s.absentCount || 0;
     });
 
-    const averagePercentage = totalStudentsSum > 0 ? ((presentSum / totalStudentsSum) * 100).toFixed(1) : '95.0';
+    const averagePercentage = totalStudentsSum > 0 ? ((presentSum / totalStudentsSum) * 100).toFixed(1) : '100.0';
 
     return {
       success: true,
@@ -134,7 +137,8 @@ export class AttendanceService {
   }
 
   async getHistory(tenantId: string, classSectionId?: string) {
-    const tid = tenantId || 'tenant-test-001';
+    if (!tenantId) throw new Error('tenantId is required');
+    const tid = tenantId;
     let query: FirebaseFirestore.Query = this.db.collection('tenants').doc(tid).collection('attendanceSessions');
     if (classSectionId) {
       query = query.where('classSectionId', '==', classSectionId);

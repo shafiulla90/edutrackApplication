@@ -13,25 +13,16 @@ export class ExamsService {
     return this.firebase.getFirestore();
   }
 
-  async getSubjects(tenantId?: string) {
-    const tid = tenantId || 'tenant-test-001';
+  async getSubjects(tenantId: string) {
+    if (!tenantId) throw new Error('tenantId is required');
+    const tid = tenantId;
     try {
       const snap = await this.db.collection('tenants').doc(tid).collection('subjects').get();
-      if (!snap.empty) {
-        return snap.docs.map(d => ({ id: d.id, ...d.data() }));
-      }
+      return snap.docs.map(d => ({ id: d.id, ...d.data() }));
     } catch (e) {
       console.error('Failed to load subjects:', e);
+      return [];
     }
-
-    return [
-      { id: 'sub-1', name: 'Mathematics', code: 'MATH101' },
-      { id: 'sub-2', name: 'Science', code: 'SCI101' },
-      { id: 'sub-3', name: 'English', code: 'ENG101' },
-      { id: 'sub-4', name: 'Social Studies', code: 'SST101' },
-      { id: 'sub-5', name: 'Computer Science', code: 'CS101' },
-      { id: 'sub-6', name: 'Hindi', code: 'HIN101' },
-    ];
   }
 
   async getComponents(tenantId?: string) {
@@ -43,12 +34,13 @@ export class ExamsService {
   }
 
   async getMarksEntryRoster(tenantId: string, subjectId: string, examName: string, classSectionId: string, subjectType?: string) {
-    const tid = tenantId || 'tenant-test-001';
+    if (!tenantId) throw new Error('tenantId is required');
+    const tid = tenantId;
     
-    // Fetch students in classSection
+    // Fetch students in tenant from root studentProfiles collection
     let students = [];
     try {
-      const snap = await this.db.collection('tenants').doc(tid).collection('studentProfiles').get();
+      const snap = await this.db.collection('studentProfiles').where('tenantId', '==', tid).get();
       students = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
     } catch (e) {
       console.error('Failed to load students for marks entry:', e);

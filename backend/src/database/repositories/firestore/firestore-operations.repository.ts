@@ -17,7 +17,8 @@ export class FirestoreOperationsRepository implements IOperationsRepository {
   }
 
   async createComplaint(data: any): Promise<any> {
-    const tenantId = data.tenantId || 'tenant-test-001';
+    if (!data.tenantId) throw new Error('tenantId is required');
+    const tenantId = data.tenantId;
     const ref = data.id ? this.db.collection('tenants').doc(tenantId).collection('complaints').doc(data.id) : this.db.collection('tenants').doc(tenantId).collection('complaints').doc();
     const payload = {
       ...data,
@@ -29,7 +30,13 @@ export class FirestoreOperationsRepository implements IOperationsRepository {
     return payload;
   }
 
-  async updateComplaint(id: string, data: any): Promise<any> {
+  async updateComplaint(id: string, data: any, tenantId?: string): Promise<any> {
+    const tid = tenantId || data?.tenantId;
+    if (tid) {
+      const docRef = this.db.collection('tenants').doc(tid).collection('complaints').doc(id);
+      await docRef.set(data, { merge: true });
+      return { id, ...data };
+    }
     const snap = await this.db.collectionGroup('complaints').where('id', '==', id).limit(1).get();
     if (snap.empty) return null;
     const doc = snap.docs[0];
@@ -61,7 +68,8 @@ export class FirestoreOperationsRepository implements IOperationsRepository {
   }
 
   async logActivity(data: any): Promise<any> {
-    const tenantId = data.tenantId || 'tenant-test-001';
+    if (!data.tenantId) throw new Error('tenantId is required');
+    const tenantId = data.tenantId;
     const ref = data.id ? this.db.collection('tenants').doc(tenantId).collection('activityLogs').doc(data.id) : this.db.collection('tenants').doc(tenantId).collection('activityLogs').doc();
     const payload = {
       ...data,

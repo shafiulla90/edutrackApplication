@@ -76,10 +76,10 @@ export class TenantService {
     };
   }
 
-  async getSetupStatus(tenantId?: string) {
-    const tenants = await this.tenantRepo.findAll();
-    const tenant = tenants.find((t: any) => t.id === tenantId) || tenants[0] || { id: 'tenant-test-001', name: 'EduTrack School' };
-    const tid = tenant.id || 'tenant-test-001';
+  async getSetupStatus(tenantId: string) {
+    if (!tenantId) throw new Error('tenantId is required');
+    const tenant = await this.tenantRepo.findById(tenantId);
+    const tid = tenantId;
 
     let classesCount = 0;
     let teachersCount = 0;

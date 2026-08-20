@@ -6,4 +6,5 @@ export interface IStudentRepository {
   createProfile(data: any): Promise<any>;
   updateProfile(id: string, data: any): Promise<any>;
   deleteProfile?(id: string): Promise<any>;
+  findStudentsByParent?(parentIdentifier: string, tenantId: string): Promise<any[]>;
 }

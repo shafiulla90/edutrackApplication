@@ -1,4 +1,4 @@
-import { Injectable, Inject, BadRequestException } from '@nestjs/common';
+import { Injectable, Inject, BadRequestException, NotFoundException } from '@nestjs/common';
 import { IBillingRepository } from '../../common/interfaces/billing.repository.interface';
 import { IAcademicRepository } from '../../common/interfaces/academic.repository.interface';
 import { IStudentRepository } from '../../common/interfaces/student.repository.interface';
@@ -15,7 +15,8 @@ export class BillingService {
   ) {}
 
   async createFeeProducts(productNames: string[], tenantId?: string) {
-    const tid = tenantId || 'tenant-test-001';
+    if (!tenantId) throw new Error('tenantId is required');
+    const tid = tenantId;
     if (this.billingRepo.createFeeProducts) {
       return this.billingRepo.createFeeProducts(productNames, tid);
     }
@@ -23,7 +24,8 @@ export class BillingService {
   }
 
   async getAllFeeProducts(tenantId?: string) {
-    const tid = tenantId || 'tenant-test-001';
+    if (!tenantId) throw new Error('tenantId is required');
+    const tid = tenantId;
     if (this.billingRepo.getAllFeeProducts) {
       return this.billingRepo.getAllFeeProducts(tid);
     }
@@ -31,7 +33,8 @@ export class BillingService {
   }
 
   async updateFeeProduct(id: string, name: string, tenantId?: string) {
-    const tid = tenantId || 'tenant-test-001';
+    if (!tenantId) throw new Error('tenantId is required');
+    const tid = tenantId;
     if (this.billingRepo.updateFeeProduct) {
       return this.billingRepo.updateFeeProduct(id, name, tid);
     }
@@ -39,7 +42,8 @@ export class BillingService {
   }
 
   async deleteFeeProduct(id: string, tenantId?: string) {
-    const tid = tenantId || 'tenant-test-001';
+    if (!tenantId) throw new Error('tenantId is required');
+    const tid = tenantId;
     if (this.billingRepo.deleteFeeProduct) {
       return this.billingRepo.deleteFeeProduct(id, tid);
     }
@@ -47,7 +51,8 @@ export class BillingService {
   }
 
   async savePriceBook(classId: string, academicYearId: string, priceItems: any[], tenantId?: string) {
-    const tid = tenantId || 'tenant-test-001';
+    if (!tenantId) throw new Error('tenantId is required');
+    const tid = tenantId;
     if (this.billingRepo.savePriceBook) {
       return this.billingRepo.savePriceBook(classId, academicYearId, priceItems, tid);
     }
@@ -55,7 +60,8 @@ export class BillingService {
   }
 
   async getPriceBook(classId: string, academicYearId: string, tenantId?: string) {
-    const tid = tenantId || 'tenant-test-001';
+    if (!tenantId) throw new Error('tenantId is required');
+    const tid = tenantId;
     if (this.billingRepo.getPriceBook) {
       return this.billingRepo.getPriceBook(classId, academicYearId, tid);
     }
@@ -63,7 +69,8 @@ export class BillingService {
   }
 
   async createInvoice(invoiceData: any, items: any[], tenantId?: string) {
-    const tid = tenantId || 'tenant-test-001';
+    if (!tenantId) throw new Error('tenantId is required');
+    const tid = tenantId;
     const studentId = invoiceData.studentId || invoiceData.opportunityId || 'std-1';
 
     // 1. Calculate amount paid in this transaction
@@ -168,7 +175,8 @@ export class BillingService {
   }
 
   async getRecentInvoices(studentId?: string, tenantId?: string) {
-    const tid = tenantId || 'tenant-test-001';
+    if (!tenantId) throw new Error('tenantId is required');
+    const tid = tenantId;
     let payments: any[] = [];
     if ((this.billingRepo as any).getRecentPayments) {
       payments = await (this.billingRepo as any).getRecentPayments(tid);
@@ -183,30 +191,42 @@ export class BillingService {
   }
 
   async getInvoiceDetails(invoiceId: string, tenantId?: string) {
-    const tid = tenantId || 'tenant-test-001';
-    let invoice = await this.billingRepo.findInvoiceById(invoiceId);
+    if (!tenantId) throw new Error('tenantId is required');
+    const tid = tenantId;
+    let invoice: any = null;
     let payment: any = null;
 
+    try {
+      invoice = await this.billingRepo.findInvoiceById(invoiceId, tid);
+    } catch (err) {}
+
     if ((this.billingRepo as any).findPaymentById) {
-      payment = await (this.billingRepo as any).findPaymentById(invoiceId, tid);
-      if (payment && !invoice) {
-        invoice = await this.billingRepo.findInvoiceById(payment.invoiceId);
-      }
+      try {
+        payment = await (this.billingRepo as any).findPaymentById(invoiceId, tid);
+        if (payment && !invoice) {
+          invoice = await this.billingRepo.findInvoiceById(payment.invoiceId, tid);
+        }
+      } catch (err) {}
+    }
+
+    if (!invoice && !payment) {
+      throw new NotFoundException(`Invoice or Payment with ID '${invoiceId}' not found.`);
     }
 
     return {
       id: invoiceId,
       invoiceNo: payment?.receiptNumber || invoice?.invoiceNo || invoiceId,
-      totalAmount: invoice?.totalAmount || 15000,
-      paidAmount: payment?.amount || invoice?.paidAmount || 2500,
-      remainingBalance: invoice?.remainingBalance !== undefined ? invoice.remainingBalance : 12500,
-      status: invoice?.status || 'PARTIALLY_PAID',
+      totalAmount: invoice?.totalAmount || payment?.amount || 0,
+      paidAmount: payment?.amount || invoice?.paidAmount || 0,
+      remainingBalance: invoice?.remainingBalance !== undefined ? invoice.remainingBalance : 0,
+      status: invoice?.status || 'UNPAID',
       items: payment?.items || invoice?.InvoiceItem || [],
     };
   }
 
   async getInvoicePDFData(invoiceId: string, tenantId?: string) {
-    const tid = tenantId || 'tenant-test-001';
+    if (!tenantId) throw new Error('tenantId is required');
+    const tid = tenantId;
     let invoice: any = null;
     let payment: any = null;
 
@@ -333,7 +353,8 @@ export class BillingService {
   }
 
   async getActiveProducts(classId: string, academicYearId?: string, tenantId?: string) {
-    const tid = tenantId || 'tenant-test-001';
+    if (!tenantId) throw new Error('tenantId is required');
+    const tid = tenantId;
     let products: any[] = [];
     if (this.billingRepo.getAllFeeProducts) {
       products = await this.billingRepo.getAllFeeProducts(tid);
@@ -381,7 +402,8 @@ export class BillingService {
   }
 
   async createAdmission(studentData: any, selectedPricebookEntryIds: string[], concessionAmount: number, tenantId?: string) {
-    const tid = tenantId || 'tenant-test-001';
+    if (!tenantId) throw new Error('tenantId is required');
+    const tid = tenantId;
     const userId = randomUUID();
     const studentProfileId = randomUUID();
 
@@ -449,7 +471,8 @@ export class BillingService {
   }
 
   async getYearsOptions(tenantId?: string) {
-    const tid = tenantId || 'tenant-test-001';
+    if (!tenantId) throw new Error('tenantId is required');
+    const tid = tenantId;
     try {
       const years = await this.academicRepo.findAcademicYears(tid);
       if (years && years.length > 0) {
@@ -465,7 +488,8 @@ export class BillingService {
   }
 
   async getClassesOptions(tenantId?: string) {
-    const tid = tenantId || 'tenant-test-001';
+    if (!tenantId) throw new Error('tenantId is required');
+    const tid = tenantId;
     try {
       const classes = await this.academicRepo.findClasses(tid);
       if (classes && classes.length > 0) {
@@ -489,7 +513,8 @@ export class BillingService {
   }
 
   async getSectionsOptions(classId?: string, tenantId?: string) {
-    const tid = tenantId || 'tenant-test-001';
+    if (!tenantId) throw new Error('tenantId is required');
+    const tid = tenantId;
     try {
       const sections = await this.academicRepo.findSections(tid);
       if (sections && sections.length > 0) {
@@ -506,7 +531,8 @@ export class BillingService {
   }
 
   async searchStudents(searchTerm: string, tenantId?: string) {
-    const tid = tenantId || 'tenant-test-001';
+    if (!tenantId) throw new Error('tenantId is required');
+    const tid = tenantId;
     const q = (searchTerm || '').trim().toLowerCase();
 
     let students: any[] = [];

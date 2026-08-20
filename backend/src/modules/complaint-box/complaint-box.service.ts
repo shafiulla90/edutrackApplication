@@ -27,9 +27,9 @@ export class ComplaintBoxService {
     return [];
   }
 
-  async submitStudentBehavior(dto: any, tenantId?: string) {
-    const tid = tenantId || 'tenant-test-001';
-    return this.opsRepo.createComplaint({ ...dto, tenantId: tid });
+  async submitStudentBehavior(dto: any, tenantId: string) {
+    if (!tenantId) throw new Error('tenantId is required');
+    return this.opsRepo.createComplaint({ ...dto, tenantId });
   }
 
   async getAcademicYears() {
@@ -37,8 +37,8 @@ export class ComplaintBoxService {
   }
 
   async getPendingCases(academicYear?: string, tenantId?: string) {
-    const tid = tenantId || 'tenant-test-001';
-    return this.opsRepo.findComplaintsByTenant(tid);
+    if (!tenantId) throw new Error('tenantId is required');
+    return this.opsRepo.findComplaintsByTenant(tenantId);
   }
 
   async getStudentCases(studentId: string, academicYear?: string) {
@@ -62,8 +62,8 @@ export class ComplaintBoxService {
   }
 
   async getParentComplaints(status?: string, tenantId?: string) {
-    const tid = tenantId || 'tenant-test-001';
-    return this.opsRepo.findComplaintsByTenant(tid);
+    if (!tenantId) throw new Error('tenantId is required');
+    return this.opsRepo.findComplaintsByTenant(tenantId);
   }
 
   async updateParentComplaintStatus(id: string, data: any) {

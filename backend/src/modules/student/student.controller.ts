@@ -1,6 +1,7 @@
 import { Controller, Get, Post, Patch, Put, Delete, Body, Param, Query, Request } from '@nestjs/common';
 import { StudentService } from './student.service';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
+import { getTenantIdFromReq } from '../../common/utils/tenant.util';
 
 @ApiTags('Students')
 @Controller('students')
@@ -18,7 +19,7 @@ export class StudentController {
     @Query('academicYearId') academicYearId?: string,
     @Request() req?: any,
   ) {
-    const tenantId = req?.user?.tenantId || 'tenant-test-001';
+    const tenantId = getTenantIdFromReq(req);
     return this.studentService.findAll(
       tenantId,
       page ? Number(page) : 1,
@@ -30,21 +31,21 @@ export class StudentController {
   @Get(':id')
   @ApiOperation({ summary: 'Get student by ID' })
   findOne(@Param('id') id: string, @Request() req) {
-    const tenantId = req?.user?.tenantId || 'tenant-test-001';
+    const tenantId = getTenantIdFromReq(req);
     return this.studentService.findOne(id, tenantId);
   }
 
   @Post()
   @ApiOperation({ summary: 'Create new student profile' })
   create(@Body() body: any, @Request() req) {
-    const tenantId = req?.user?.tenantId || 'tenant-test-001';
+    const tenantId = getTenantIdFromReq(req);
     return this.studentService.create(body, tenantId);
   }
 
   @Post('import')
   @ApiOperation({ summary: 'Bulk import student records' })
   importStudents(@Body() body: any, @Request() req: any) {
-    const tenantId = req?.user?.tenantId || 'tenant-test-001';
+    const tenantId = getTenantIdFromReq(req);
     const studentsData = Array.isArray(body) ? body : (body?.students || body?.studentDataList || []);
     return this.studentService.importStudentsBulk(studentsData, tenantId);
   }
@@ -52,21 +53,21 @@ export class StudentController {
   @Patch(':id')
   @ApiOperation({ summary: 'Update student profile' })
   updatePatch(@Param('id') id: string, @Body() body: any, @Request() req) {
-    const tenantId = req?.user?.tenantId || 'tenant-test-001';
+    const tenantId = getTenantIdFromReq(req);
     return this.studentService.update(id, body, tenantId);
   }
 
   @Put(':id')
   @ApiOperation({ summary: 'Update student profile' })
   updatePut(@Param('id') id: string, @Body() body: any, @Request() req) {
-    const tenantId = req?.user?.tenantId || 'tenant-test-001';
+    const tenantId = getTenantIdFromReq(req);
     return this.studentService.update(id, body, tenantId);
   }
 
   @Delete(':id')
   @ApiOperation({ summary: 'Delete student profile' })
   remove(@Param('id') id: string, @Request() req) {
-    const tenantId = req?.user?.tenantId || 'tenant-test-001';
+    const tenantId = getTenantIdFromReq(req);
     return this.studentService.delete(id, tenantId);
   }
 }

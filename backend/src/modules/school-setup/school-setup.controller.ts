@@ -1,6 +1,7 @@
-import { Controller, Get, Put, Body, Headers } from '@nestjs/common';
+import { Controller, Get, Put, Body, Request } from '@nestjs/common';
 import { SchoolSetupService } from './school-setup.service';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
+import { getTenantIdFromReq } from '../../common/utils/tenant.util';
 
 @ApiTags('School Setup')
 @Controller('school-setup')
@@ -9,13 +10,15 @@ export class SchoolSetupController {
 
   @Get()
   @ApiOperation({ summary: 'Get school setup configuration' })
-  async getSetup(@Headers('X-Tenant-ID') tenantId?: string) {
+  async getSetup(@Request() req: any) {
+    const tenantId = getTenantIdFromReq(req);
     return this.schoolSetupService.getSchoolSetup(tenantId);
   }
 
   @Put()
   @ApiOperation({ summary: 'Update school setup configuration' })
-  async updateSetup(@Body() body: any, @Headers('X-Tenant-ID') tenantId?: string) {
+  async updateSetup(@Body() body: any, @Request() req: any) {
+    const tenantId = getTenantIdFromReq(req);
     return this.schoolSetupService.updateSchoolSetup(body, tenantId);
   }
 }

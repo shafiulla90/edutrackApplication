@@ -162,8 +162,9 @@ export class TeacherService {
   }
 
   async paySalary(id: string, tenantId: string, data?: any) {
+    if (!tenantId) throw new Error('tenantId is required');
     const month = data?.month || 'Jun 2026';
-    const tid = tenantId || 'tenant-test-001';
+    const tid = tenantId;
 
     if (this.firebase) {
       const db = this.firebase.getFirestore();
@@ -197,8 +198,9 @@ export class TeacherService {
   }
 
   async payAllSalaries(tenantId: string, data?: any) {
+    if (!tenantId) throw new Error('tenantId is required');
     const month = data?.month || 'Jun 2026';
-    const tid = tenantId || 'tenant-test-001';
+    const tid = tenantId;
 
     if (this.firebase) {
       const db = this.firebase.getFirestore();

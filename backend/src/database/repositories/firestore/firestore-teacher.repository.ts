@@ -69,18 +69,96 @@ export class FirestoreTeacherRepository implements ITeacherRepository {
         const data = { id: doc.id, ...doc.data() };
         const userDoc = await this.db.collection('users').doc((data as any).userId).get();
         const userData = userDoc.exists ? { id: userDoc.id, ...userDoc.data() } : null;
+        const name = (userData as any)?.name || (data as any).name || 'Teacher Profile';
+        const email = (userData as any)?.email || (data as any).email || 'N/A';
+        const phone = (userData as any)?.phone || (data as any).phone || 'N/A';
+        const role = (userData as any)?.role || (data as any).role || 'TEACHER';
+
         return {
           ...data,
-          User: userData,
-          user: userData, // lowercase alias for frontend compatibility
+          name,
+          email,
+          phone,
+          role,
+          User: userData || { id: (data as any).userId || doc.id, name, email, phone, role },
+          user: userData || { id: (data as any).userId || doc.id, name, email, phone, role },
         };
       }),
     );
   }
 
-  async findTeacherAssignments(teacherId: string): Promise<any[]> {
-    const snap = await this.db.collectionGroup('teacherAssignments').where('teacherId', '==', teacherId).get();
-    return snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+  async findTeacherAssignments(teacherId: string, tenantId?: string): Promise<any[]> {
+    const tid = tenantId;
+    let assignments: any[] = [];
+
+    if (tid) {
+      const classSectionsSnap = await this.db.collection('tenants').doc(tid).collection('classSections').where('teacherId', '==', teacherId).get().catch(() => null);
+      if (classSectionsSnap && !classSectionsSnap.empty) {
+        classSectionsSnap.docs.forEach((doc) => {
+          assignments.push({ id: doc.id, classSectionId: doc.id, ...doc.data() });
+        });
+      }
+
+      const tenantAssignSnap = await this.db.collection('tenants').doc(tid).collection('teacherAssignments').where('teacherId', '==', teacherId).get().catch(() => null);
+      if (tenantAssignSnap && !tenantAssignSnap.empty) {
+        tenantAssignSnap.docs.forEach((doc) => {
+          const data = doc.data();
+          if (!assignments.some((a) => a.id === doc.id || a.classSectionId === data.classSectionId)) {
+            assignments.push({ id: doc.id, ...data });
+          }
+        });
+      }
+    } else {
+      const snap = await this.db.collectionGroup('teacherAssignments').where('teacherId', '==', teacherId).get();
+      assignments = snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+    }
+
+    if (tid && assignments.length > 0) {
+      const [classesSnap, sectionsSnap] = await Promise.all([
+        this.db.collection('tenants').doc(tid).collection('classes').get().catch(() => null),
+        this.db.collection('tenants').doc(tid).collection('sections').get().catch(() => null),
+      ]);
+
+      const classMap = new Map<string, any>();
+      if (classesSnap) classesSnap.docs.forEach((d) => classMap.set(d.id, d.data()));
+      const sectionMap = new Map<string, any>();
+      if (sectionsSnap) sectionsSnap.docs.forEach((d) => sectionMap.set(d.id, d.data()));
+
+      return Promise.all(
+        assignments.map(async (assign) => {
+          const classId = assign.classId;
+          const sectionId = assign.sectionId;
+          const clsData = classId ? classMap.get(classId) : null;
+          const secData = sectionId ? sectionMap.get(sectionId) : null;
+
+          const className = clsData?.name || assign.className || 'Class';
+          const sectionName = secData?.name || assign.sectionName || 'Section A';
+
+          let studentCount = 0;
+          if (classId) {
+            const sSnap = await this.db.collection('studentProfiles')
+              .where('tenantId', '==', tid)
+              .where('classId', '==', classId)
+              .get().catch(() => null);
+            if (sSnap) studentCount = sSnap.size;
+          }
+
+          return {
+            ...assign,
+            className,
+            sectionName,
+            studentCount,
+            classSection: {
+              id: assign.classSectionId || assign.id,
+              class: { id: classId, name: className },
+              section: { id: sectionId, name: sectionName },
+            },
+          };
+        }),
+      );
+    }
+
+    return assignments;
   }
 
   async findTeacherSkills(teacherId: string): Promise<any[]> {
@@ -89,7 +167,8 @@ export class FirestoreTeacherRepository implements ITeacherRepository {
   }
 
   async createTeacherAssignment(data: any): Promise<any> {
-    const tenantId = data.tenantId || 'tenant-test-001';
+    if (!data.tenantId) throw new Error('tenantId is required');
+    const tenantId = data.tenantId;
     const docId = data.id || DeterministicKey.teacherAssignment(data.teacherId, data.classSectionId, data.subjectId);
     const ref = this.db.collection('tenants').doc(tenantId).collection('teacherAssignments').doc(docId);
     const payload = sanitizePayload({ ...data, id: docId, tenantId });
@@ -98,7 +177,8 @@ export class FirestoreTeacherRepository implements ITeacherRepository {
   }
 
   async createTeacherSkill(data: any): Promise<any> {
-    const tenantId = data.tenantId || 'tenant-test-001';
+    if (!data.tenantId) throw new Error('tenantId is required');
+    const tenantId = data.tenantId;
     const docId = data.id || DeterministicKey.teacherSkill(data.teacherId, data.subjectId);
     const ref = this.db.collection('tenants').doc(tenantId).collection('teacherSkills').doc(docId);
     const payload = sanitizePayload({ ...data, id: docId, tenantId });

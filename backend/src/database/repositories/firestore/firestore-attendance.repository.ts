@@ -12,17 +12,16 @@ export class FirestoreAttendanceRepository implements IAttendanceRepository {
   }
 
   async findSessionsByClassSection(classSectionIdOrTenantId: string, startDate?: string, endDate?: string): Promise<any[]> {
-    const tid = classSectionIdOrTenantId || 'tenant-test-001';
+    if (!classSectionIdOrTenantId) throw new Error('tenantId/classSectionId is required');
+    const tid = classSectionIdOrTenantId;
     let snap: FirebaseFirestore.QuerySnapshot;
     try {
-      const tenantSnap = await this.db.collection('tenants').doc(tid).collection('attendanceSessions').get();
-      if (!tenantSnap.empty) {
-        snap = tenantSnap;
-      } else {
+      snap = await this.db.collection('tenants').doc(tid).collection('attendanceSessions').get();
+      if (snap.empty) {
         snap = await this.db.collectionGroup('attendanceSessions').where('classSectionId', '==', classSectionIdOrTenantId).get();
       }
     } catch {
-      snap = await this.db.collectionGroup('attendanceSessions').get();
+      snap = await this.db.collectionGroup('attendanceSessions').where('classSectionId', '==', classSectionIdOrTenantId).get();
     }
     return snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
   }
@@ -45,7 +44,8 @@ export class FirestoreAttendanceRepository implements IAttendanceRepository {
   }
 
   async createSessionWithAttendance(sessionData: any, attendanceRecords: any[]): Promise<any> {
-    const tenantId = sessionData.tenantId || 'tenant-test-001';
+    if (!sessionData.tenantId) throw new Error('tenantId is required');
+    const tenantId = sessionData.tenantId;
     const sessionRef = sessionData.id ? this.db.collection('tenants').doc(tenantId).collection('attendanceSessions').doc(sessionData.id) : this.db.collection('tenants').doc(tenantId).collection('attendanceSessions').doc();
 
     const batch = this.db.batch();

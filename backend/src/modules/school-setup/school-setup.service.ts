@@ -5,37 +5,30 @@ import { ITenantRepository } from '../../common/interfaces/tenant.repository.int
 export class SchoolSetupService {
   constructor(@Inject('ITenantRepository') private readonly tenantRepo: ITenantRepository) {}
 
-  async getSchoolSetup(tenantId?: string) {
-    const tenants = await this.tenantRepo.findAll();
-    const tenant = tenants.find((t: any) => t.id === tenantId) || tenants[0] || {
-      id: 'tenant-test-001',
-      name: 'A.P. Greenwood High School',
-      schoolType: 'School',
-      adminName: 'School Administrator',
-      email: 'apgreenwoodschool@gmail.com',
-      helpDeskPhone: '9642402639',
-      subDomain: 'apgreenwoodschool',
-    };
+  async getSchoolSetup(tenantId: string) {
+    if (!tenantId) throw new Error('tenantId is required');
+    const tenant = await this.tenantRepo.findById(tenantId);
+    if (!tenant) {
+      return { success: false, message: 'Tenant not found' };
+    }
 
     return {
       success: true,
       id: tenant.id,
-      schoolName: tenant.name || 'A.P. Greenwood High School',
+      schoolName: tenant.name || 'EduTrack School',
       schoolType: tenant.schoolType || 'School',
       adminName: tenant.adminName || 'School Administrator',
-      email: tenant.email || 'apgreenwoodschool@gmail.com',
-      helpDeskPhone: tenant.helpDeskPhone || tenant.adminPhone || '9642402639',
-      address: tenant.address || 'Greenwood Campus',
-      subDomain: tenant.subDomain || 'apgreenwoodschool',
+      email: tenant.email || '',
+      helpDeskPhone: tenant.helpDeskPhone || tenant.adminPhone || '',
+      address: tenant.address || '',
+      subDomain: tenant.subDomain || '',
       schoolLogo: tenant.logoUrl || null,
       adminPhoto: tenant.adminPhoto || null,
     };
   }
 
-  async updateSchoolSetup(data: any, tenantId?: string) {
-    const tenants = await this.tenantRepo.findAll();
-    const primaryTenant = tenants.find((t: any) => t.id === tenantId) || tenants[0];
-    const idToUpdate = primaryTenant ? primaryTenant.id : 'tenant-test-001';
+  async updateSchoolSetup(data: any, tenantId: string) {
+    if (!tenantId) throw new Error('tenantId is required');
 
     const updatePayload: any = {};
     if (data.schoolName || data.name) updatePayload.name = data.schoolName || data.name;
@@ -50,7 +43,7 @@ export class SchoolSetupService {
     if (data.title) updatePayload.title = data.title;
     updatePayload.updatedAt = new Date().toISOString();
 
-    const updated = await this.tenantRepo.update(idToUpdate, updatePayload);
+    const updated = await this.tenantRepo.update(tenantId, updatePayload);
 
     return {
       success: true,

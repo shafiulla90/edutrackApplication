@@ -1,6 +1,7 @@
 import { Controller, Get, Post, Body, Param, Query, Patch, Delete, Request } from '@nestjs/common';
 import { ComplaintBoxService } from './complaint-box.service';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
+import { getTenantIdFromReq } from '../../common/utils/tenant.util';
 
 @ApiTags('Complaint Box')
 @Controller('complaint-box')
@@ -38,7 +39,7 @@ export class ComplaintBoxController {
 
   @Post('submit-behavior')
   submitStudentBehavior(@Body() dto: any, @Request() req?: any) {
-    const tenantId = req?.user?.tenantId || 'tenant-test-001';
+    const tenantId = getTenantIdFromReq(req);
     return this.complaintBoxService.submitStudentBehavior(dto, tenantId);
   }
 
@@ -49,7 +50,7 @@ export class ComplaintBoxController {
 
   @Get('pending-cases')
   getPendingCases(@Query('academicYear') academicYear?: string, @Request() req?: any) {
-    const tenantId = req?.user?.tenantId || 'tenant-test-001';
+    const tenantId = getTenantIdFromReq(req);
     return this.complaintBoxService.getPendingCases(academicYear, tenantId);
   }
 
@@ -80,7 +81,7 @@ export class ComplaintBoxController {
 
   @Get('parent-complaints')
   getParentComplaints(@Query('status') status?: string, @Request() req?: any) {
-    const tenantId = req?.user?.tenantId || 'tenant-test-001';
+    const tenantId = getTenantIdFromReq(req);
     return this.complaintBoxService.getParentComplaints(status, tenantId);
   }
 

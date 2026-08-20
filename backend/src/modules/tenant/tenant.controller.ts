@@ -1,6 +1,7 @@
-import { Controller, Get, Post, Put, Body, Headers, Param } from '@nestjs/common';
+import { Controller, Get, Post, Put, Body, Request, Param } from '@nestjs/common';
 import { TenantService } from './tenant.service';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
+import { getTenantIdFromReq } from '../../common/utils/tenant.util';
 
 @ApiTags('Tenants')
 @Controller('tenant')
@@ -12,7 +13,7 @@ export class TenantController {
   async getPublicBranding() {
     const tenants = await this.tenantService.findAll();
     const primaryTenant = tenants[0] || {
-      id: 'tenant-test-001',
+      id: 'default',
       name: 'EduTrack School System',
       subDomain: 'default',
     };
@@ -35,7 +36,8 @@ export class TenantController {
 
   @Get('setup-status')
   @ApiOperation({ summary: 'Get tenant setup status and current user details' })
-  async getSetupStatus(@Headers('X-Tenant-ID') tenantId?: string) {
+  async getSetupStatus(@Request() req: any) {
+    const tenantId = getTenantIdFromReq(req);
     return this.tenantService.getSetupStatus(tenantId);
   }
 

@@ -15,4 +15,5 @@ export interface IAcademicRepository {
   createAcademicYear?(data: any): Promise<any>;
   toggleAcademicYearActive?(id: string, tenantId: string): Promise<any>;
   createClassSection?(data: any): Promise<any>;
+  getClassStudentCount?(classId: string, tenantId: string): Promise<any>;
 }

@@ -7,16 +7,6 @@ import { ApiTags, ApiOperation } from '@nestjs/swagger';
 export class TeacherPortalController {
   constructor(private readonly examsService: ExamsService) {}
 
-  @Get('classes')
-  @ApiOperation({ summary: 'Get teacher classes' })
-  async getClasses() {
-    return [
-      { id: 'cs-1', classSectionId: 'cs-1', className: 'Grade 10', sectionName: 'Section A', name: 'Grade 10 - Section A' },
-      { id: 'cs-2', classSectionId: 'cs-2', className: 'Class-2', sectionName: 'Section A', name: 'Class-2 - Section A' },
-      { id: 'cs-3', classSectionId: 'cs-3', className: 'Grade 1', sectionName: 'Section A', name: 'Grade 1 - Section A' },
-    ];
-  }
-
   @Get('marks/entry')
   @ApiOperation({ summary: 'Get marks entry roster' })
   async getMarksEntry(

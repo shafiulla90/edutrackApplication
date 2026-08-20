@@ -40,7 +40,11 @@ export class AcademicsService {
     return this.academicRepo.findClasses(tid, academicYearId);
   }
 
-  async getClassStudentCount(id: string) {
+  async getClassStudentCount(id: string, tenantId?: string) {
+    const tid = tenantId || 'tenant-test-001';
+    if (this.academicRepo.getClassStudentCount) {
+      return this.academicRepo.getClassStudentCount(id, tid);
+    }
     return { classId: id, count: 0, studentCount: 0 };
   }
 

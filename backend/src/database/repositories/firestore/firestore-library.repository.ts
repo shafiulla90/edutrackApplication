@@ -16,7 +16,18 @@ export class FirestoreLibraryRepository implements ILibraryRepository {
     return snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
   }
 
-  async findBookById(id: string): Promise<any | null> {
+  async findBookById(id: string, tenantId?: string): Promise<any | null> {
+    if (tenantId) {
+      const docRef = this.db.collection('tenants').doc(tenantId).collection('books').doc(id);
+      const doc = await docRef.get();
+      if (!doc.exists) return null;
+      const data = { id: doc.id, ...doc.data() };
+      const copiesSnap = await docRef.collection('bookCopies').get();
+      return {
+        ...data,
+        BookCopy: copiesSnap.docs.map((d) => ({ id: d.id, ...d.data() })),
+      };
+    }
     const snap = await this.db.collectionGroup('books').where('id', '==', id).limit(1).get();
     if (snap.empty) return null;
     const doc = snap.docs[0];
@@ -33,13 +44,18 @@ export class FirestoreLibraryRepository implements ILibraryRepository {
     return snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
   }
 
-  async findBookIssuesByBorrower(borrowerId: string): Promise<any[]> {
+  async findBookIssuesByBorrower(borrowerId: string, tenantId?: string): Promise<any[]> {
+    if (tenantId) {
+      const snap = await this.db.collection('tenants').doc(tenantId).collection('bookIssues').where('borrowerId', '==', borrowerId).get();
+      return snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+    }
     const snap = await this.db.collectionGroup('bookIssues').where('borrowerId', '==', borrowerId).get();
     return snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
   }
 
   async issueBook(data: any): Promise<any> {
-    const tenantId = data.tenantId || 'tenant-test-001';
+    if (!data.tenantId) throw new Error('tenantId is required');
+    const tenantId = data.tenantId;
     const ref = data.id ? this.db.collection('tenants').doc(tenantId).collection('bookIssues').doc(data.id) : this.db.collection('tenants').doc(tenantId).collection('bookIssues').doc();
     const payload = {
       ...data,
@@ -52,7 +68,15 @@ export class FirestoreLibraryRepository implements ILibraryRepository {
     return payload;
   }
 
-  async returnBook(issueId: string, returnDate: Date): Promise<any> {
+  async returnBook(issueId: string, returnDate: Date, tenantId?: string): Promise<any> {
+    if (tenantId) {
+      const docRef = this.db.collection('tenants').doc(tenantId).collection('bookIssues').doc(issueId);
+      const doc = await docRef.get();
+      if (doc.exists) {
+        await docRef.set({ returnDate: formatDateISO(returnDate) }, { merge: true });
+        return { id: issueId, ...doc.data(), returnDate: formatDateISO(returnDate) };
+      }
+    }
     const snap = await this.db.collectionGroup('bookIssues').where('id', '==', issueId).limit(1).get();
     if (snap.empty) return null;
     const doc = snap.docs[0];

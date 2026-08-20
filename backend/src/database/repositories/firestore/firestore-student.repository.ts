@@ -34,9 +34,14 @@ export class FirestoreStudentRepository implements IStudentRepository {
         user = { id: userDoc.id, ...userDoc.data() };
       }
     }
+    const fullName = (data as any).name || (user as any)?.name || `${(data as any).firstName || ''} ${(data as any).lastName || ''}`.trim() || 'Student';
+    const resolvedUser = user || { id: userId || doc.id, name: fullName, email: (data as any).email, phone: (data as any).phone };
+
     return {
       ...data,
-      User: user,
+      name: fullName,
+      user: resolvedUser,
+      User: resolvedUser,
     };
   }
 
@@ -44,7 +49,18 @@ export class FirestoreStudentRepository implements IStudentRepository {
     const snap = await this.db.collection('studentProfiles').where('userId', '==', userId).limit(1).get();
     if (snap.empty) return null;
     const doc = snap.docs[0];
-    return { id: doc.id, ...doc.data() };
+    const data = { id: doc.id, ...doc.data() };
+    const userDoc = await this.db.collection('users').doc(userId).get();
+    const user = userDoc.exists ? { id: userDoc.id, ...userDoc.data() } : null;
+    const fullName = (data as any).name || (user as any)?.name || `${(data as any).firstName || ''} ${(data as any).lastName || ''}`.trim() || 'Student';
+    const resolvedUser = user || { id: userId, name: fullName, email: (data as any).email, phone: (data as any).phone };
+
+    return {
+      ...data,
+      name: fullName,
+      user: resolvedUser,
+      User: resolvedUser,
+    };
   }
 
   async findStudentsByClassSection(classSectionId: string): Promise<any[]> {
@@ -52,10 +68,19 @@ export class FirestoreStudentRepository implements IStudentRepository {
     const students = await Promise.all(
       snap.docs.map(async (doc) => {
         const data = { id: doc.id, ...doc.data() };
-        const userDoc = await this.db.collection('users').doc((data as any).userId).get();
+        let user = null;
+        if ((data as any).userId) {
+          const userDoc = await this.db.collection('users').doc((data as any).userId).get();
+          if (userDoc.exists) user = { id: userDoc.id, ...userDoc.data() };
+        }
+        const fullName = (data as any).name || (user as any)?.name || `${(data as any).firstName || ''} ${(data as any).lastName || ''}`.trim() || 'Student';
+        const resolvedUser = user || { id: (data as any).userId || doc.id, name: fullName, email: (data as any).email, phone: (data as any).phone };
+
         return {
           ...data,
-          User: userDoc.exists ? { id: userDoc.id, ...userDoc.data() } : null,
+          name: fullName,
+          user: resolvedUser,
+          User: resolvedUser,
         };
       }),
     );
@@ -63,14 +88,11 @@ export class FirestoreStudentRepository implements IStudentRepository {
   }
 
   async findStudentsByTenant(tenantId: string, page = 1, limit = 100, filters?: any): Promise<{ items: any[]; total: number }> {
-    const tid = tenantId || 'tenant-test-001';
+    if (!tenantId) throw new Error('tenantId is required');
+    const tid = tenantId;
     
-    // Fetch all studentProfiles
-    let snap = await this.db.collection('studentProfiles').where('tenantId', '==', tid).get();
-    
-    if (snap.empty) {
-      snap = await this.db.collection('studentProfiles').limit(500).get();
-    }
+    // Fetch tenant-scoped studentProfiles strictly
+    const snap = await this.db.collection('studentProfiles').where('tenantId', '==', tid).get();
 
     // Pre-fetch classes and sections for label mapping
     const [classesSnap, sectionsSnap] = await Promise.all([
@@ -209,5 +231,69 @@ export class FirestoreStudentRepository implements IStudentRepository {
       return data;
     }
     return { id, success: true };
+  }
+
+  async findStudentsByParent(parentIdentifier: string, tenantId: string): Promise<any[]> {
+    if (!tenantId) throw new Error('tenantId is required');
+    const tid = tenantId;
+
+    const snap = await this.db.collection('studentProfiles').where('tenantId', '==', tid).get();
+    if (snap.empty) return [];
+
+    const matches = snap.docs.filter((doc) => {
+      const d = doc.data();
+      return (
+        d.parentId === parentIdentifier ||
+        d.parentEmail === parentIdentifier ||
+        d.fatherPhone === parentIdentifier ||
+        d.motherPhone === parentIdentifier ||
+        d.guardianPhone === parentIdentifier ||
+        d.userId === parentIdentifier ||
+        doc.id === parentIdentifier
+      );
+    });
+
+    const [classesSnap, sectionsSnap] = await Promise.all([
+      this.db.collection('tenants').doc(tid).collection('classes').get().catch(() => null),
+      this.db.collection('tenants').doc(tid).collection('sections').get().catch(() => null),
+    ]);
+
+    const classMap = new Map<string, any>();
+    if (classesSnap) classesSnap.docs.forEach((d) => classMap.set(d.id, d.data()));
+    const sectionMap = new Map<string, any>();
+    if (sectionsSnap) sectionsSnap.docs.forEach((d) => sectionMap.set(d.id, d.data()));
+
+    return Promise.all(
+      matches.map(async (doc) => {
+        const data = { id: doc.id, studentProfileId: doc.id, ...doc.data() };
+        let user = null;
+        if ((data as any).userId) {
+          const userDoc = await this.db.collection('users').doc((data as any).userId).get();
+          if (userDoc.exists) user = { id: userDoc.id, ...userDoc.data() };
+        }
+
+        const clsData = (data as any).classId ? classMap.get((data as any).classId) : null;
+        const secData = (data as any).sectionId ? sectionMap.get((data as any).sectionId) : null;
+
+        const className = clsData?.name || (data as any).className || 'Grade 1';
+        const sectionName = secData?.name || (data as any).sectionName || 'Section A';
+        const fullName = (data as any).name || (user as any)?.name || `${(data as any).firstName || ''} ${(data as any).lastName || ''}`.trim() || 'Student';
+        const resolvedUser = user || { id: (data as any).userId || doc.id, name: fullName, email: (data as any).email, phone: (data as any).phone };
+
+        return {
+          ...data,
+          name: fullName,
+          rollNo: (data as any).rollNo || (data as any).rollNumber || 'N/A',
+          user: resolvedUser,
+          User: resolvedUser,
+          classSection: {
+            class: { id: (data as any).classId, name: className },
+            section: { id: (data as any).sectionId, name: sectionName },
+          },
+          className,
+          sectionName,
+        };
+      }),
+    );
   }
 }
