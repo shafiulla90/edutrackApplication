@@ -26,20 +26,26 @@ async function bootstrap() {
 
 function normalizeUrl(url: string): string {
   if (!url) return '/';
-  let cleaned = url;
-  if (cleaned.startsWith('/api/index.ts')) {
-    cleaned = cleaned.substring(13);
-  } else if (cleaned.startsWith('/api/index')) {
-    cleaned = cleaned.substring(10);
-  } else if (cleaned.startsWith('/api')) {
-    cleaned = cleaned.substring(4);
+  let path = url;
+  let query = '';
+  const queryIndex = url.indexOf('?');
+  if (queryIndex !== -1) {
+    path = url.substring(0, queryIndex);
+    query = url.substring(queryIndex);
   }
-  if (cleaned.includes('?')) {
-    cleaned = cleaned.split('?')[0];
+
+  if (path.startsWith('/api/index.ts')) {
+    path = path.substring(13);
+  } else if (path.startsWith('/api/index')) {
+    path = path.substring(10);
+  } else if (path.startsWith('/api')) {
+    path = path.substring(4);
   }
-  if (!cleaned || cleaned === '') return '/';
-  if (!cleaned.startsWith('/')) return '/' + cleaned;
-  return cleaned;
+
+  if (!path || path === '') path = '/';
+  if (!path.startsWith('/')) path = '/' + path;
+
+  return path + query;
 }
 
 export default async function handler(req: any, res: any) {
