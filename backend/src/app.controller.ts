@@ -13,4 +13,9 @@ export class AppController {
       timestamp: new Date().toISOString(),
     };
   }
+  @Public()
+  @Get('health')
+  getHealthEndpoint() {
+    return { status: 'ok', service: 'EduTrack SaaS API' };
+  }
 }

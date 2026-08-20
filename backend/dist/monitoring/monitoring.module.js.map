@@ -1,1 +1,0 @@
-{"version":3,"file":"monitoring.module.js","sourceRoot":"","sources":["../../src/monitoring/monitoring.module.ts"],"names":[],"mappings":";;;;;;;;;AAAA,2CAAwC;AACxC,2DAAuD;AACvD,sDAAkD;AAM3C,IAAM,gBAAgB,GAAtB,MAAM,gBAAgB;CAAG,CAAA;AAAnB,4CAAgB;2BAAhB,gBAAgB;IAJ5B,IAAA,eAAM,EAAC;QACN,WAAW,EAAE,CAAC,oCAAgB,CAAC;QAC/B,SAAS,EAAE,CAAC,8BAAa,CAAC;KAC3B,CAAC;GACW,gBAAgB,CAAG"}

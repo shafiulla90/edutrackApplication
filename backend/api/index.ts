@@ -1,7 +1,7 @@
 import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
-import express from 'express';
+import * as express from 'express';
 import { ExpressAdapter } from '@nestjs/platform-express';
 import { AppModule } from '../src/app.module';
 
@@ -38,8 +38,6 @@ function normalizeUrl(url: string): string {
     path = path.substring(13);
   } else if (path.startsWith('/api/index')) {
     path = path.substring(10);
-  } else if (path === '/api' || path === '/api/') {
-    path = '/';
   }
 
   if (!path || path === '') path = '/';
@@ -67,4 +65,5 @@ export default async function handler(req: any, res: any) {
 
 module.exports = handler;
 module.exports.default = handler;
+
 
