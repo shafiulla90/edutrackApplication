@@ -3,17 +3,7 @@ import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import express from 'express';
 import { ExpressAdapter } from '@nestjs/platform-express';
-
-let AppModule: any;
-try {
-  AppModule = require('../src/app.module').AppModule;
-} catch (e1) {
-  try {
-    AppModule = require('../dist/app.module').AppModule;
-  } catch (e2) {
-    AppModule = require('../dist/src/app.module').AppModule;
-  }
-}
+import { AppModule } from '../src/app.module';
 
 const server = express();
 let cachedApp: any;
@@ -48,8 +38,8 @@ function normalizeUrl(url: string): string {
     path = path.substring(13);
   } else if (path.startsWith('/api/index')) {
     path = path.substring(10);
-  } else if (path.startsWith('/api')) {
-    path = path.substring(4);
+  } else if (path === '/api' || path === '/api/') {
+    path = '/';
   }
 
   if (!path || path === '') path = '/';
@@ -77,3 +67,4 @@ export default async function handler(req: any, res: any) {
 
 module.exports = handler;
 module.exports.default = handler;
+
