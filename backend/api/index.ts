@@ -3,7 +3,12 @@ import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import * as express from 'express';
 import { ExpressAdapter } from '@nestjs/platform-express';
-import { AppModule } from '../src/app.module';
+let AppModule: any;
+try {
+  AppModule = require('../dist/src/app.module').AppModule;
+} catch (e) {
+  AppModule = require('../src/app.module').AppModule;
+}
 
 const server = express();
 let cachedApp: any;
