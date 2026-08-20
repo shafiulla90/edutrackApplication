@@ -35,18 +35,29 @@ export class FirebaseService implements OnModuleInit, OnModuleDestroy {
 
     let credential;
 
-    if (credentialsPath && fs.existsSync(credentialsPath)) {
+    const serviceAccountJson = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
+    if (serviceAccountJson) {
+      try {
+        this.logger.log(`Initializing Firebase Admin SDK using FIREBASE_SERVICE_ACCOUNT_JSON env var`);
+        const serviceAccount = JSON.parse(serviceAccountJson);
+        credential = cert(serviceAccount);
+      } catch (err) {
+        this.logger.error('Failed to parse FIREBASE_SERVICE_ACCOUNT_JSON', err);
+      }
+    }
+
+    if (!credential && credentialsPath && fs.existsSync(credentialsPath)) {
       this.logger.log(`Initializing Firebase Admin SDK using credential file: ${credentialsPath}`);
       const serviceAccount = JSON.parse(fs.readFileSync(credentialsPath, 'utf8'));
       credential = cert(serviceAccount);
-    } else if (clientEmail && privateKey) {
+    } else if (!credential && clientEmail && privateKey) {
       this.logger.log(`Initializing Firebase Admin SDK using environment variable credentials`);
       credential = cert({
         projectId,
         clientEmail,
         privateKey,
       });
-    } else {
+    } else if (!credential) {
       this.logger.log(`Initializing Firebase Admin SDK with project ID: ${projectId}`);
       credential = cert({ projectId });
     }

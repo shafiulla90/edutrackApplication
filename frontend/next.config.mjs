@@ -2,7 +2,8 @@
 const nextConfig = {
   reactStrictMode: true,
 
-  output: 'standalone',
+  // Conditionally apply standalone output (for Docker), omit on Vercel
+  ...(process.env.VERCEL ? {} : { output: 'standalone' }),
 
   images: {
     domains: ['localhost', 'edutrack-saas-media.s3.amazonaws.com'],

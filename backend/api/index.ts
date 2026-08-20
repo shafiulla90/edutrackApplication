@@ -27,6 +27,11 @@ async function bootstrap() {
 export default async function handler(req: any, res: any) {
   try {
     await bootstrap();
+    if (req.url && req.url.startsWith('/api/')) {
+      req.url = req.url.substring(4);
+    } else if (req.url === '/api' || req.url === '/api/') {
+      req.url = '/';
+    }
     server(req, res);
   } catch (error: any) {
     console.error('CRITICAL SERVERLESS BOOTSTRAP ERROR:', error);
