@@ -38,6 +38,8 @@ function normalizeUrl(url: string): string {
     path = path.substring(13);
   } else if (path.startsWith('/api/index')) {
     path = path.substring(10);
+  } else if (path.startsWith('/api')) {
+    path = path.substring(4);
   }
 
   if (!path || path === '') path = '/';
