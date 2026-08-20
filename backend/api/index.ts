@@ -27,10 +27,15 @@ async function bootstrap() {
 function normalizeUrl(url: string): string {
   if (!url) return '/';
   let cleaned = url;
-  if (cleaned.startsWith('/api/index')) {
+  if (cleaned.startsWith('/api/index.ts')) {
+    cleaned = cleaned.substring(13);
+  } else if (cleaned.startsWith('/api/index')) {
     cleaned = cleaned.substring(10);
   } else if (cleaned.startsWith('/api')) {
     cleaned = cleaned.substring(4);
+  }
+  if (cleaned.includes('?')) {
+    cleaned = cleaned.split('?')[0];
   }
   if (!cleaned || cleaned === '') return '/';
   if (!cleaned.startsWith('/')) return '/' + cleaned;
