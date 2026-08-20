@@ -24,13 +24,24 @@ async function bootstrap() {
   return cachedApp;
 }
 
+function normalizeUrl(url: string): string {
+  if (!url) return '/';
+  let cleaned = url;
+  if (cleaned.startsWith('/api/index')) {
+    cleaned = cleaned.substring(10);
+  } else if (cleaned.startsWith('/api')) {
+    cleaned = cleaned.substring(4);
+  }
+  if (!cleaned || cleaned === '') return '/';
+  if (!cleaned.startsWith('/')) return '/' + cleaned;
+  return cleaned;
+}
+
 export default async function handler(req: any, res: any) {
   try {
     await bootstrap();
-    if (req.url && req.url.startsWith('/api/')) {
-      req.url = req.url.substring(4);
-    } else if (req.url === '/api' || req.url === '/api/') {
-      req.url = '/';
+    if (req.url) {
+      req.url = normalizeUrl(req.url);
     }
     server(req, res);
   } catch (error: any) {
