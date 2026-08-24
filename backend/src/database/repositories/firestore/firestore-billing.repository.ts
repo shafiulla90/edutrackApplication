@@ -27,6 +27,18 @@ export class FirestoreBillingRepository implements IBillingRepository {
     });
   }
 
+  async findPaymentsByTenant(tenantId: string): Promise<any[]> {
+    const snap = await this.db.collection('tenants').doc(tenantId).collection('payments').get();
+    return snap.docs.map((doc) => {
+      const data = doc.data();
+      return {
+        id: doc.id,
+        ...data,
+        amount: data.amountCents !== undefined ? fromCents(data.amountCents) : Number(data.amount || 0),
+      };
+    });
+  }
+
   async findInvoiceById(id: string, tenantId?: string): Promise<any | null> {
     if (tenantId) {
       const doc = await this.db.collection('tenants').doc(tenantId).collection('invoices').doc(id).get();

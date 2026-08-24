@@ -34,12 +34,15 @@ type StudentMarkRow = {
 export default function ExamsAndMarksPage() {
   const router = useRouter();
   // Metadata options
-  const [classes, setClasses] = useState<ClassSectionOption[]>([]);
+  const [rawClassSections, setRawClassSections] = useState<any[]>([]);
+  const [uniqueClasses, setUniqueClasses] = useState<string[]>([]);
+  const [selectedClassName, setSelectedClassName] = useState('');
+  const [availableSections, setAvailableSections] = useState<string[]>([]);
+  const [selectedSectionName, setSelectedSectionName] = useState('ALL');
   const [subjects, setSubjects] = useState<SubjectOption[]>([]);
   const [examTypes, setExamTypes] = useState<string[]>([]);
 
   // Selection states
-  const [selectedClassSectionId, setSelectedClassSectionId] = useState('');
   const [selectedSubjectId, setSelectedSubjectId] = useState('');
   const [selectedExamName, setSelectedExamName] = useState('');
   const [selectedSubjectType, setSelectedSubjectType] = useState('');
@@ -134,9 +137,20 @@ export default function ExamsAndMarksPage() {
   const fetchMetadata = async () => {
     try {
       const classRes = await api.get('/exams/classes');
-      setClasses(classRes.data);
-      if (classRes.data.length > 0) {
-        setSelectedClassSectionId(classRes.data[0].value);
+      const classData: any[] = Array.isArray(classRes.data) ? classRes.data : (classRes.data?.data || []);
+      setRawClassSections(classData);
+
+      // Extract unique Class names
+      const classNamesSet = new Set<string>();
+      classData.forEach((c: any) => {
+        let cName = c.className || (c.label ? c.label.split('-')[0].trim() : '');
+        if (cName) classNamesSet.add(cName);
+      });
+      const uniqueClassList = Array.from(classNamesSet);
+      setUniqueClasses(uniqueClassList);
+
+      if (uniqueClassList.length > 0) {
+        setSelectedClassName(uniqueClassList[0]);
       }
 
       const subRes = await api.get('/exams/subjects');
@@ -154,12 +168,15 @@ export default function ExamsAndMarksPage() {
       }
 
       const typeRes = await api.get('/exams/exam-types');
-      setExamTypes(typeRes.data);
-      if (typeRes.data.length > 0) {
-        setSelectedExamName(typeRes.data[0]);
-        // Fetch config for first exam type
+      const rawTypes = Array.isArray(typeRes.data) ? typeRes.data : [];
+      const stringTypes: string[] = rawTypes.map((t: any) =>
+        typeof t === 'string' ? t : t.name || t.id || 'Unit Test'
+      );
+      setExamTypes(stringTypes);
+      if (stringTypes.length > 0) {
+        setSelectedExamName(stringTypes[0]);
         try {
-          const cfgRes = await api.get(`/exam-config/resolve?examType=${encodeURIComponent(typeRes.data[0])}`);
+          const cfgRes = await api.get(`/exam-config/resolve?examType=${encodeURIComponent(stringTypes[0])}`);
           setExamConfig({ passingPercentage: cfgRes.data.passingPercentage, maxMarks: cfgRes.data.maxMarks });
         } catch {}
       }
@@ -167,6 +184,46 @@ export default function ExamsAndMarksPage() {
       console.error('Error fetching exams metadata:', err);
       setErrorMsg('Failed to load class, subject, or exam metadata.');
     }
+  };
+
+  // Update available sections when selected class changes
+  useEffect(() => {
+    if (!selectedClassName) {
+      setAvailableSections([]);
+      return;
+    }
+    const matchingSections = rawClassSections.filter((c: any) => {
+      const cName = c.className || (c.label ? c.label.split('-')[0].trim() : '');
+      return cName === selectedClassName;
+    });
+
+    const secSet = new Set<string>();
+    matchingSections.forEach((c: any) => {
+      let sName = c.sectionName || (c.label && c.label.includes('-') ? c.label.split('-').slice(1).join('-').trim() : '');
+      if (sName) secSet.add(sName);
+    });
+
+    const secList = Array.from(secSet);
+    setAvailableSections(secList);
+    setSelectedSectionName('ALL');
+  }, [selectedClassName, rawClassSections]);
+
+  const getActiveClassSectionId = () => {
+    if (!selectedClassName) return '';
+    const matching = rawClassSections.filter((c: any) => {
+      const cName = c.className || (c.label ? c.label.split('-')[0].trim() : '');
+      return cName === selectedClassName;
+    });
+
+    if (selectedSectionName !== 'ALL') {
+      const matchSec = matching.find((c: any) => {
+        const sName = c.sectionName || (c.label && c.label.includes('-') ? c.label.split('-').slice(1).join('-').trim() : '');
+        return sName === selectedSectionName;
+      });
+      if (matchSec) return matchSec.value;
+    }
+
+    return matching[0]?.value || '';
   };
 
   // Re-fetch exam config when exam name changes
@@ -178,17 +235,19 @@ export default function ExamsAndMarksPage() {
   }, [selectedExamName]);
 
   useEffect(() => {
-    if (selectedClassSectionId && selectedSubjectId && selectedExamName && selectedSubjectType) {
-      fetchRoster();
+    const activeCsId = getActiveClassSectionId();
+    if (selectedClassName && selectedSubjectId && selectedExamName && selectedSubjectType) {
+      fetchRoster(activeCsId);
     }
-  }, [selectedClassSectionId, selectedSubjectId, selectedExamName, selectedSubjectType]);
+  }, [selectedClassName, selectedSectionName, selectedSubjectId, selectedExamName, selectedSubjectType]);
 
-  const fetchRoster = async () => {
+  const fetchRoster = async (csId?: string) => {
+    const activeCsId = csId !== undefined ? csId : getActiveClassSectionId();
     setIsLoading(true);
     setErrorMsg('');
     try {
       const res = await api.get(
-        `/exams/marks-entry?classSectionId=${selectedClassSectionId}&subjectId=${selectedSubjectId}&examName=${encodeURIComponent(
+        `/exams/marks-entry?classSectionId=${activeCsId}&className=${encodeURIComponent(selectedClassName)}&sectionName=${encodeURIComponent(selectedSectionName)}&subjectId=${selectedSubjectId}&examName=${encodeURIComponent(
           selectedExamName
         )}&subjectType=${encodeURIComponent(selectedSubjectType)}`
       );
@@ -257,7 +316,7 @@ export default function ExamsAndMarksPage() {
       await api.post('/exams/save-marks', {
         marks: marksPayload,
         examName: selectedExamName,
-        classSectionId: selectedClassSectionId,
+        classSectionId: getActiveClassSectionId(),
         subjectId: selectedSubjectId,
         subjectType: selectedSubjectType,
       });
@@ -359,17 +418,32 @@ export default function ExamsAndMarksPage() {
 
       {/* Selectors card */}
       <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs font-bold">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 text-xs font-bold">
           <div>
-            <label className="block text-slate-400 mb-1.5 uppercase tracking-wider">Select Class & Section</label>
+            <label className="block text-slate-400 mb-1.5 uppercase tracking-wider">Select Class</label>
             <select
-              value={selectedClassSectionId}
-              onChange={(e) => setSelectedClassSectionId(e.target.value)}
-              className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-slate-800 font-bold outline-none"
+              value={selectedClassName}
+              onChange={(e) => setSelectedClassName(e.target.value)}
+              className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-slate-800 font-bold outline-none cursor-pointer"
             >
-              {classes.map((cls) => (
-                <option key={cls.value} value={cls.value}>
-                  {cls.label}
+              {uniqueClasses.map((cName) => (
+                <option key={cName} value={cName}>
+                  {cName}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-slate-400 mb-1.5 uppercase tracking-wider">Select Section</label>
+            <select
+              value={selectedSectionName}
+              onChange={(e) => setSelectedSectionName(e.target.value)}
+              className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-slate-800 font-bold outline-none cursor-pointer"
+            >
+              <option value="ALL">All Sections</option>
+              {availableSections.map((sName) => (
+                <option key={sName} value={sName}>
+                  {sName}
                 </option>
               ))}
             </select>
@@ -452,7 +526,7 @@ export default function ExamsAndMarksPage() {
             Scoring Matrix: {subjects.find(s => s.id === selectedSubjectId)?.name || 'Subject'} — Max Marks: 100
           </h3>
           <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">
-            {classes.find(c => c.value === selectedClassSectionId)?.label || ''} · {selectedExamName}
+            {selectedSectionName !== 'ALL' ? `${selectedClassName} - ${selectedSectionName}` : selectedClassName} · {selectedExamName}
           </span>
         </div>
 

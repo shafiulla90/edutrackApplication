@@ -1,8 +1,7 @@
 'use client';
 
-import React from 'react';
+import React, { useRef } from 'react';
 import { Calendar } from 'lucide-react';
-import { formatDateDDMMYYYY } from '@/lib/date';
 
 interface DatePickerInputProps {
   value: string; // ISO YYYY-MM-DD string
@@ -29,21 +28,27 @@ export default function DatePickerInput({
   id,
   name,
 }: DatePickerInputProps) {
-  const displayFormatted = value ? formatDateDDMMYYYY(value) : placeholder;
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const handleCalendarClick = () => {
+    if (disabled) return;
+    if (inputRef.current) {
+      if ('showPicker' in inputRef.current && typeof inputRef.current.showPicker === 'function') {
+        try {
+          inputRef.current.showPicker();
+        } catch (e) {
+          inputRef.current.focus();
+        }
+      } else {
+        inputRef.current.focus();
+      }
+    }
+  };
 
   return (
-    <div className="relative w-full">
-      <div
-        className={`flex items-center justify-between px-3.5 py-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-slate-800 dark:text-slate-100 text-sm font-semibold shadow-xs select-none transition-colors ${
-          disabled ? 'opacity-60 bg-slate-100 dark:bg-slate-950 cursor-not-allowed' : 'hover:border-[#2E5BFF] focus-within:ring-2 focus-within:ring-[#2E5BFF]/20'
-        } ${className}`}
-      >
-        <span className={value ? 'text-slate-800 dark:text-slate-100 font-mono font-bold' : 'text-slate-400 font-normal'}>
-          {displayFormatted}
-        </span>
-        <Calendar className="w-4 h-4 text-slate-400 shrink-0 ml-2 pointer-events-none" />
-      </div>
+    <div className={`relative flex items-center w-full ${className}`}>
       <input
+        ref={inputRef}
         type="date"
         id={id}
         name={name}
@@ -54,8 +59,17 @@ export default function DatePickerInput({
         max={max}
         required={required}
         aria-label={placeholder}
-        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10 disabled:cursor-not-allowed"
+        className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-800 dark:text-slate-100 text-sm font-semibold shadow-xs focus:outline-none focus:border-[#2E5BFF] focus:ring-2 focus:ring-[#2E5BFF]/20 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
       />
+      <button
+        type="button"
+        tabIndex={-1}
+        onClick={handleCalendarClick}
+        disabled={disabled}
+        className="absolute right-3 p-1 text-slate-400 hover:text-[#2E5BFF] cursor-pointer disabled:cursor-not-allowed"
+      >
+        <Calendar className="w-4 h-4 shrink-0" />
+      </button>
     </div>
   );
 }

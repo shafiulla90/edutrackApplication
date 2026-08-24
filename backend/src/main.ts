@@ -40,6 +40,11 @@ async function bootstrap() {
     credentials: true,
   });
 
+  // Increase JSON and URL-encoded body limits for file uploads
+  const express = require('express');
+  app.use(express.json({ limit: '50mb' }));
+  app.use(express.urlencoded({ limit: '50mb', extended: true }));
+
   // global pipes
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
 

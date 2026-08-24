@@ -10,10 +10,8 @@ import {
   AlertTriangle,
   RefreshCw,
   Check,
-  Tag,
   Receipt,
   Clock,
-  XCircle,
   Shield,
   Zap,
   ChevronRight,
@@ -21,24 +19,11 @@ import {
   Sparkles,
 } from 'lucide-react';
 
-// ─── Pricing Configuration ────────────────────────────────────────────────
-const IS_TEST_MODE = true; // Set to false for live production pricing (₹5,999 / ₹11,999)
-
-const PLAN_PRICING: Record<string, Record<string, number>> = IS_TEST_MODE
-  ? { BASIC: { 6: 1, 12: 2 } }
-  : { BASIC: { 6: 5999, 12: 11999 } };
-
-const PLAN_SAVINGS: Record<string, Record<string, number>> = IS_TEST_MODE
-  ? { BASIC: { 6: 0, 12: 0 } }
-  : { BASIC: { 6: 0, 12: 999 } };
-
-const VALID_COUPONS: Record<string, { type: 'percent' | 'flat'; value: number; label: string }> = {
-  WELCOME50: { type: 'percent', value: 50, label: '50% OFF' },
-  FLAT2000: { type: 'flat', value: 2000, label: '₹2,000 OFF' },
-  FLAT1000: { type: 'flat', value: 1000, label: '₹1,000 OFF' },
+// ─── Pricing Configuration (Updated to ₹1 for 6 months & ₹2 for 12 months) ────
+const PLAN_PRICING: Record<string, Record<number, number>> = {
+  BASIC: { 6: 1, 12: 2 }
 };
 
-// ─── Load Razorpay Script ─────────────────────────────────────────────────
 function loadRazorpayScript(): Promise<boolean> {
   return new Promise((resolve) => {
     if ((window as any).Razorpay) {
@@ -56,57 +41,27 @@ function loadRazorpayScript(): Promise<boolean> {
 export default function SubscriptionPage() {
   const { subscription, refresh, schoolName } = useTenant();
 
-  const [stats, setStats] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [showCheckoutModal, setShowCheckoutModal] = useState(false);
-
-  // Selected Billing Duration (6 or 12 months)
   const [billingMonths, setBillingMonths] = useState<6 | 12>(12);
 
-  // Coupon
-  const [couponCode, setCouponCode] = useState('');
-  const [appliedCoupon, setAppliedCoupon] = useState<null | { code: string; type: 'percent' | 'flat'; value: number; label: string }>(null);
-  const [couponMsg, setCouponMsg] = useState<{ text: string; ok: boolean } | null>(null);
-
-  // Payment state
   const [paymentProcessing, setPaymentProcessing] = useState(false);
   const [paymentSuccess, setPaymentSuccess] = useState<{ transactionId: string; message: string } | null>(null);
   const [paymentError, setPaymentError] = useState('');
 
-  // History
-  const [invoices, setInvoices] = useState<any[]>([]);
   const [payments, setPayments] = useState<any[]>([]);
   const [downloadingPdfId, setDownloadingPdfId] = useState<string | null>(null);
 
-  // ─── Real-Time Pricing Calculation ───────────────────────────────────────
-  const basePrice = PLAN_PRICING.BASIC[billingMonths] ?? 11999;
-  const savings = PLAN_SAVINGS.BASIC[billingMonths] ?? 0;
+  const basePrice = PLAN_PRICING.BASIC[billingMonths] ?? 2;
 
-  const { discountAmount, taxableAmount, gstAmount, finalPayable } = useMemo(() => {
-    let discount = 0;
-    if (appliedCoupon) {
-      discount = appliedCoupon.type === 'percent'
-        ? Math.round((basePrice * appliedCoupon.value) / 100)
-        : Math.min(appliedCoupon.value, basePrice);
-    }
-    const taxable = Math.max(0, basePrice - discount);
-    const gst = Math.round(taxable * 0.18);
-    return {
-      discountAmount: discount,
-      taxableAmount: taxable,
-      gstAmount: gst,
-      finalPayable: taxable + gst,
-    };
-  }, [basePrice, appliedCoupon]);
-
-  // ─── Fetch Subscription Data ──────────────────────────────────────────────
-  const fetchStats = async () => {
+  // Fetch Payment History
+  const fetchSubscriptionHistory = async () => {
     try {
       setLoading(true);
-      const res = await api.get('/tenant/subscription');
-      setStats(res.data);
-      if (res.data?.invoices) setInvoices(res.data.invoices);
-      if (res.data?.payments) setPayments(res.data.payments);
+      const res = await api.get('/subscription/history');
+      if (Array.isArray(res.data)) {
+        setPayments(res.data);
+      }
     } catch {
       // ignore
     } finally {
@@ -114,28 +69,9 @@ export default function SubscriptionPage() {
     }
   };
 
-  useEffect(() => { fetchStats(); }, [subscription?.status]);
-
-  // ─── Coupon Logic ─────────────────────────────────────────────────────────
-  const applyCoupon = () => {
-    setCouponMsg(null);
-    const upper = couponCode.toUpperCase().trim();
-    if (!upper) return;
-    const found = VALID_COUPONS[upper];
-    if (found) {
-      setAppliedCoupon({ code: upper, ...found });
-      setCouponMsg({ text: `✓ Coupon "${upper}" applied! (${found.label})`, ok: true });
-    } else {
-      setAppliedCoupon(null);
-      setCouponMsg({ text: 'Invalid or expired coupon code.', ok: false });
-    }
-  };
-
-  const removeCoupon = () => {
-    setAppliedCoupon(null);
-    setCouponCode('');
-    setCouponMsg(null);
-  };
+  useEffect(() => {
+    fetchSubscriptionHistory();
+  }, [subscription?.status]);
 
   const openCheckoutWithMonths = (months: 6 | 12) => {
     setBillingMonths(months);
@@ -144,7 +80,7 @@ export default function SubscriptionPage() {
     setShowCheckoutModal(true);
   };
 
-  // ─── PDF Download Handler (In-Memory Download on Same Page) ─────────────
+  // PDF Download Handler
   const handleDownloadInvoicePDF = async (inv: any) => {
     try {
       setDownloadingPdfId(inv.id);
@@ -152,10 +88,8 @@ export default function SubscriptionPage() {
       const html2canvas = (await import('html2canvas')).default;
       const { jsPDF } = await import('jspdf');
 
-      const subtotal = Number(inv.amount || 0);
-      const gst = Number(inv.gst || 0);
-      const total = subtotal + gst;
-      const invNumber = inv.invoiceNumber || 'INV-SUB-001';
+      const amount = Number(inv.amount || (inv.duration?.includes('12') ? 2 : 1));
+      const invNumber = inv.id ? `INV-SUB-${inv.id.slice(-6).toUpperCase()}` : 'INV-SUB-001';
 
       const container = document.createElement('div');
       container.style.position = 'fixed';
@@ -169,65 +103,53 @@ export default function SubscriptionPage() {
 
       container.innerHTML = `
         <div style="border: 1px solid #cbd5e1; border-radius: 12px; overflow: hidden; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);">
-          <!-- Header -->
           <div style="background-color: #0f172a; color: #ffffff; padding: 32px; border-bottom: 5px solid #2563eb; display: flex; justify-content: space-between; align-items: center;">
             <div>
               <h1 style="margin: 0; font-size: 24px; font-weight: 900; letter-spacing: -0.5px; text-transform: uppercase; color: #ffffff;">EduTrack SaaS Platform</h1>
-              <p style="margin: 4px 0 0 0; font-size: 12px; color: #94a3b8; font-weight: 600;">Official Tax Invoice & Payment Receipt</p>
+              <p style="margin: 4px 0 0 0; font-size: 12px; color: #94a3b8; font-weight: 600;">Official Subscription Tax Receipt</p>
             </div>
             <div style="text-align: right;">
-              <div style="background-color: #059669; color: #ffffff; padding: 6px 14px; border-radius: 20px; font-size: 11px; font-weight: 800; display: inline-block; text-transform: uppercase;">${inv.status || 'PAID'}</div>
-              <div style="font-size: 11px; color: #cbd5e1; margin-top: 6px; font-family: monospace;">Date: ${new Date(inv.createdDate || inv.createdAt || Date.now()).toLocaleDateString('en-IN')}</div>
+              <div style="background-color: #059669; color: #ffffff; padding: 6px 14px; border-radius: 20px; font-size: 11px; font-weight: 800; display: inline-block; text-transform: uppercase;">${inv.status || 'SUCCESS'}</div>
+              <div style="font-size: 11px; color: #cbd5e1; margin-top: 6px; font-family: monospace;">Date: ${new Date(inv.paidDate || inv.createdAt || Date.now()).toLocaleDateString('en-IN')}</div>
             </div>
           </div>
-
-          <!-- Content -->
           <div style="padding: 32px;">
-            <!-- Meta Table -->
             <table style="width: 100%; font-size: 13px; margin-bottom: 24px; border-collapse: collapse; border-bottom: 1px solid #e2e8f0; padding-bottom: 16px;">
               <tbody>
                 <tr>
-                  <td style="padding: 6px 0;"><strong>Invoice No:</strong> <span style="font-family: monospace; font-weight: 700; color: #0f172a;">${invNumber}</span></td>
-                  <td style="padding: 6px 0; text-align: right;"><strong>Payment Method:</strong> <span style="font-weight: 700; color: #0f172a;">RAZORPAY (Online)</span></td>
+                  <td style="padding: 6px 0;"><strong>Receipt No:</strong> <span style="font-family: monospace; font-weight: 700; color: #0f172a;">${invNumber}</span></td>
+                  <td style="padding: 6px 0; text-align: right;"><strong>Payment Method:</strong> <span style="font-weight: 700; color: #0f172a;">Razorpay Subscription</span></td>
                 </tr>
                 <tr>
-                  <td style="padding: 6px 0;"><strong>School Tenant:</strong> <span style="font-weight: 700; color: #0f172a;">${schoolName || stats?.schoolName || 'School Admin'}</span></td>
+                  <td style="padding: 6px 0;"><strong>School Tenant:</strong> <span style="font-weight: 700; color: #0f172a;">${schoolName || 'School Admin'}</span></td>
                   <td style="padding: 6px 0; text-align: right;"><strong>Currency:</strong> <span style="font-weight: 700; color: #0f172a;">INR (₹)</span></td>
                 </tr>
               </tbody>
             </table>
-
-            <!-- Particulars Table -->
             <table style="width: 100%; border-collapse: collapse; margin-top: 16px;">
               <thead>
                 <tr style="background-color: #f8fafc; color: #475569; font-size: 11px; font-weight: 700; text-transform: uppercase; border-bottom: 2px solid #e2e8f0;">
-                  <th style="padding: 12px 16px; text-align: left;">Description</th>
+                  <th style="padding: 12px 16px; text-align: left;">Plan Description</th>
                   <th style="padding: 12px 16px; text-align: center;">Billing Cycle</th>
-                  <th style="padding: 12px 16px; text-align: right;">Subtotal</th>
-                  <th style="padding: 12px 16px; text-align: right;">GST (18%)</th>
                   <th style="padding: 12px 16px; text-align: right;">Total Amount</th>
                 </tr>
               </thead>
               <tbody style="font-size: 13px;">
                 <tr style="border-bottom: 1px solid #f1f5f9;">
-                  <td style="padding: 16px; font-weight: 700; color: #0f172a;">EduTrack SaaS ${inv.planId || 'BASIC'} Plan Subscription Renewal</td>
-                  <td style="padding: 16px; text-align: center; color: #475569;">Standard Tier</td>
-                  <td style="padding: 16px; text-align: right; font-family: monospace;">₹${subtotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                  <td style="padding: 16px; text-align: right; font-family: monospace;">₹${gst.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                  <td style="padding: 16px; text-align: right; font-weight: 800; color: #059669; font-family: monospace;">₹${total.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                  <td style="padding: 16px; font-weight: 700; color: #0f172a;">${inv.planName || 'EduTrack Basic Plan'}</td>
+                  <td style="padding: 16px; text-align: center; color: #475569;">${inv.duration || '12 Months'}</td>
+                  <td style="padding: 16px; text-align: right; font-weight: 800; color: #059669; font-family: monospace;">₹${amount.toLocaleString('en-IN')}</td>
                 </tr>
               </tbody>
             </table>
           </div>
-
-          <!-- Footer -->
           <div style="background-color: #f8fafc; border-top: 1px solid #e2e8f0; padding: 24px 32px; display: flex; justify-content: space-between; align-items: center;">
             <div style="font-size: 11px; color: #64748b; font-weight: 500; max-width: 400px; line-height: 1.4;">
-              This is an official computer generated tax invoice issued by EduTrack SaaS Platforms.<br/>No physical signature is required.
+              Computer generated tax invoice issued by EduTrack SaaS Platforms. No physical signature is required.
             </div>
             <div style="background-color: #0f172a; color: #ffffff; border-radius: 10px; padding: 14px 24px; text-align: right;">
               <div style="font-size: 10px; text-transform: uppercase; color: #94a3b8; font-weight: 700;">Grand Total Paid</div>
-              <div style="font-size: 20px; font-weight: 900; font-family: monospace; color: #34d399;">₹${total.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</div>
+              <div style="font-size: 20px; font-weight: 900; font-family: monospace; color: #34d399;">₹${amount.toLocaleString('en-IN')}</div>
             </div>
           </div>
         </div>
@@ -254,148 +176,117 @@ export default function SubscriptionPage() {
     }
   };
 
-  // ─── Razorpay Payment Handler ─────────────────────────────────────────────
+  // Razorpay SaaS Subscription Payment Handler
   const handleProceedToPayment = async () => {
     setPaymentError('');
     setPaymentProcessing(true);
 
+    const planCode = billingMonths === 6 ? 'BASIC_6_MONTH' : 'BASIC_12_MONTH';
+
     try {
-      // 1. Load Razorpay script
       const loaded = await loadRazorpayScript();
       if (!loaded) {
-        setPaymentError('Could not load Razorpay. Please check your internet connection.');
+        setPaymentError('Could not load Razorpay SDK. Please check internet connection.');
         setPaymentProcessing(false);
         return;
       }
 
-      // 2. Create order on backend
-      const orderRes = await api.post('/tenant/subscription/create-order', {
-        planName: 'BASIC',
-        billingMonths,
-        baseAmountRs: finalPayable,
-        couponCode: appliedCoupon?.code || null,
-      });
-      const { orderId, amount, currency, key_id } = orderRes.data;
+      // 1. Create order on backend with server-side price enforcement
+      const orderRes = await api.post('/subscription/create-order', { planCode });
+      const orderData = orderRes.data;
 
-      // 3. Open Razorpay Checkout
+      if (!orderData || !orderData.orderId) {
+        throw new Error('Failed to generate subscription order.');
+      }
+
+      // 2. Open Razorpay Checkout modal
       const options = {
-        key: key_id || process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || 'rzp_test_placeholder',
-        amount,
-        currency,
-        order_id: orderId,
-        name: 'EduTrack SaaS',
-        description: `BASIC Plan – ${billingMonths} Months`,
-        image: '/logo.png',
+        key: orderData.keyId || 'rzp_test_TRzAGmaPvw7hNM',
+        amount: orderData.amountInPaise,
+        currency: orderData.currency || 'INR',
+        order_id: orderData.orderId,
+        name: 'EduTrack SaaS Platform',
+        description: `${orderData.planName || 'EduTrack Basic Plan'} (${billingMonths} Months)`,
         handler: async (response: any) => {
-          // 4. Verify payment on backend
           try {
-            const verifyRes = await api.post('/tenant/subscription/verify-payment', {
-              razorpay_order_id: response.razorpay_order_id || orderId,
-              razorpay_payment_id: response.razorpay_payment_id || ('dummy_pay_' + Date.now()),
-              razorpay_signature: response.razorpay_signature || 'dummy_sig',
-              planName: 'BASIC',
-              billingMonths,
-              finalAmountRs: finalPayable,
-              couponCode: appliedCoupon?.code || null,
+            // 3. Verify signature server-side
+            const verifyRes = await api.post('/subscription/verify', {
+              razorpayOrderId: response.razorpay_order_id || orderData.orderId,
+              razorpayPaymentId: response.razorpay_payment_id,
+              razorpaySignature: response.razorpay_signature,
+              planCode,
             });
+
             setPaymentSuccess({
-              transactionId: verifyRes.data.transactionId,
-              message: verifyRes.data.message,
+              transactionId: response.razorpay_payment_id || 'pay_success',
+              message: verifyRes.data?.message || 'Subscription activated successfully!',
             });
             setShowCheckoutModal(false);
-            setPaymentProcessing(false);
             await refresh();
-            await fetchStats();
+            await fetchSubscriptionHistory();
           } catch (err: any) {
-            setPaymentError(err.response?.data?.message || 'Payment verification failed. Please contact support.');
+            setPaymentError(err.response?.data?.message || 'Payment verification failed.');
+          } finally {
             setPaymentProcessing(false);
           }
         },
         prefill: {
-          email: stats?.email || '',
-          contact: stats?.phone || '',
+          name: schoolName || 'School Admin',
         },
         theme: { color: '#2563EB' },
         modal: {
-          ondismiss: () => { setPaymentProcessing(false); },
+          ondismiss: () => {
+            setPaymentProcessing(false);
+          },
         },
       };
 
       const rzp = new (window as any).Razorpay(options);
       rzp.open();
-
     } catch (err: any) {
-      setPaymentError(err.response?.data?.message || 'Failed to initiate payment. Please try again.');
+      console.error('Subscription checkout error:', err);
+      setPaymentError(err.response?.data?.message || err.message || 'Failed to initiate payment.');
       setPaymentProcessing(false);
     }
   };
 
-  // ─── Subscription Status ──────────────────────────────────────────────────
   const currentStatus = subscription?.status || 'ACTIVE';
-  const isPending = currentStatus === 'PENDING_APPROVAL' || currentStatus === 'PENDING';
   const isExpired = currentStatus === 'EXPIRED' || currentStatus === 'SUSPENDED';
-  const expiryDate = subscription?.expiryDate ? new Date(subscription.expiryDate) : new Date(Date.now() + 365 * 24 * 60 * 60 * 1000);
+  const expiryDate = subscription?.expiryDate ? new Date(subscription.expiryDate) : new Date(Date.now() + 180 * 24 * 60 * 60 * 1000);
   const daysRemaining = Math.max(0, Math.ceil((expiryDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24)));
 
   return (
     <div className="p-6 max-w-6xl mx-auto space-y-8">
-
       {/* ── Top Banner ─────────────────────────────────────────────────────── */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-2xl">
         <div>
           <div className="flex items-center gap-3">
             <h1 className="text-2xl font-black text-white tracking-tight">Subscription & Billing Console</h1>
             <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${
-              isPending ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
-              : isExpired ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30'
-              : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+              isExpired ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30' : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
             }`}>
               {currentStatus}
             </span>
           </div>
-          <p className="text-xs text-slate-400 mt-1">Real-time Razorpay checkout, automated invoicing, and approval workflows.</p>
+          <p className="text-xs text-slate-400 mt-1">Real-time Razorpay checkout, automated invoicing, and instant approval workflows.</p>
         </div>
+
         <button
           onClick={() => openCheckoutWithMonths(12)}
-          className="flex items-center gap-2 px-5 py-3 text-xs font-extrabold text-white bg-blue-600 hover:bg-blue-500 rounded-2xl shadow-lg shadow-blue-600/30 cursor-pointer transition-all"
+          className="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-2xl font-bold text-xs flex items-center gap-2 transition-all shadow-lg shadow-blue-600/30 cursor-pointer"
         >
-          <CreditCard className="w-4 h-4" />
+          <Sparkles className="w-4 h-4" />
           <span>Renew / Upgrade Subscription</span>
         </button>
       </div>
 
-      {/* ── Payment Success Banner ──────────────────────────────────────────── */}
       {paymentSuccess && (
-        <div className="p-6 bg-emerald-950/60 border border-emerald-700/80 rounded-3xl flex items-start gap-4 shadow-xl">
+        <div className="p-6 bg-emerald-950/70 border border-emerald-800/80 rounded-3xl flex items-start gap-4 text-emerald-200 shadow-xl">
           <CheckCircle className="w-6 h-6 text-emerald-400 shrink-0 mt-0.5" />
           <div>
-            <h3 className="text-sm font-bold text-emerald-300">Payment Received Successfully!</h3>
-            <p className="text-xs text-emerald-200/90 mt-1 leading-relaxed max-w-2xl">{paymentSuccess.message}</p>
-            <p className="text-[11px] text-emerald-400/70 mt-2 font-mono">Transaction ID: {paymentSuccess.transactionId}</p>
-          </div>
-        </div>
-      )}
-
-      {/* ── Pending Approval Banner ─────────────────────────────────────────── */}
-      {isPending && !paymentSuccess && (
-        <div className="p-6 bg-amber-950/60 border border-amber-800/80 rounded-3xl flex items-start gap-4 text-amber-200 shadow-xl">
-          <Clock className="w-6 h-6 text-amber-400 shrink-0 mt-0.5 animate-pulse" />
-          <div>
-            <h3 className="text-sm font-bold text-amber-300">Renewal Request Pending Approval</h3>
-            <p className="text-xs text-amber-200/90 mt-1 leading-relaxed">
-              Your payment has been received and is awaiting approval from the Platform Administrator. Approval normally takes a few hours. You will receive a notification once approved.
-            </p>
-          </div>
-        </div>
-      )}
-
-      {/* ── Expired Banner ──────────────────────────────────────────────────── */}
-      {isExpired && (
-        <div className="p-6 bg-rose-950/70 border border-rose-800/80 rounded-3xl flex items-start gap-4 text-rose-200 shadow-xl">
-          <AlertTriangle className="w-6 h-6 text-rose-400 shrink-0 mt-0.5" />
-          <div>
-            <h3 className="text-sm font-bold text-rose-300">Subscription Expired — Application Locked</h3>
-            <p className="text-xs text-rose-200/90 mt-1 leading-relaxed">Please renew your subscription to continue using EduTrack modules.</p>
+            <h3 className="text-sm font-bold text-emerald-300">✓ Subscription Active</h3>
+            <p className="text-xs text-emerald-200/90 mt-1 leading-relaxed">{paymentSuccess.message}</p>
+            <p className="text-[11px] font-mono text-emerald-400 mt-2">Payment ID: {paymentSuccess.transactionId}</p>
           </div>
         </div>
       )}
@@ -404,8 +295,8 @@ export default function SubscriptionPage() {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
           { label: 'Current Plan', value: subscription?.plan || 'BASIC', sub: 'Standard tier' },
-          { label: 'Expiry Date', value: expiryDate.toLocaleDateString(), sub: `${daysRemaining} days remaining` },
-          { label: 'Billing Cycle', value: stats?.billingCycle || '12 Months', sub: 'Auto-renewal enabled' },
+          { label: 'Expiry Date', value: expiryDate.toLocaleDateString('en-IN'), sub: `${daysRemaining} days remaining` },
+          { label: 'Billing Cycle', value: (subscription as any)?.billingCycle || (billingMonths === 6 ? '6 Months' : '12 Months'), sub: 'Auto-renewal enabled' },
           { label: 'Grace Period', value: 'Active', sub: '14-day grace window', green: true },
         ].map((card) => (
           <div key={card.label} className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
@@ -424,7 +315,6 @@ export default function SubscriptionPage() {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-
           {/* ── CARD 1: 6 MONTHS ──────────────────────────────────────────────── */}
           <div
             onClick={() => setBillingMonths(6)}
@@ -454,7 +344,7 @@ export default function SubscriptionPage() {
               <div>
                 <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Billing Duration: 6 Months</span>
                 <div className="flex items-baseline gap-1 mt-1">
-                  <span className="text-3xl font-black text-slate-900">₹5,999</span>
+                  <span className="text-3xl font-black text-slate-900">₹1</span>
                   <span className="text-xs text-slate-400 font-medium">/ 6 months</span>
                 </div>
                 <p className="text-[11px] text-slate-400 mt-1">Includes all core school management modules</p>
@@ -487,7 +377,7 @@ export default function SubscriptionPage() {
               className="mt-6 w-full py-3.5 bg-blue-600 hover:bg-blue-500 text-white rounded-2xl font-extrabold text-sm transition-all shadow-lg shadow-blue-600/30 cursor-pointer flex items-center justify-center gap-2"
             >
               <CreditCard className="w-4 h-4" />
-              <span>Proceed to Payment (₹5,999)</span>
+              <span>Proceed to Payment (₹1)</span>
               <ChevronRight className="w-4 h-4" />
             </button>
           </div>
@@ -501,11 +391,6 @@ export default function SubscriptionPage() {
                 : 'border-slate-200 hover:border-blue-300 shadow-md hover:shadow-lg'
             }`}
           >
-            {/* Top Ribbon Badge */}
-            <div className="absolute top-0 right-0 bg-emerald-600 text-white text-[10px] font-black uppercase px-4 py-1.5 rounded-bl-2xl tracking-wider flex items-center gap-1 shadow-md">
-              <Sparkles className="w-3 h-3" /> BEST VALUE — SAVE ₹999
-            </div>
-
             <div className="space-y-4">
               <div className="flex justify-between items-start">
                 <div className="flex items-center gap-3">
@@ -526,11 +411,8 @@ export default function SubscriptionPage() {
               <div>
                 <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Billing Duration: 12 Months</span>
                 <div className="flex items-baseline gap-2 mt-1">
-                  <span className="text-3xl font-black text-slate-900">₹11,999</span>
+                  <span className="text-3xl font-black text-slate-900">₹2</span>
                   <span className="text-xs text-slate-400 font-medium">/ 12 months</span>
-                  <span className="text-xs bg-emerald-100 text-emerald-800 font-extrabold px-2 py-0.5 rounded-md">
-                    Save ₹999
-                  </span>
                 </div>
                 <p className="text-[11px] text-slate-400 mt-1">Best value annual plan for full academic year support</p>
               </div>
@@ -562,77 +444,18 @@ export default function SubscriptionPage() {
               className="mt-6 w-full py-3.5 bg-blue-600 hover:bg-blue-500 text-white rounded-2xl font-extrabold text-sm transition-all shadow-lg shadow-blue-600/30 cursor-pointer flex items-center justify-center gap-2"
             >
               <CreditCard className="w-4 h-4" />
-              <span>Proceed to Payment (₹11,999)</span>
+              <span>Proceed to Payment (₹2)</span>
               <ChevronRight className="w-4 h-4" />
             </button>
           </div>
-
         </div>
       </div>
 
-      {/* ── Invoice History ─────────────────────────────────────────────────── */}
-      <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm space-y-4">
-        <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
-          <Receipt className="w-5 h-5 text-blue-600" />
-          Invoice History
-        </h3>
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse text-xs">
-            <thead>
-              <tr className="bg-slate-50 text-slate-500 border-b border-slate-200 font-semibold">
-                <th className="p-3">Invoice #</th>
-                <th className="p-3">Plan</th>
-                <th className="p-3">Subtotal</th>
-                <th className="p-3">GST (18%)</th>
-                <th className="p-3">Total</th>
-                <th className="p-3">Status</th>
-                <th className="p-3">Date</th>
-                <th className="p-3">PDF</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 text-slate-700">
-              {invoices.length > 0 ? invoices.map((inv) => (
-                <tr key={inv.id}>
-                  <td className="p-3 font-mono font-bold text-slate-900">{inv.invoiceNumber}</td>
-                  <td className="p-3 font-semibold">{inv.planId || 'BASIC'}</td>
-                  <td className="p-3 font-mono">₹{Number(inv.amount).toLocaleString('en-IN')}</td>
-                  <td className="p-3 font-mono">₹{Number(inv.gst).toLocaleString('en-IN')}</td>
-                  <td className="p-3 font-mono font-bold text-emerald-600">₹{(Number(inv.amount) + Number(inv.gst)).toLocaleString('en-IN')}</td>
-                  <td className="p-3">
-                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${inv.status === 'PAID' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
-                      {inv.status}
-                    </span>
-                  </td>
-                  <td className="p-3 text-slate-500">{new Date(inv.createdDate || inv.createdAt).toLocaleDateString()}</td>
-                  <td className="p-3">
-                    <button
-                      type="button"
-                      onClick={() => handleDownloadInvoicePDF(inv)}
-                      disabled={downloadingPdfId === inv.id}
-                      className="flex items-center gap-1 text-blue-600 hover:text-blue-700 font-bold cursor-pointer transition-all disabled:opacity-50"
-                    >
-                      {downloadingPdfId === inv.id ? (
-                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                      ) : (
-                        <Download className="w-3.5 h-3.5" />
-                      )}
-                      PDF
-                    </button>
-                  </td>
-                </tr>
-              )) : (
-                <tr><td colSpan={8} className="p-5 text-center text-slate-400">No invoices yet. Invoices are generated after Super Admin approval.</td></tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      {/* ── Payment History ─────────────────────────────────────────────────── */}
+      {/* ── Subscription Payment History ────────────────────────────────────── */}
       <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm space-y-4">
         <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
           <Banknote className="w-5 h-5 text-emerald-600" />
-          Payment History
+          Subscription Payment History
         </h3>
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse text-xs">
@@ -641,53 +464,63 @@ export default function SubscriptionPage() {
                 <th className="p-3">Date</th>
                 <th className="p-3">Plan</th>
                 <th className="p-3">Duration</th>
-                <th className="p-3">Gateway</th>
-                <th className="p-3">Method</th>
-                <th className="p-3">Transaction ID</th>
                 <th className="p-3">Amount</th>
+                <th className="p-3">Razorpay Payment ID</th>
+                <th className="p-3">Order ID</th>
                 <th className="p-3">Status</th>
+                <th className="p-3">Receipt</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 text-slate-700">
               {payments.length > 0 ? payments.map((p) => (
                 <tr key={p.id}>
-                  <td className="p-3 text-slate-500">{p.paidAt ? new Date(p.paidAt).toLocaleDateString() : new Date(p.createdAt).toLocaleDateString()}</td>
-                  <td className="p-3 font-semibold">{p.planId || 'BASIC'}</td>
-                  <td className="p-3">{p.billingDurationMonths ? `${p.billingDurationMonths} Months` : '—'}</td>
-                  <td className="p-3">{p.gateway || '—'}</td>
-                  <td className="p-3">{p.method || '—'}</td>
-                  <td className="p-3 font-mono text-slate-600">{p.transactionId?.slice(0, 20) || '—'}</td>
-                  <td className="p-3 font-mono font-bold text-emerald-600">₹{Number(p.amount).toLocaleString('en-IN')}</td>
+                  <td className="p-3 text-slate-500">{p.paidDate ? new Date(p.paidDate).toLocaleDateString('en-IN') : (p.createdAt ? new Date(p.createdAt).toLocaleDateString('en-IN') : '—')}</td>
+                  <td className="p-3 font-semibold">{p.planName || 'EduTrack Basic'}</td>
+                  <td className="p-3">{p.duration || '12 Months'}</td>
+                  <td className="p-3 font-mono font-bold text-emerald-600">₹{Number(p.amount || (p.duration?.includes('12') ? 2 : 1)).toLocaleString('en-IN')}</td>
+                  <td className="p-3 font-mono text-slate-600">{p.paymentId || p.id || '—'}</td>
+                  <td className="p-3 font-mono text-slate-600">{p.orderId || '—'}</td>
                   <td className="p-3">
                     <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
-                      p.status === 'SUCCESS' ? 'bg-emerald-100 text-emerald-700'
-                      : p.status === 'PENDING' ? 'bg-amber-100 text-amber-700'
-                      : 'bg-rose-100 text-rose-700'
-                    }`}>{p.status}</span>
+                      p.status === 'SUCCESS' || p.status === 'PAID' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'
+                    }`}>{p.status || 'SUCCESS'}</span>
+                  </td>
+                  <td className="p-3">
+                    <button
+                      type="button"
+                      onClick={() => handleDownloadInvoicePDF(p)}
+                      disabled={downloadingPdfId === p.id}
+                      className="flex items-center gap-1 text-blue-600 hover:text-blue-700 font-bold cursor-pointer transition-all disabled:opacity-50"
+                    >
+                      {downloadingPdfId === p.id ? (
+                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <Download className="w-3.5 h-3.5" />
+                      )}
+                      Receipt PDF
+                    </button>
                   </td>
                 </tr>
               )) : (
-                <tr><td colSpan={8} className="p-5 text-center text-slate-400">No payment records yet.</td></tr>
+                <tr><td colSpan={8} className="p-5 text-center text-slate-400">No subscription payment records found.</td></tr>
               )}
             </tbody>
           </table>
         </div>
       </div>
 
-      {/* ── Checkout Modal (Full Viewport Coverage via z-[99999] top-0 left-0 w-screen h-screen) ───── */}
+      {/* ── Checkout Modal ──────────────────────────────────────────────────── */}
       {showCheckoutModal && (
         <div className="fixed inset-0 top-0 left-0 w-screen h-screen bg-black/80 backdrop-blur-md flex items-center justify-center p-4 z-[99999] overflow-y-auto">
           <div className="bg-slate-900 border border-slate-700 rounded-3xl p-6 w-full max-w-md space-y-5 text-white shadow-2xl my-auto">
-            {/* Header */}
             <div className="flex justify-between items-center border-b border-slate-800 pb-4">
               <div>
-                <h3 className="text-lg font-black">BASIC Plan ({billingMonths} Months) — Checkout</h3>
-                <p className="text-xs text-slate-400 mt-0.5">Secure Razorpay Checkout</p>
+                <h3 className="text-lg font-black">EduTrack Basic Plan ({billingMonths} Months)</h3>
+                <p className="text-xs text-slate-400 mt-0.5">Dedicated SaaS Subscription Gateway</p>
               </div>
               <button onClick={() => setShowCheckoutModal(false)} className="text-slate-400 hover:text-white text-2xl leading-none cursor-pointer">✕</button>
             </div>
 
-            {/* Selected Duration Switcher */}
             <div>
               <label className="block text-xs font-bold text-slate-400 mb-2 uppercase tracking-wider">Selected Duration</label>
               <div className="grid grid-cols-2 gap-3">
@@ -704,74 +537,26 @@ export default function SubscriptionPage() {
                       </div>
                       <span className="text-xs font-bold text-slate-300">{m} Months</span>
                     </div>
-                    <div className="text-lg font-black text-white mt-1">₹{PLAN_PRICING.BASIC[m].toLocaleString('en-IN')}</div>
+                    <div className="text-lg font-black text-white mt-1">₹{PLAN_PRICING.BASIC[m]}</div>
                   </button>
                 ))}
               </div>
             </div>
 
-            {/* Coupon Code */}
-            <div>
-              <label className="block text-xs font-bold text-slate-400 mb-2 uppercase tracking-wider flex items-center gap-1.5">
-                <Tag className="w-3.5 h-3.5" /> Promo Code (Optional)
-              </label>
-              {appliedCoupon ? (
-                <div className="flex items-center justify-between bg-emerald-500/10 border border-emerald-500/30 rounded-xl px-3 py-2.5">
-                  <span className="text-xs font-bold text-emerald-400">✓ {appliedCoupon.code} — {appliedCoupon.label}</span>
-                  <button type="button" onClick={removeCoupon} className="text-slate-400 hover:text-rose-400 cursor-pointer">
-                    <XCircle className="w-4 h-4" />
-                  </button>
-                </div>
-              ) : (
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    value={couponCode}
-                    onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
-                    onKeyDown={(e) => e.key === 'Enter' && applyCoupon()}
-                    placeholder="e.g. WELCOME50"
-                    className="flex-1 bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-white text-xs outline-none uppercase font-mono focus:border-blue-500"
-                  />
-                  <button type="button" onClick={applyCoupon} className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 font-bold rounded-xl text-blue-400 text-xs cursor-pointer transition-all">
-                    Apply
-                  </button>
-                </div>
-              )}
-              {couponMsg && !appliedCoupon && (
-                <p className={`text-[11px] mt-1.5 font-medium ${couponMsg.ok ? 'text-emerald-400' : 'text-rose-400'}`}>{couponMsg.text}</p>
-              )}
-            </div>
-
-            {/* Real-Time Pricing Summary */}
             <div className="bg-slate-950 border border-slate-800 rounded-2xl p-4 space-y-2 text-xs font-mono">
               <div className="flex justify-between text-slate-400">
-                <span>Plan Price ({billingMonths} Months):</span>
-                <span>₹{basePrice.toLocaleString('en-IN')}</span>
-              </div>
-              {appliedCoupon && (
-                <div className="flex justify-between text-emerald-400">
-                  <span>Coupon ({appliedCoupon.code}):</span>
-                  <span>−₹{discountAmount.toLocaleString('en-IN')}</span>
-                </div>
-              )}
-              <div className="flex justify-between text-slate-400">
-                <span>Subtotal:</span>
-                <span>₹{taxableAmount.toLocaleString('en-IN')}</span>
-              </div>
-              <div className="flex justify-between text-slate-400">
-                <span>GST (18%):</span>
-                <span>+₹{gstAmount.toLocaleString('en-IN')}</span>
+                <span>Plan Duration:</span>
+                <span>{billingMonths} Months</span>
               </div>
               <div className="border-t border-slate-800 pt-2 flex justify-between text-sm font-bold text-white">
-                <span>Grand Total:</span>
-                <span className="text-emerald-400">₹{finalPayable.toLocaleString('en-IN')}</span>
+                <span>Total Amount Due:</span>
+                <span className="text-emerald-400">₹{basePrice} INR</span>
               </div>
             </div>
 
-            {/* Payment Methods Info */}
             <div className="flex items-center gap-2 bg-blue-500/5 border border-blue-500/20 rounded-xl px-3 py-2">
               <Shield className="w-4 h-4 text-blue-400 shrink-0" />
-              <p className="text-[11px] text-slate-400">Secure checkout via Razorpay — UPI, Cards, Net Banking, Wallets, EMI supported</p>
+              <p className="text-[11px] text-slate-400">EduTrack SaaS Subscription Gateway (UPI, Cards, Net Banking)</p>
             </div>
 
             {paymentError && (
@@ -781,7 +566,6 @@ export default function SubscriptionPage() {
               </div>
             )}
 
-            {/* Actions */}
             <div className="flex gap-3 pt-1">
               <button
                 type="button"
@@ -799,15 +583,10 @@ export default function SubscriptionPage() {
                 {paymentProcessing ? (
                   <><RefreshCw className="w-4 h-4 animate-spin" /> Processing...</>
                 ) : (
-                  <><CreditCard className="w-4 h-4" /> Pay ₹{finalPayable.toLocaleString('en-IN')}</>
+                  <><CreditCard className="w-4 h-4" /> Proceed to Payment (₹{basePrice})</>
                 )}
               </button>
             </div>
-
-            <p className="text-[10px] text-slate-600 text-center">
-              After payment, your renewal request will be submitted for Super Admin approval.<br />
-              Approval usually takes a few hours.
-            </p>
           </div>
         </div>
       )}

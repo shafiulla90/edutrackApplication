@@ -19,11 +19,20 @@ export class TenantContextMiddleware implements NestMiddleware {
     }
 
     const headerTenantId = req.headers['x-tenant-id'];
-    const resolvedTenantId =
-      userPayload?.tenantId ||
-      (headerTenantId && headerTenantId !== 'undefined' && headerTenantId !== 'null' ? headerTenantId : null);
+    
+    // JWT tenant identity is non-bypassable and authoritative
+    const jwtTenantId = userPayload?.tenantId || null;
+    let resolvedTenantId = jwtTenantId;
+
+    if (!resolvedTenantId && headerTenantId && headerTenantId !== 'undefined' && headerTenantId !== 'null') {
+      resolvedTenantId = headerTenantId;
+    }
 
     if (userPayload) {
+      // If client sends a conflicting X-Tenant-ID header, validate authorization
+      if (headerTenantId && headerTenantId !== userPayload.tenantId && userPayload.role !== 'SUPER_ADMIN') {
+        console.warn(`TenantContextMiddleware: Client X-Tenant-ID (${headerTenantId}) overridden by authenticated JWT tenant (${userPayload.tenantId})`);
+      }
       req.user = {
         ...userPayload,
         tenantId: userPayload.tenantId || resolvedTenantId,
@@ -40,3 +49,4 @@ export class TenantContextMiddleware implements NestMiddleware {
     next();
   }
 }
+

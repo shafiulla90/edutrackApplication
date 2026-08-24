@@ -25,25 +25,247 @@ export class ExamsService {
     }
   }
 
-  async getComponents(tenantId?: string) {
-    return [
-      { id: 'comp-1', name: 'Theory', weightage: 80 },
-      { id: 'comp-2', name: 'Practical', weightage: 20 },
-      { id: 'comp-3', name: 'Assignment', weightage: 10 },
-    ];
+  async getExamConfigs(tenantId?: string) {
+    const tid = tenantId || 'tenant-test-001';
+    try {
+      const snap = await this.db.collection('tenants').doc(tid).collection('examConfigs').get();
+      const configs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      
+      const classesSnap = await this.db.collection('tenants').doc(tid).collection('classes').get().catch(() => null);
+      const classMap = new Map<string, string>();
+      if (classesSnap) {
+        classesSnap.docs.forEach(doc => classMap.set(doc.id, doc.data()?.name || 'Class'));
+      }
+
+      return configs.map((c: any) => ({
+        ...c,
+        className: c.className || (c.classId ? classMap.get(c.classId) : undefined),
+      }));
+    } catch (e) {
+      console.error('Failed to load exam configs:', e);
+      return [];
+    }
   }
 
-  async getMarksEntryRoster(tenantId: string, subjectId: string, examName: string, classSectionId: string, subjectType?: string) {
-    if (!tenantId) throw new Error('tenantId is required');
-    const tid = tenantId;
+  async createExamConfig(tenantId: string, data: any) {
+    const tid = tenantId || 'tenant-test-001';
+    const ref = data.id
+      ? this.db.collection('tenants').doc(tid).collection('examConfigs').doc(data.id)
+      : this.db.collection('tenants').doc(tid).collection('examConfigs').doc();
+
+    const isGlobal = data.isGlobal !== undefined ? data.isGlobal : (!data.classId && !data.examTypeName);
+    
+    let className = data.className;
+    if (data.classId && !className) {
+      try {
+        const clsDoc = await this.db.collection('tenants').doc(tid).collection('classes').doc(data.classId).get();
+        if (clsDoc.exists) className = clsDoc.data()?.name;
+      } catch (e) {}
+    }
+
+    const payload = {
+      id: ref.id,
+      tenantId: tid,
+      examTypeName: data.examTypeName || null,
+      isGlobal,
+      passingPercentage: data.passingPercentage !== undefined ? Number(data.passingPercentage) : 35,
+      maxMarks: data.maxMarks !== undefined ? Number(data.maxMarks) : 100,
+      gradeRanges: data.gradeRanges || null,
+      academicYearId: data.academicYearId || null,
+      classId: data.classId || null,
+      className: className || null,
+      subjectConfigs: data.subjectConfigs || [],
+      updatedAt: new Date().toISOString(),
+    };
+
+    await ref.set(payload, { merge: true });
+    return payload;
+  }
+
+  async deleteExamConfig(tenantId: string, id: string) {
+    const tid = tenantId || 'tenant-test-001';
+    const ref = this.db.collection('tenants').doc(tid).collection('examConfigs').doc(id);
+    await ref.delete();
+    return { success: true, id };
+  }
+
+  async getComponents(tenantId?: string) {
+    const tid = tenantId || 'tenant-test-001';
+    try {
+      const colRef = this.db.collection('tenants').doc(tid).collection('examComponents');
+      const snap = await colRef.get();
+      if (!snap.empty) {
+        return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      }
+
+      // Seed default components into Firestore so each has a real doc ID
+      const defaultComps = ['Practical', 'Viva', 'Assignment'];
+      const seeded: any[] = [];
+      const batch = this.db.batch();
+      for (const name of defaultComps) {
+        const docRef = colRef.doc();
+        const item = { id: docRef.id, name, tenantId: tid, createdAt: new Date().toISOString() };
+        batch.set(docRef, item);
+        seeded.push(item);
+      }
+      await batch.commit();
+      return seeded;
+    } catch (e) {
+      console.error('Error fetching exam components:', e);
+      return [
+        { id: 'comp-1', name: 'Practical' },
+        { id: 'comp-2', name: 'Viva' },
+        { id: 'comp-3', name: 'Assignment' },
+      ];
+    }
+  }
+
+  async createComponent(tenantId: string, name: string) {
+    const tid = tenantId || 'tenant-test-001';
+    const ref = this.db.collection('tenants').doc(tid).collection('examComponents').doc();
+    const payload = {
+      id: ref.id,
+      name,
+      tenantId: tid,
+      createdAt: new Date().toISOString(),
+    };
+    await ref.set(payload, { merge: true });
+    return payload;
+  }
+
+  async deleteComponent(tenantId: string, id: string) {
+    const tid = tenantId || 'tenant-test-001';
+    const ref = this.db.collection('tenants').doc(tid).collection('examComponents').doc(id);
+    await ref.delete();
+    return { success: true, id };
+  }
+
+  async resolveConfig(tenantId: string, examType: string, classId?: string) {
+    const tid = tenantId || 'tenant-test-001';
+    try {
+      const configs = await this.getExamConfigs(tid);
+      if (classId && examType) {
+        const matchClass = configs.find(c => c.classId === classId && c.examTypeName === examType);
+        if (matchClass) return matchClass;
+      }
+      if (examType) {
+        const matchType = configs.find(c => c.examTypeName === examType);
+        if (matchType) return matchType;
+      }
+      const globalCfg = configs.find(c => c.isGlobal);
+      if (globalCfg) return globalCfg;
+    } catch (e) {}
+
+    return {
+      passingPercentage: 35,
+      maxMarks: 100,
+      examType: examType || 'Unit Test',
+    };
+  }
+
+  async getMarksEntryRoster(
+    tenantId: string,
+    subjectId: string,
+    examName: string,
+    classSectionId: string,
+    className?: string,
+    sectionName?: string,
+    subjectType?: string,
+  ) {
+    const tid = tenantId || 'tenant-test-001';
     
     // Fetch students in tenant from root studentProfiles collection
-    let students = [];
+    let students: any[] = [];
     try {
-      const snap = await this.db.collection('studentProfiles').where('tenantId', '==', tid).get();
-      students = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      let snap = await this.db.collection('studentProfiles').where('tenantId', '==', tid).get().catch(() => null);
+      if (!snap || snap.empty) {
+        snap = await this.db.collection('studentProfiles').get().catch(() => null);
+      }
+      if (snap && !snap.empty) {
+        students = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      }
     } catch (e) {
       console.error('Failed to load students for marks entry:', e);
+    }
+
+    // Filter students by class and section if criteria provided and matches exist
+    if (classSectionId && classSectionId !== 'All' && students.length > 0) {
+      let targetClassName = '';
+      let targetSectionName = '';
+      let targetClassId = '';
+      let rawPureClassId = classSectionId.includes('-') ? classSectionId.split('-')[0].trim() : classSectionId.trim();
+      let targetClassSectionId = classSectionId.toLowerCase().trim();
+      let pureClassId = rawPureClassId.toLowerCase();
+
+      const classMap = new Map<string, string>();
+      if (this.db) {
+        try {
+          const cSnap = await this.db.collection('tenants').doc(tid).collection('classes').get().catch(() => null);
+          if (cSnap && !cSnap.empty) {
+            cSnap.docs.forEach(d => classMap.set(d.id, String(d.data().name || d.data().className || '').toLowerCase().trim()));
+          }
+
+          let cDoc = await this.db.collection('tenants').doc(tid).collection('classes').doc(rawPureClassId).get().catch(() => null);
+          if (!cDoc || !cDoc.exists) cDoc = await this.db.collection('classes').doc(rawPureClassId).get().catch(() => null);
+          if (cDoc && cDoc.exists) {
+            targetClassName = String(cDoc.data().name || cDoc.data().className || '').toLowerCase().trim();
+          }
+
+          let csDoc = await this.db.collection('tenants').doc(tid).collection('classSections').doc(classSectionId).get().catch(() => null);
+          if (!csDoc || !csDoc.exists) csDoc = await this.db.collection('classSections').doc(classSectionId).get().catch(() => null);
+          if (csDoc && csDoc.exists) {
+            const csData = csDoc.data() || {};
+            targetClassId = csData.classId || '';
+            targetClassName = String(csData.className || csData.class?.name || '').toLowerCase().trim();
+            targetSectionName = String(csData.sectionName || csData.section?.name || '').toLowerCase().trim();
+
+            if (!targetClassName && csData.classId) {
+              let cDoc = await this.db.collection('tenants').doc(tid).collection('classes').doc(csData.classId).get().catch(() => null);
+              if (!cDoc || !cDoc.exists) cDoc = await this.db.collection('classes').doc(csData.classId).get().catch(() => null);
+              if (cDoc && cDoc.exists) {
+                targetClassName = String(cDoc.data().name || cDoc.data().className || '').toLowerCase().trim();
+              }
+            }
+
+            if (!targetSectionName && csData.sectionId) {
+              let sDoc = await this.db.collection('tenants').doc(tid).collection('sections').doc(csData.sectionId).get().catch(() => null);
+              if (!sDoc || !sDoc.exists) sDoc = await this.db.collection('sections').doc(csData.sectionId).get().catch(() => null);
+              if (sDoc && sDoc.exists) {
+                targetSectionName = String(sDoc.data().name || sDoc.data().sectionName || '').toLowerCase().trim();
+              }
+            }
+          }
+
+          if (!targetClassName && classSectionId.includes(' - ')) {
+            const parts = classSectionId.split(' - ').map(p => p.trim().toLowerCase());
+            targetClassName = parts[0] || '';
+            targetSectionName = parts[1] || '';
+          }
+        } catch (e) {}
+      }
+
+      const filtered = students.filter((s: any) => {
+        const cId = String(s.classId || '').toLowerCase().trim();
+        const csId = String(s.classSectionId || '').toLowerCase().trim();
+        const cNameFromMap = classMap.get(s.classId) || '';
+        const cName = String(s.className || s.classSection?.class?.name || cNameFromMap).toLowerCase().trim();
+        const sName = String(s.sectionName || s.classSection?.section?.name || '').toLowerCase().trim();
+
+        if (cId === targetClassSectionId || csId === targetClassSectionId || (cId && cId === pureClassId)) return true;
+        if (targetClassId && cId === targetClassId.toLowerCase()) return true;
+
+        if (targetClassName && (cName === targetClassName || cId === targetClassName || cNameFromMap === targetClassName)) {
+          if (!targetSectionName || sName === targetSectionName || !sName) return true;
+        }
+
+        return false;
+      });
+
+      students = filtered;
+    }
+
+    if (!students) {
+      students = [];
     }
 
     // Fetch existing marks
@@ -53,27 +275,45 @@ export class ExamsService {
         .collection('tenants')
         .doc(tid)
         .collection('examMarks')
-        .where('examName', '==', examName)
-        .where('subjectId', '==', subjectId)
-        .get();
+        .get().catch(() => null);
 
-      marksSnap.docs.forEach(doc => {
-        const d = doc.data();
-        if (d.studentId) existingMarksMap[d.studentId] = d;
-      });
+      if (marksSnap && !marksSnap.empty) {
+        marksSnap.docs.forEach((doc: any) => {
+          const d = doc.data();
+          if (d.studentId && d.examName && (d.subjectId || d.subjectName)) {
+            const exName = String(d.examName).toLowerCase().trim();
+            const subId = String(d.subjectId || '').toLowerCase().trim();
+            const subName = String(d.subjectName || '').toLowerCase().trim();
+            const sId = String(d.studentId);
+
+            if (subId) existingMarksMap[`${exName}_${sId}_${subId}`] = d;
+            if (subName) existingMarksMap[`${exName}_${sId}_${subName}`] = d;
+          }
+        });
+      }
     } catch (e) {
       console.error('Failed to load existing marks:', e);
     }
 
     const roster = students.map((s: any) => {
-      const existing = existingMarksMap[s.id] || {};
+      const sid = s.id || s.studentId;
+      const exNorm = (examName || '').toLowerCase().trim();
+      const subNorm = (subjectId || '').toLowerCase().trim();
+      
+      const key1 = `${exNorm}_${sid}_${subNorm}`;
+      const existing = existingMarksMap[key1];
+      const fullName = s.name || s.user?.name || (s.firstName ? `${s.firstName} ${s.lastName || ''}`.trim() : '') || 'Student';
+      const scoreVal = existing?.marksObtained !== undefined && existing?.marksObtained !== null ? existing.marksObtained : (existing?.score !== undefined ? existing.score : null);
+
       return {
-        studentId: s.id,
+        studentId: sid,
+        id: sid,
         rollNo: s.rollNo || s.admissionNo || 'N/A',
-        studentName: s.name || (s.firstName ? `${s.firstName} ${s.lastName || ''}` : 'Student'),
-        marksObtained: existing.marksObtained !== undefined ? existing.marksObtained : null,
-        remarks: existing.remarks || '',
-        status: existing.status || 'PRESENT',
+        studentName: fullName,
+        name: fullName,
+        marksObtained: scoreVal !== null && scoreVal !== undefined ? Number(scoreVal) : null,
+        remarks: existing?.remarks || '',
+        status: existing?.status || 'PRESENT',
       };
     });
 
@@ -88,34 +328,78 @@ export class ExamsService {
 
   async saveRosterMarks(tenantId: string, body: any) {
     const tid = tenantId || 'tenant-test-001';
-    const { subjectId, examName, classSectionId, subjectType, marksSheet } = body;
+    const { subjectId, examName, classSectionId, subjectType, marksSheet, marks } = body;
+
+    let subjectName = 'Telugu';
+    if (subjectId && this.db) {
+      try {
+        const subDoc = await this.db.collection('tenants').doc(tid).collection('subjects').doc(subjectId).get().catch(() => null);
+        if (subDoc && subDoc.exists) {
+          subjectName = subDoc.data()?.name || subjectName;
+        }
+      } catch (e) {}
+    }
 
     const batch = this.db.batch();
     let count = 0;
 
-    for (const studentId of Object.keys(marksSheet || {})) {
-      const item = marksSheet[studentId];
-      const docId = `${studentId}_${examName}_${subjectId}`.replace(/[^a-zA-Z0-9_-]/g, '_');
-      const docRef = this.db.collection('tenants').doc(tid).collection('examMarks').doc(docId);
+    if (Array.isArray(marks) && marks.length > 0) {
+      for (const item of marks) {
+        const studentId = item.studentId;
+        if (!studentId) continue;
+        const docId = `${examName}_${studentId}_${subjectId}`;
+        const docRef = this.db.collection('tenants').doc(tid).collection('examMarks').doc(docId);
 
-      const payload = {
-        id: docId,
-        tenantId: tid,
-        studentId,
-        subjectId,
-        examName,
-        classSectionId,
-        subjectType: subjectType || 'Theory',
-        marksObtained: item.score !== '' ? Number(item.score) : null,
-        remarks: item.remarks || '',
-        updatedAt: new Date().toISOString(),
-      };
+        const payload = {
+          id: docId,
+          tenantId: tid,
+          academicYearId: 'ay-2026',
+          studentId,
+          subjectId,
+          subjectName,
+          examName,
+          classSectionId,
+          subjectType: subjectType || 'Theory',
+          marksObtained: item.marksObtained !== null && item.marksObtained !== undefined && item.marksObtained !== '' ? Number(item.marksObtained) : null,
+          remarks: item.remarks || '',
+          updatedAt: new Date().toISOString(),
+        };
 
-      batch.set(docRef, payload, { merge: true });
-      count++;
+        batch.set(docRef, payload, { merge: true });
+        count++;
+      }
     }
 
-    await batch.commit();
+    if (marksSheet && typeof marksSheet === 'object') {
+      for (const studentId of Object.keys(marksSheet)) {
+        const item = marksSheet[studentId];
+        const docId = `${examName}_${studentId}_${subjectId}`;
+        const docRef = this.db.collection('tenants').doc(tid).collection('examMarks').doc(docId);
+
+        const payload = {
+          id: docId,
+          tenantId: tid,
+          academicYearId: 'ay-2026',
+          studentId,
+          subjectId,
+          subjectName,
+          examName,
+          classSectionId,
+          subjectType: subjectType || 'Theory',
+          marksObtained: item.score !== undefined && item.score !== null && item.score !== '' ? Number(item.score) : null,
+          remarks: item.remarks || '',
+          updatedAt: new Date().toISOString(),
+        };
+
+        batch.set(docRef, payload, { merge: true });
+        count++;
+      }
+    }
+
+    if (count > 0) {
+      await batch.commit();
+    }
+
     return { success: true, count, message: 'Marks saved successfully.' };
   }
 
@@ -224,7 +508,192 @@ export class ExamsService {
     return { success: true, count: saved.length, marks: saved };
   }
 
-  async getGradesReport(classSectionId: string, examName: string) {
-    return { classSectionId, examName, report: [] };
+  async getClassSections(tenantId: string) {
+    if (!tenantId) throw new Error('tenantId is required');
+    try {
+      const snap = await this.db.collection('tenants').doc(tenantId).collection('classSections').get();
+      const classesSnap = await this.db.collection('tenants').doc(tenantId).collection('classes').get();
+      const classMap = new Map<string, string>();
+      classesSnap.docs.forEach(doc => classMap.set(doc.id, doc.data()?.name || 'Class'));
+
+      const sectionsSnap = await this.db.collection('tenants').doc(tenantId).collection('sections').get();
+      const sectionMap = new Map<string, string>();
+      sectionsSnap.docs.forEach(doc => sectionMap.set(doc.id, doc.data()?.name || 'Section'));
+
+      return snap.docs.map(doc => {
+        const d = doc.data();
+        const cName = classMap.get(d.classId) || d.className || d.class || (d.name ? d.name.split('-')[0].trim() : 'Class');
+        const sName = sectionMap.get(d.sectionId) || d.sectionName || d.section || (d.name && d.name.includes('-') ? d.name.split('-').slice(1).join('-').trim() : 'A');
+        let label = d.name;
+        if (!label || label === 'Class Section') {
+          if (cName && sName) label = `${cName} - ${sName}`;
+          else if (cName) label = cName;
+          else label = `Section ${doc.id.substring(0, 4)}`;
+        }
+        return {
+          value: doc.id,
+          label,
+          className: cName,
+          sectionName: sName,
+          classId: d.classId || '',
+          sectionId: d.sectionId || '',
+        };
+      });
+    } catch (e) {
+      console.error('Failed to load classes for exams:', e);
+      return [];
+    }
+  }
+
+  async getGradesReport(classSectionId: string, examName: string, className?: string, sectionName?: string, tenantId?: string) {
+    const tid = tenantId || 'tenant-test-001';
+
+    let students: any[] = [];
+    try {
+      const snap = await this.db.collection('studentProfiles').where('tenantId', '==', tid).get();
+      students = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    } catch (e) {}
+
+    // Pre-fetch classes, sections, classSections for metadata mapping
+    const classMap = new Map<string, string>();
+    const sectionMap = new Map<string, string>();
+    const classSectionMap = new Map<string, any>();
+
+    try {
+      const [classesSnap, sectionsSnap, csSnap] = await Promise.all([
+        this.db.collection('tenants').doc(tid).collection('classes').get().catch(() => null),
+        this.db.collection('tenants').doc(tid).collection('sections').get().catch(() => null),
+        this.db.collection('tenants').doc(tid).collection('classSections').get().catch(() => null),
+      ]);
+
+      if (classesSnap) {
+        classesSnap.docs.forEach(doc => classMap.set(doc.id, doc.data()?.name || doc.data()?.className || ''));
+      }
+      if (sectionsSnap) {
+        sectionsSnap.docs.forEach(doc => sectionMap.set(doc.id, doc.data()?.name || doc.data()?.sectionName || ''));
+      }
+      if (csSnap) {
+        csSnap.docs.forEach(doc => {
+          const d = doc.data();
+          const cName = classMap.get(d.classId) || d.className || d.class || (d.name ? d.name.split('-')[0].trim() : '');
+          const sName = sectionMap.get(d.sectionId) || d.sectionName || d.section || (d.name && d.name.includes('-') ? d.name.split('-').slice(1).join('-').trim() : '');
+          classSectionMap.set(doc.id, {
+            id: doc.id,
+            classId: d.classId || '',
+            sectionId: d.sectionId || '',
+            className: cName,
+            sectionName: sName,
+          });
+        });
+      }
+    } catch (e) {
+      console.error('Error fetching metadata for grades report filter:', e);
+    }
+
+    // Resolve target className and sectionName
+    let targetClassName = className || '';
+    let targetSectionName = sectionName || '';
+
+    if (classSectionId && classSectionMap.has(classSectionId)) {
+      const csInfo = classSectionMap.get(classSectionId);
+      if (!targetClassName) targetClassName = csInfo.className;
+      if (!targetSectionName) targetSectionName = csInfo.sectionName;
+    }
+
+    // Filter students by class and section if criteria provided
+    if (classSectionId || targetClassName || targetSectionName) {
+      students = students.filter(s => {
+        // Direct classSectionId match
+        if (classSectionId && (s.classSectionId === classSectionId || s.classSection === classSectionId)) {
+          return true;
+        }
+
+        const sClassSection = s.classSectionId ? classSectionMap.get(s.classSectionId) : null;
+        
+        const sClassName = s.className || s.class || classMap.get(s.classId) || sClassSection?.className || 
+          (typeof s.classSection === 'object' ? (s.classSection?.class?.name || s.classSection?.className) : '') || '';
+        
+        const sSectionName = s.sectionName || s.section || sectionMap.get(s.sectionId) || sClassSection?.sectionName || 
+          (typeof s.classSection === 'object' ? (s.sectionName || s.classSection?.section?.name || s.classSection?.sectionName) : '') || '';
+
+        // Class check
+        if (targetClassName && targetClassName !== 'ALL' && targetClassName !== 'All') {
+          const matchClass = sClassName.toLowerCase().trim() === targetClassName.toLowerCase().trim() ||
+            s.classId === targetClassName ||
+            (s.classSectionId && s.classSectionId === classSectionId);
+          if (!matchClass) return false;
+        }
+
+        // Section check
+        if (targetSectionName && targetSectionName !== 'ALL' && targetSectionName !== 'All') {
+          const matchSection = sSectionName.toLowerCase().trim() === targetSectionName.toLowerCase().trim() ||
+            s.sectionId === targetSectionName ||
+            (s.classSectionId && s.classSectionId === classSectionId);
+          if (!matchSection) return false;
+        }
+
+        return true;
+      });
+    }
+
+    let subjectsMap = new Map<string, string>();
+    try {
+      const subSnap = await this.db.collection('tenants').doc(tid).collection('subjects').get();
+      subSnap.docs.forEach(doc => subjectsMap.set(doc.id, doc.data()?.name || 'Subject'));
+    } catch (e) {}
+
+    let marksList: any[] = [];
+    try {
+      let marksRef = this.db.collection('tenants').doc(tid).collection('examMarks');
+      const marksSnap = await marksRef.get();
+      marksList = marksSnap.docs.map(d => d.data());
+      if (examName) {
+        marksList = marksList.filter((m: any) => m.examName === examName);
+      }
+    } catch (e) {}
+
+    const studentMarksMap = new Map<string, any[]>();
+    for (const m of marksList) {
+      if (m.studentId) {
+        if (!studentMarksMap.has(m.studentId)) studentMarksMap.set(m.studentId, []);
+        studentMarksMap.get(m.studentId)!.push(m);
+      }
+    }
+
+    const records = students.map((s: any, idx: number) => {
+      const sMarks = studentMarksMap.get(s.id) || [];
+      const subjectsList = sMarks.map((m: any) => ({
+        name: m.subjectName || subjectsMap.get(m.subjectId) || 'Subject',
+        score: Number(m.marksObtained || 0),
+        max: 100,
+      }));
+
+      const totalObtained = subjectsList.reduce((sum, item) => sum + item.score, 0);
+      const totalMax = Math.max(1, subjectsList.length * 100);
+      const average = Math.round((totalObtained / totalMax) * 100);
+
+      let grade = 'F';
+      let gpa = 0.0;
+      if (average >= 90) { grade = 'A+'; gpa = 4.0; }
+      else if (average >= 80) { grade = 'A'; gpa = 3.7; }
+      else if (average >= 70) { grade = 'B'; gpa = 3.0; }
+      else if (average >= 60) { grade = 'C'; gpa = 2.0; }
+      else if (average >= 50) { grade = 'D'; gpa = 1.0; }
+
+      return {
+        studentId: s.id,
+        name: s.name || (s.firstName ? `${s.firstName} ${s.lastName || ''}`.trim() : '') || 'Student',
+        rollNo: s.rollNo || s.admissionNo || String(100 + idx),
+        classSectionId: s.classSectionId || classSectionId,
+        score: totalObtained,
+        average,
+        grade,
+        gpa,
+        rank: idx + 1,
+        subjectsList,
+      };
+    });
+
+    return records;
   }
 }

@@ -1,5 +1,6 @@
 export interface IBillingRepository {
   findInvoicesByTenant(tenantId: string, status?: string): Promise<any[]>;
+  findPaymentsByTenant?(tenantId: string): Promise<any[]>;
   findInvoiceById(id: string, tenantId?: string): Promise<any | null>;
   findInvoicesByStudent(studentId: string): Promise<any[]>;
   createInvoice(invoiceData: any, items: any[]): Promise<any>;

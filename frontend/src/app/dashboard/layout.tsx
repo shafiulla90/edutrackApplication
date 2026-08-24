@@ -84,8 +84,12 @@ export default function DashboardLayout({
     if (!loading && typeof window !== 'undefined') {
       const storedToken = getStoredToken();
       if (!storedToken) {
+        const currentActiveRole = sessionStorage.getItem('active_role');
+        const portalParam = currentActiveRole === 'TEACHER' ? 'teacher' : currentActiveRole === 'PARENT' ? 'parent' : 'admin';
         clearStoredAuth();
-        router.push('/auth/login');
+        if (!window.location.pathname.startsWith('/auth')) {
+          router.push(`/auth/login?portal=${portalParam}`);
+        }
       }
     }
   }, [loading, currentUser, router]);
@@ -1419,9 +1423,7 @@ function NotificationBell() {
     }
   };
 
-  const unreadCount = currentUser?.role === 'SCHOOL_ADMIN'
-    ? notifications.filter(n => !n.isRead && (n.type === 'LEAVE_APPROVAL' || n.title?.toLowerCase().includes('leave') || n.message?.includes('LeaveRequestId:'))).length
-    : notifications.filter(n => !n.isRead).length;
+  const unreadCount = notifications.filter(n => !n.isRead).length;
 
   return (
     <div className="relative" ref={dropdownRef}>
@@ -1469,7 +1471,7 @@ function NotificationBell() {
               </div>
             ) : (
               notifications.map(n => {
-                const isLeaveNotification = n.type === 'LEAVE_APPROVAL' || (n.message && n.message.includes('LeaveRequestId:')) || (n.title && n.title.toLowerCase().includes('leave application'));
+                const isLeaveNotification = n.type === 'LEAVE_APPROVAL' || (n.message && n.message.includes('LeaveRequestId:'));
                 
                 if (isLeaveNotification) {
                   const details = parseLeaveRequestMessage(n.message || '');
@@ -1504,9 +1506,15 @@ function NotificationBell() {
                       </div>
 
                       <div className="bg-slate-50/80 p-2.5 rounded-lg border border-slate-100 space-y-1 text-[11px] font-medium text-slate-600">
-                        {details.leaveType && <div><strong className="text-slate-500 font-bold">Leave Type:</strong> {details.leaveType}</div>}
-                        {(details.fromDate || details.toDate) && <div><strong className="text-slate-500 font-bold">Dates:</strong> {details.fromDate} to {details.toDate}</div>}
-                        {details.reason && <div className="whitespace-pre-wrap"><strong className="text-slate-500 font-bold">Reason:</strong> {details.reason}</div>}
+                        {(!details.leaveType && !details.reason) ? (
+                          <div className="whitespace-pre-wrap">{n.message || n.title}</div>
+                        ) : (
+                          <>
+                            {details.leaveType && <div><strong className="text-slate-500 font-bold">Leave Type:</strong> {details.leaveType}</div>}
+                            {(details.fromDate || details.toDate) && <div><strong className="text-slate-500 font-bold">Dates:</strong> {details.fromDate} to {details.toDate}</div>}
+                            {details.reason && <div className="whitespace-pre-wrap"><strong className="text-slate-500 font-bold">Reason:</strong> {details.reason}</div>}
+                          </>
+                        )}
                       </div>
 
                       {!n.isRead && details.leaveRequestId ? (
@@ -1561,7 +1569,7 @@ function NotificationBell() {
                   );
                 }
 
-                const isComplaintNotification = n.type === 'COMPLAINT_UPDATE' || (n.message && n.message.includes('ComplaintId:')) || (n.title && n.title.toLowerCase().includes('complaint'));
+                const isComplaintNotification = n.type === 'COMPLAINT_UPDATE' || (n.message && n.message.includes('ComplaintId:'));
 
                 if (isComplaintNotification) {
                   const details = parseComplaintMessage(n.message || '');

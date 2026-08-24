@@ -5,6 +5,21 @@ import { IStudentRepository } from '../../common/interfaces/student.repository.i
 import { IUserRepository } from '../../common/interfaces/user.repository.interface';
 import { randomUUID } from 'crypto';
 
+function parseDocDate(val: any): Date {
+  if (!val) return new Date();
+  if (val instanceof Date) return isNaN(val.getTime()) ? new Date() : val;
+  if (typeof val === 'string' || typeof val === 'number') {
+    const d = new Date(val);
+    return isNaN(d.getTime()) ? new Date() : d;
+  }
+  if (typeof val === 'object') {
+    if (typeof val._seconds === 'number') return new Date(val._seconds * 1000);
+    if (typeof val.seconds === 'number') return new Date(val.seconds * 1000);
+    if (typeof val.toDate === 'function') return val.toDate();
+  }
+  return new Date();
+}
+
 @Injectable()
 export class BillingService {
   constructor(
@@ -852,5 +867,349 @@ export class BillingService {
     });
 
     return items;
+  }
+
+  async getFinancialCommandCenter(tenantId: string, params?: any) {
+    if (!tenantId) throw new Error('tenantId is required');
+    const tid = tenantId;
+
+    let years: any[] = [];
+    let classes: any[] = [];
+    let sections: any[] = [];
+
+    try {
+      years = (await this.academicRepo.findAcademicYears(tid)) || [];
+      classes = (await this.academicRepo.findClasses(tid)) || [];
+      sections = (await this.academicRepo.findSections(tid)) || [];
+    } catch (err) {}
+
+    let payments: any[] = [];
+    let invoices: any[] = [];
+    let expenses: any[] = [];
+
+    try {
+      payments = (await this.billingRepo.findPaymentsByTenant(tid)) || [];
+      invoices = (await this.billingRepo.findInvoicesByTenant(tid)) || [];
+      expenses = (await this.billingRepo.findExpensesByTenant(tid)) || [];
+    } catch (err) {}
+
+    // Apply Filter Parameters dynamically
+    if (params) {
+      if (params.academicYearId) {
+        invoices = invoices.filter((i: any) => i.academicYearId === params.academicYearId);
+        payments = payments.filter((p: any) => p.academicYearId === params.academicYearId);
+      }
+      if (params.classId) {
+        invoices = invoices.filter((i: any) => i.classId === params.classId || i.className?.toLowerCase().includes(params.classId.toLowerCase()));
+        payments = payments.filter((p: any) => p.classId === params.classId);
+      }
+      if (params.sectionId) {
+        invoices = invoices.filter((i: any) => i.sectionId === params.sectionId || i.sectionName?.toLowerCase().includes(params.sectionId.toLowerCase()));
+        payments = payments.filter((p: any) => p.sectionId === params.sectionId);
+      }
+      if (params.month) {
+        const mNum = Number(params.month) - 1;
+        invoices = invoices.filter((i: any) => {
+          const d = new Date(i.invoiceDate || i.createdAt);
+          return !isNaN(d.getTime()) && d.getMonth() === mNum;
+        });
+        payments = payments.filter((p: any) => {
+          const d = new Date(p.paymentDate || p.createdAt);
+          return !isNaN(d.getTime()) && d.getMonth() === mNum;
+        });
+        expenses = expenses.filter((e: any) => {
+          const d = new Date(e.date || e.createdAt);
+          return !isNaN(d.getTime()) && d.getMonth() === mNum;
+        });
+      }
+      if (params.paymentMethod) {
+        payments = payments.filter((p: any) => (p.paymentMethod || '').toUpperCase() === params.paymentMethod.toUpperCase());
+      }
+    }
+
+    const now = new Date();
+    const currentMo = now.getMonth();
+    const currentYr = now.getFullYear();
+
+    let currentMonthRevenue = 0;
+    let currentMonthInvoicesCount = 0;
+    let prevMonthRevenue = 0;
+    let prevMonthInvoicesCount = 0;
+    let yearRevenue = 0;
+
+    const latestPayments: any[] = [];
+    payments.forEach((p: any) => {
+      const amt = p.amountCents !== undefined ? p.amountCents / 100 : Number(p.amount || 0);
+      const dt = parseDocDate(p.paymentDate || p.createdAt);
+      if (dt.getFullYear() === currentYr) {
+        yearRevenue += amt;
+        if (dt.getMonth() === currentMo) {
+          currentMonthRevenue += amt;
+          currentMonthInvoicesCount++;
+        } else if (dt.getMonth() === currentMo - 1 || (currentMo === 0 && dt.getMonth() === 11 && dt.getFullYear() === currentYr - 1)) {
+          prevMonthRevenue += amt;
+          prevMonthInvoicesCount++;
+        }
+      }
+
+      latestPayments.push({
+        id: p.id || `PAY-${Math.random().toString(36).substring(2, 7)}`,
+        studentName: p.studentName || p.name || 'Student',
+        amount: amt,
+        date: dt.toISOString(),
+        method: p.paymentMethod || 'CASH',
+      });
+    });
+
+    // Query studentProfiles for tenant to map student details & class
+    const db = (this.billingRepo as any).db || (this.academicRepo as any).db;
+    let studentProfilesSnap: any = null;
+    if (db) {
+      studentProfilesSnap = await db.collection('studentProfiles').where('tenantId', '==', tid).get().catch(() => null);
+    }
+    const studentProfilesMap = new Map<string, any>();
+    if (studentProfilesSnap && !studentProfilesSnap.empty) {
+      studentProfilesSnap.docs.forEach((doc: any) => {
+        const d = doc.data();
+        const sId = doc.id;
+        const uId = d.userId;
+        const name = d.name || (d.user?.name) || `${d.firstName || ''} ${d.lastName || ''}`.trim() || 'Student';
+        const clsName = d.className || d.class || (d.classSection?.class?.name) || 'Class-1';
+        const secName = d.sectionName || d.section || (d.classSection?.section?.name) || 'Section A';
+        const rollNo = d.rollNo || 'STU-1001';
+
+        const obj = { id: sId, userId: uId, name, className: clsName, sectionName: secName, rollNo };
+        studentProfilesMap.set(sId, obj);
+        if (uId) studentProfilesMap.set(uId, obj);
+      });
+    }
+
+    let pendingTotal = 0;
+    const studentDuesMap = new Map<string, any>();
+
+    invoices.forEach((inv: any) => {
+      const sId = inv.studentId || inv.id;
+      const sInfo = studentProfilesMap.get(sId) || studentProfilesMap.get(inv.userId) || {};
+      const sName = inv.studentName || sInfo.name || 'Student';
+      const cName = inv.className || sInfo.className || 'Class-1';
+      const secName = inv.sectionName || sInfo.sectionName || 'Section A';
+      const rem = Number(inv.remainingBalance !== undefined ? inv.remainingBalance : (inv.balanceDue || 0));
+      const tot = Number(inv.totalAmount || inv.amount || 0);
+      const paid = Number(inv.paidAmount || 0);
+
+      const uniqueKey = sInfo.id || sId;
+
+      if (rem > 0 || inv.status !== 'PAID') {
+        const pendingAmt = rem > 0 ? rem : tot;
+        pendingTotal += pendingAmt;
+
+        if (!studentDuesMap.has(uniqueKey)) {
+          studentDuesMap.set(uniqueKey, {
+            studentId: sInfo.id || sId,
+            studentName: sName,
+            rollNo: inv.rollNo || sInfo.rollNo || 'STU-1001',
+            className: cName,
+            sectionName: secName,
+            totalFee: 0,
+            paid: 0,
+            pending: 0,
+          });
+        }
+        const item = studentDuesMap.get(uniqueKey);
+        item.totalFee += tot;
+        item.paid += paid;
+        item.pending += pendingAmt;
+      }
+    });
+
+    const topPendingStudents = Array.from(studentDuesMap.values()).sort((a, b) => b.pending - a.pending);
+    const pendingStudentsCount = topPendingStudents.length;
+
+    let totalExpenses = 0;
+    const latestExpenses: any[] = [];
+    expenses.forEach((e: any) => {
+      const amt = Number(e.amount || 0);
+      const eDt = parseDocDate(e.date || e.createdAt);
+      totalExpenses += amt;
+      latestExpenses.push({
+        id: e.id || `EXP-${Math.random().toString(36).substring(2, 7)}`,
+        category: e.category || 'General Expense',
+        amount: amt,
+        date: eDt.toISOString(),
+        mode: e.paymentMethod || 'Bank Transfer',
+      });
+    });
+
+    const expectedTotal = yearRevenue + pendingTotal;
+    const collectionRate = expectedTotal > 0 ? Math.round((yearRevenue / expectedTotal) * 100) : 0;
+    const pendingPercentage = expectedTotal > 0 ? Math.round((pendingTotal / expectedTotal) * 100) : 0;
+
+    // 1. Monthly Revenue & Expenses (Apr to Mar)
+    const monthIndexMap: Record<number, string> = {
+      3: 'Apr', 4: 'May', 5: 'Jun', 6: 'Jul', 7: 'Aug', 8: 'Sep', 9: 'Oct', 10: 'Nov', 11: 'Dec', 0: 'Jan', 1: 'Feb', 2: 'Mar'
+    };
+    const monthlyIncomeMap: Record<string, number> = { Apr: 0, May: 0, Jun: 0, Jul: 0, Aug: 0, Sep: 0, Oct: 0, Nov: 0, Dec: 0, Jan: 0, Feb: 0, Mar: 0 };
+    const monthlyExpenseMap: Record<string, number> = { Apr: 0, May: 0, Jun: 0, Jul: 0, Aug: 0, Sep: 0, Oct: 0, Nov: 0, Dec: 0, Jan: 0, Feb: 0, Mar: 0 };
+
+    payments.forEach((p: any) => {
+      const dt = parseDocDate(p.paymentDate || p.createdAt);
+      const mKey = monthIndexMap[dt.getMonth()];
+      if (mKey) {
+        const amt = p.amountCents !== undefined ? p.amountCents / 100 : Number(p.amount || 0);
+        monthlyIncomeMap[mKey] += amt;
+      }
+    });
+
+    expenses.forEach((e: any) => {
+      const dt = parseDocDate(e.date || e.createdAt);
+      const mKey = monthIndexMap[dt.getMonth()];
+      if (mKey) {
+        monthlyExpenseMap[mKey] += Number(e.amount || 0);
+      }
+    });
+
+    const incomeVsExpense = Object.keys(monthlyIncomeMap).map(m => ({
+      month: m,
+      income: monthlyIncomeMap[m],
+      expenses: monthlyExpenseMap[m],
+    }));
+
+    // 2. Daily Collection Trend (Last 30 Days)
+    const dailyCollectionTrend: any[] = [];
+    for (let i = 29; i >= 0; i--) {
+      const d = new Date(now.getTime() - i * 24 * 60 * 60 * 1000);
+      const dateStr = d.toLocaleDateString('en-US', { day: '2-digit', month: 'short' });
+      let daySum = 0;
+      payments.forEach((p: any) => {
+        const pDt = parseDocDate(p.paymentDate || p.createdAt);
+        if (pDt.getDate() === d.getDate() && pDt.getMonth() === d.getMonth() && pDt.getFullYear() === d.getFullYear()) {
+          daySum += p.amountCents !== undefined ? p.amountCents / 100 : Number(p.amount || 0);
+        }
+      });
+      dailyCollectionTrend.push({ date: dateStr, amount: daySum });
+    }
+
+    // 3. Payment Methods Distribution
+    const methodTotals: Record<string, number> = {};
+    payments.forEach((p: any) => {
+      const amt = p.amountCents !== undefined ? p.amountCents / 100 : Number(p.amount || 0);
+      const m = p.paymentMethod || 'Online Payment';
+      methodTotals[m] = (methodTotals[m] || 0) + amt;
+    });
+    const grandMethodTotal = Object.values(methodTotals).reduce((a, b) => a + b, 0) || 1;
+    const paymentMethodsDistribution = Object.entries(methodTotals).map(([method, amount]) => ({
+      method,
+      amount,
+      percentage: Math.round((amount / grandMethodTotal) * 100),
+    }));
+
+    // 4. Expense Category Analysis
+    const catTotals: Record<string, number> = {};
+    expenses.forEach((e: any) => {
+      const amt = Number(e.amount || 0);
+      const cat = e.category || 'General Expense';
+      catTotals[cat] = (catTotals[cat] || 0) + amt;
+    });
+    const grandCatTotal = Object.values(catTotals).reduce((a, b) => a + b, 0) || 1;
+    const expenseCategoryAnalysis = Object.entries(catTotals).map(([categoryName, amount]) => ({
+      categoryName,
+      amount,
+      percentage: Math.round((amount / grandCatTotal) * 100),
+    }));
+
+    // 5. Outstanding Dues by Class (Deduplicated unique pending students per class)
+    const classPendingMap: Record<string, { totalPending: number; studentSet: Set<string>; totalBilled: number }> = {};
+    topPendingStudents.forEach((std: any) => {
+      const cName = std.className || 'Class-1';
+      if (!classPendingMap[cName]) {
+        classPendingMap[cName] = { totalPending: 0, studentSet: new Set<string>(), totalBilled: 0 };
+      }
+      classPendingMap[cName].totalPending += std.pending;
+      classPendingMap[cName].totalBilled += std.totalFee;
+      classPendingMap[cName].studentSet.add(std.studentId);
+    });
+
+    const outstandingByClass = Object.entries(classPendingMap).map(([className, val], idx) => ({
+      classId: `cls-${idx}`,
+      className,
+      totalPending: val.totalPending,
+      studentCount: val.studentSet.size,
+      collectionPercentage: val.totalBilled > 0 ? Math.round(((val.totalBilled - val.totalPending) / val.totalBilled) * 100) : 100,
+    }));
+
+    // 6. KPIs
+    const totalStudents = pendingStudentsCount || invoices.length || 1;
+    const kpis = {
+      expenseRatio: yearRevenue > 0 ? Math.round((totalExpenses / yearRevenue) * 100) : 0,
+      netMargin: yearRevenue > 0 ? Math.round(((yearRevenue - totalExpenses) / yearRevenue) * 100) : 0,
+      avgFeePerStudent: Math.round(yearRevenue / totalStudents),
+      outstandingRatio: pendingPercentage,
+    };
+
+    // 7. Executive Insights
+    const topClass = outstandingByClass.sort((a, b) => b.totalPending - a.totalPending)[0]?.className || 'N/A';
+    const topCategory = expenseCategoryAnalysis.sort((a, b) => b.amount - a.amount)[0]?.categoryName || 'N/A';
+    const executiveInsights = {
+      highestPayingClass: classes[0]?.name || 'Class-1',
+      highestPendingDuesClass: topClass,
+      topRevenueMonth: now.toLocaleDateString('en-US', { month: 'long' }),
+      topBudgetCategory: topCategory,
+      avgRevenuePerStudent: Math.round(yearRevenue / totalStudents),
+      avgPendingPerStudent: pendingStudentsCount > 0 ? Math.round(pendingTotal / pendingStudentsCount) : 0,
+    };
+
+    return {
+      academicYears: years.map(y => ({ id: y.id, name: y.name })),
+      classes: classes.map(c => ({ id: c.id, name: c.name })),
+      sections: sections.map(s => ({ id: s.id, name: s.name })),
+      summary: {
+        revenue: {
+          prevMonth: prevMonthRevenue,
+          prevMonthInvoicesCount: prevMonthInvoicesCount,
+          currentMonth: currentMonthRevenue,
+          currentMonthInvoicesCount: currentMonthInvoicesCount,
+          academicYear: yearRevenue,
+        },
+        pending: {
+          total: pendingTotal,
+          studentsCount: pendingStudentsCount,
+        },
+        profit: {
+          collectionRate,
+          pendingPercentage,
+          netProfit: yearRevenue - totalExpenses,
+          profitMargin: yearRevenue > 0 ? Math.round(((yearRevenue - totalExpenses) / yearRevenue) * 100) : 0,
+        },
+        cashFlow: {
+          openingBalance: 0,
+          totalIncome: yearRevenue,
+          totalExpenses,
+          closingBalance: yearRevenue - totalExpenses,
+          expectedIncome: expectedTotal,
+          expectedExpenses: totalExpenses,
+          netPeriodCashFlow: yearRevenue - totalExpenses,
+        },
+      },
+      charts: {
+        incomeVsExpense,
+        dailyCollectionTrend,
+        paymentMethodsDistribution,
+        expenseCategoryAnalysis,
+        outstandingByClass,
+      },
+      kpis,
+      insights: {
+        executive: executiveInsights,
+        topPendingStudents: topPendingStudents.slice(0, 10),
+      },
+      activities: {
+        latestPayments: latestPayments.slice(0, 10),
+        latestExpenses: latestExpenses.slice(0, 10),
+      },
+      notifications: [
+        { message: `${pendingStudentsCount} accounts have outstanding fee payments overdue.`, type: 'WARNING' },
+        { message: 'Monthly staff payroll recorded in Financial Ledger.', type: 'INFO' }
+      ],
+    };
   }
 }

@@ -23,7 +23,8 @@ import {
   ChevronDown,
   GraduationCap,
   Menu,
-  X
+  X,
+  Trash2
 } from 'lucide-react';
 
 function ParentLayoutContent({ children }: { children: React.ReactNode }) {
@@ -56,7 +57,7 @@ function ParentLayoutContent({ children }: { children: React.ReactNode }) {
 
   const handleLogout = () => {
     clearStoredAuth();
-    window.location.href = '/auth/login';
+    window.location.href = '/auth/login?portal=parent';
   };
 
   const isPrintReceiptPage = pathname?.includes('/parent/fees/receipts/');
@@ -529,6 +530,16 @@ function ParentNotificationBell() {
     }
   };
 
+  const handleDeleteNotification = async (e: React.MouseEvent, id: string) => {
+    e.stopPropagation();
+    try {
+      setNotifications(prev => prev.filter(n => n.id !== id));
+      await api.delete(`/communications/${id}`);
+    } catch (err) {
+      console.error('Failed to delete notification:', err);
+    }
+  };
+
   const unreadCount = notifications.filter(n => !n.isRead).length;
 
   return (
@@ -571,7 +582,7 @@ function ParentNotificationBell() {
                       await handleMarkAsRead(n.id);
                     }
                     setIsOpen(false);
-                    if (n.type === 'LEAVE_APPROVAL') {
+                    if (n.type === 'LEAVE_APPROVAL' || n.type === 'LEAVE_STATUS') {
                       window.location.href = '/parent/leave';
                     } else if (n.type === 'COMPLAINT_UPDATE') {
                       window.location.href = '/parent/complaints';
@@ -594,9 +605,19 @@ function ParentNotificationBell() {
                   <p className="text-slate-500 font-normal leading-relaxed whitespace-pre-wrap">
                     {n.message}
                   </p>
-                  <span className="text-[9px] text-slate-400 mt-1 font-mono">
-                    {new Date(n.createdAt).toLocaleDateString()}
-                  </span>
+                  <div className="flex justify-between items-center mt-1">
+                    <span className="text-[9px] text-slate-400 font-mono">
+                      {new Date(n.createdAt).toLocaleDateString()}
+                    </span>
+                    <button
+                      onClick={(e) => handleDeleteNotification(e, n.id)}
+                      className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded transition-colors cursor-pointer flex items-center gap-1 text-[10px] font-semibold"
+                      title="Delete Notification"
+                    >
+                      <Trash2 className="w-3.5 h-3.5 text-slate-400 hover:text-rose-600" />
+                      <span>Delete</span>
+                    </button>
+                  </div>
                 </div>
               ))
             )}

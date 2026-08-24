@@ -223,7 +223,7 @@ export default function ComplaintsPage() {
               <span className="text-[10px] text-slate-400 font-mono">Real-Time Sync Active</span>
             </div>
             
-            <div className="space-y-4">
+            <div className="space-y-4 max-h-[520px] overflow-y-auto pr-1">
               {complaints.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-12 text-slate-400 text-center bg-white border border-slate-200 rounded-3xl shadow-sm">
                   <Info className="w-8 h-8 text-slate-300 mb-2" />
@@ -320,7 +320,7 @@ export default function ComplaintsPage() {
               <p className="text-xs font-semibold">No teacher complaints have been raised for this student.</p>
             </div>
           ) : (
-            <div className="space-y-4">
+            <div className="space-y-4 max-h-[520px] overflow-y-auto pr-1">
               {teacherComplaints.map((c) => {
                 const st = (c.status || 'NEW').toUpperCase();
                 return (

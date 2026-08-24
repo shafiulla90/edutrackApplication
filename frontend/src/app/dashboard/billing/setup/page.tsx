@@ -71,11 +71,20 @@ export default function FeeSetupPage() {
         api.get('/academics/academic-years'),
         api.get('/billing/products'),
       ]);
-      setClassesList(classesRes.data || []);
+      let clsList = classesRes.data || [];
+      if (!Array.isArray(clsList) || clsList.length === 0) {
+        const fallbackRes = await api.get('/academics/classes');
+        clsList = fallbackRes.data || [];
+      }
+      setClassesList(Array.isArray(clsList) ? clsList : []);
       setYearsList(yearsRes.data || []);
       setAllProducts(productsRes.data || []);
     } catch (err) {
       console.error('Failed to load dropdown data:', err);
+      try {
+        const fallbackRes = await api.get('/academics/classes');
+        setClassesList(fallbackRes.data || []);
+      } catch (e) {}
     }
   }, []);
 

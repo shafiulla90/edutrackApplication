@@ -71,6 +71,9 @@ export default function LeavePage() {
             endDate,
             reason,
             base64File,
+            fileName: uploadFile ? uploadFile.name : null,
+            fileType: uploadFile ? uploadFile.type : null,
+            fileSize: uploadFile ? uploadFile.size : null,
           });
 
           setMessage('Leave application submitted successfully!');
@@ -239,7 +242,7 @@ export default function LeavePage() {
               <Loader2 className="w-6 h-6 animate-spin text-[#2E5BFF]" />
             </div>
           ) : (
-            <div className="space-y-4">
+            <div className="space-y-4 max-h-[580px] overflow-y-auto pr-1.5 scrollbar-thin">
               {leavesList.length === 0 ? (
                 <div className="text-xs text-slate-500 text-center py-12 bg-white border border-slate-200 rounded-3xl shadow-sm">
                   No leave applications submitted yet.
@@ -278,25 +281,37 @@ export default function LeavePage() {
                       </p>
 
                       {/* Approval Info Box */}
-                      {(isApproved || isRejected || leave.comments || leave.approvedBy) && (
-                        <div className="bg-slate-50/80 p-3 rounded-xl border border-slate-200 text-xs space-y-1">
-                          {leave.approvedBy && (
-                            <div className="text-slate-700 font-semibold text-[11px]">
-                              <strong className="text-slate-500 font-bold">Processed By:</strong> {leave.approvedBy} {leave.approvedRole ? `(${leave.approvedRole})` : ''}
-                            </div>
-                          )}
-                          {leave.approvedDate && (
-                            <div className="text-slate-500 text-[10px]">
-                              <strong className="font-bold">Decision Date:</strong> {leave.approvedDate}
-                            </div>
-                          )}
-                          {leave.comments && (
-                            <div className="text-slate-800 font-medium text-[11px] pt-1">
-                              <strong className="text-blue-700 font-bold">Remarks:</strong> "{leave.comments}"
-                            </div>
-                          )}
-                        </div>
-                      )}
+                      {(() => {
+                        const approverName = leave.approvedBy || leave.approver;
+                        const decisionDate = leave.approvedDate || leave.rejectedDate || (isApproved || isRejected ? (leave.updatedAt ? leave.updatedAt.split('T')[0] : null) : null);
+                        const remarksText = leave.comments || leave.remarks;
+
+                        if (!isApproved && !isRejected && !remarksText && !approverName) return null;
+
+                        return (
+                          <div className={`p-3 rounded-xl border text-xs space-y-1 ${
+                            isApproved ? 'bg-emerald-50/50 border-emerald-100' :
+                            isRejected ? 'bg-rose-50/50 border-rose-100' :
+                            'bg-slate-50/80 border-slate-200'
+                          }`}>
+                            {approverName && (
+                              <div className="text-slate-700 font-semibold text-[11px]">
+                                <strong className="text-slate-500 font-bold">Processed By:</strong> {approverName} {leave.approvedRole ? `(${leave.approvedRole})` : '(School Admin)'}
+                              </div>
+                            )}
+                            {decisionDate && (
+                              <div className="text-slate-500 text-[10px]">
+                                <strong className="font-bold">Decision Date:</strong> {formatDateDDMMYYYY(decisionDate)}
+                              </div>
+                            )}
+                            {remarksText && (
+                              <div className="text-slate-800 font-medium text-[11px] pt-1">
+                                <strong className={`${isRejected ? 'text-rose-700' : 'text-blue-700'} font-bold`}>Remarks:</strong> "{remarksText}"
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })()}
 
                       {/* Card Footer Actions */}
                       <div className="flex items-center justify-between pt-1 border-t border-slate-100">
@@ -307,7 +322,7 @@ export default function LeavePage() {
                             rel="noreferrer"
                             className="text-[11px] text-[#2E5BFF] hover:underline flex items-center gap-1 font-bold"
                           >
-                            <Paperclip className="w-3.5 h-3.5" /> Medical Certificate / File
+                            <Paperclip className="w-3.5 h-3.5" /> 📎 {leave.attachmentName || 'View Attachment'}
                           </a>
                         ) : (
                           <span className="text-[10px] text-slate-400 italic">No attachment</span>

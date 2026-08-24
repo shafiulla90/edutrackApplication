@@ -17,6 +17,12 @@ export class TeacherController {
     return this.teacherService.findAll(tenantId, { search, role, department });
   }
 
+  @Get('salary-payments')
+  getAllSalaryPayments(@Request() req: any) {
+    const tenantId = getTenantIdFromReq(req);
+    return this.teacherService.getAllSalaryPayments(tenantId);
+  }
+
   @Post('pay-all-salaries')
   payAllSalaries(@Body() body: any, @Request() req: any) {
     const tenantId = getTenantIdFromReq(req);

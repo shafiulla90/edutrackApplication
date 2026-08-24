@@ -23,7 +23,7 @@ export class SchoolSetupService {
       address: tenant.address || '',
       subDomain: tenant.subDomain || '',
       schoolLogo: tenant.logoUrl || null,
-      adminPhoto: tenant.adminPhoto || null,
+      adminPhoto: tenant.adminPhoto || tenant.adminAvatarUrl || null,
     };
   }
 
@@ -38,7 +38,12 @@ export class SchoolSetupService {
     if (data.helpDeskPhone || data.mobileNumber) updatePayload.helpDeskPhone = data.helpDeskPhone || data.mobileNumber;
     if (data.address) updatePayload.address = data.address;
     if (data.schoolLogo || data.logoUrl) updatePayload.logoUrl = data.schoolLogo || data.logoUrl;
-    if (data.adminPhoto) updatePayload.adminPhoto = data.adminPhoto;
+    
+    if (data.adminPhoto || data.adminAvatarUrl) {
+      updatePayload.adminPhoto = data.adminPhoto || data.adminAvatarUrl;
+      updatePayload.adminAvatarUrl = data.adminPhoto || data.adminAvatarUrl;
+    }
+
     if (data.subdomain) updatePayload.subDomain = data.subdomain;
     if (data.title) updatePayload.title = data.title;
     updatePayload.updatedAt = new Date().toISOString();

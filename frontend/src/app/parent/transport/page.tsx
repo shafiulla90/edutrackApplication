@@ -100,8 +100,12 @@ export default function ParentTransportPage() {
     );
   }
 
-  const { bus, driver, route, assignedStop, telemetry } = transportData;
-  const isOnline = bus?.isOnline;
+  const bus = transportData.bus || {};
+  const driver = transportData.driver || null;
+  const route = transportData.route || null;
+  const assignedStop = transportData.assignedStop || null;
+  const telemetry = transportData.telemetry || {};
+  const isOnline = !!bus?.isOnline;
 
   const busLocations = [
     {
@@ -186,7 +190,7 @@ export default function ParentTransportPage() {
               <div className="space-y-3">
                 <div className="flex items-center gap-3">
                   <div className="w-12 h-12 rounded-2xl bg-blue-100 text-blue-700 font-black flex items-center justify-center text-lg shadow-inner">
-                    {driver.name.charAt(0)}
+                    {driver.name ? driver.name.charAt(0) : 'D'}
                   </div>
                   <div>
                     <h3 className="font-extrabold text-sm text-slate-900">{driver.name}</h3>
@@ -237,7 +241,7 @@ export default function ParentTransportPage() {
             <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-xs">
               <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block">ESTIMATED ETA</span>
               <strong className="text-sm font-black text-emerald-600 mt-1 block">
-                {isOnline ? (googleEta ? googleEta : `${telemetry.etaMinutes} Mins Away`) : 'Standby'}
+                {isOnline ? (googleEta ? googleEta : (telemetry?.etaMinutes !== undefined ? `${telemetry.etaMinutes} Mins Away` : 'In Transit')) : 'Standby'}
               </strong>
             </div>
 
@@ -251,7 +255,7 @@ export default function ParentTransportPage() {
             <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-xs">
               <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block">NEXT STOP</span>
               <strong className="text-xs font-black text-slate-800 mt-1 block truncate">
-                {telemetry.nextStop}
+                {telemetry?.nextStop || assignedStop?.stopName || 'School Campus'}
               </strong>
             </div>
           </div>

@@ -576,7 +576,7 @@ export default function TeacherClassManagement() {
       }));
       setTeachers(mappedTeachers);
 
-      const mappedClasses: ClassSection[] = (classesRes.data || []).map((c: any) => ({
+      const rawClasses: ClassSection[] = (classesRes.data || []).map((c: any) => ({
         id: c.classSectionId,
         classId: c.classId,
         name: c.name || 'Unknown Class',
@@ -585,7 +585,15 @@ export default function TeacherClassManagement() {
         staffedCount: c.staffedCount || 0,
         loadPercent: c.loadPercent || 0
       }));
-      setClasses(mappedClasses);
+
+      // Deduplicate class sections by name
+      const uniqueClassMap = new Map<string, ClassSection>();
+      for (const cls of rawClasses) {
+        if (!uniqueClassMap.has(cls.name)) {
+          uniqueClassMap.set(cls.name, cls);
+        }
+      }
+      setClasses(Array.from(uniqueClassMap.values()));
 
       const rawTimings = timingsRes.data || [];
       const sortedTimings = [...rawTimings].sort((a: any, b: any) => (a.periodNumber ?? a.num ?? 0) - (b.periodNumber ?? b.num ?? 0));
@@ -766,25 +774,29 @@ export default function TeacherClassManagement() {
     setClassDetailLoading(true);
     try {
       const [workloadRes, periodsRes] = await Promise.all([
-        api.get(`/timetable/workload/class-section/${classSectionId}`),
-        api.get(`/timetable/class/${classSectionId}/periods`)
+        api.get(`/timetable/workload/class-section/${classSectionId}`).catch(() => ({ data: {} })),
+        api.get(`/timetable/class/${classSectionId}/periods`).catch(() => ({ data: [] }))
       ]);
       
-      const workload = workloadRes.data;
+      const workload = workloadRes.data || {};
 
       // Group timetable periods daily
-      const todayPeriods = (periodsRes.data || []).filter((p: any) => p.day === TODAY_DAY_NAME);
-      const activePeriods = todayPeriods.length > 0 ? todayPeriods : (periodsRes.data || []).filter((p: any) => p.day === 'Monday');
+      const rawPeriods = Array.isArray(periodsRes.data)
+        ? periodsRes.data
+        : (periodsRes.data && typeof periodsRes.data === 'object' ? Object.values(periodsRes.data) : []);
+
+      const todayPeriods = rawPeriods.filter((p: any) => p.day === TODAY_DAY_NAME || p.dayOfWeek === TODAY_DAY_NAME.toUpperCase());
+      const activePeriods = todayPeriods.length > 0 ? todayPeriods : rawPeriods.filter((p: any) => p.day === 'Monday' || p.dayOfWeek === 'MONDAY');
       
       const dayMap: Record<string, any[]> = {};
       activePeriods.forEach((p: any) => {
-        const day = p.day || 'Monday';
+        const day = p.day || p.dayOfWeek || 'Monday';
         if (!dayMap[day]) dayMap[day] = [];
         
-        const isSub = p.isSubstitute === true;
+        const isSub = p.isSubstitute === true || p.isOnLeave === true;
         dayMap[day].push({
-          key: p.periodId,
-          periodNumber: p.periodNumber,
+          key: p.periodId || p.id || Math.random().toString(),
+          periodNumber: p.periodNumber || p.num || 1,
           subjectName: p.subjectName || '—',
           teacherName: isSub ? (p.substituteTeacherName || 'Sub TBD') : (p.teacherName || 'Unassigned'),
           classSectionId: p.classSectionId || '',
@@ -794,7 +806,7 @@ export default function TeacherClassManagement() {
           frequency: p.frequency || 'Weekly',
           isSubstitute: isSub,
           substituteTeacher: isSub ? p.substituteTeacherName : null,
-          originalTeacher: isSub ? p.originalTeacherName : null
+          originalTeacher: isSub ? p.originalTeacherName || p.onLeaveTeacherName : null
         });
       });
 
@@ -1060,14 +1072,24 @@ export default function TeacherClassManagement() {
         }
       }
 
-      // Fill backend scheduled periods (flat array mapping)
-      const backendData = Array.isArray(timetableRes.data) ? timetableRes.data : [];
+      // Fill backend scheduled periods (flat array mapping or key-value object map)
+      const rawRes = timetableRes.data;
+      const backendData: any[] = Array.isArray(rawRes)
+        ? rawRes
+        : (rawRes && typeof rawRes === 'object' ? Object.values(rawRes) : []);
+
       const cachedSubjectTeachers: Record<string, any[]> = {};
 
       for (const p of backendData) {
-        const backDay = p.day;
-        const periodNum = p.periodNumber;
-        const frontDay = dayShortMap[backDay] || backDay.substring(0, 3).toUpperCase();
+        if (!p || typeof p !== 'object') continue;
+        const backDay = p.day || p.dayOfWeek || '';
+        const periodNum = Number(p.periodNumber || p.num || 0);
+
+        let frontDay = '';
+        if (backDay) {
+          const cleanDay = backDay.charAt(0).toUpperCase() + backDay.slice(1).toLowerCase();
+          frontDay = dayShortMap[cleanDay] || dayShortMap[backDay.toUpperCase()] || backDay.substring(0, 3).toUpperCase();
+        }
 
         if (frontDay && periodNum) {
           const subId = p.subjectId || '';
@@ -1308,13 +1330,21 @@ export default function TeacherClassManagement() {
 
   const fetchExistingClasses = useCallback(async () => {
     try {
-      // Use the academics endpoint to get the list of classes for the selected academic year
-      const res = await api.get('/academics/classes', {
+      let res = await api.get('/academics/classes', {
         params: selectedAcademicYear ? { academicYearId: selectedAcademicYear } : undefined
       });
-      setExistingClasses(res.data || []);
+      let list = res.data || [];
+      if (!Array.isArray(list) || list.length === 0) {
+        res = await api.get('/academics/classes');
+        list = res.data || [];
+      }
+      setExistingClasses(Array.isArray(list) ? list : []);
     } catch (err) {
       console.error('Failed to fetch existing classes:', err);
+      try {
+        const fallback = await api.get('/academics/classes');
+        setExistingClasses(fallback.data || []);
+      } catch (e) {}
     }
   }, [selectedAcademicYear]);
 
@@ -3499,26 +3529,36 @@ export default function TeacherClassManagement() {
               <button onClick={() => setShowCreateClass(false)} className="p-1 rounded-lg text-slate-400 hover:bg-slate-100"><X className="w-4 h-4" /></button>
             </div>
 
-            {existingClasses.length > 0 && (
-              <div className="mb-4">
-                <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Existing Classes</h4>
-                <div className="max-h-32 overflow-y-auto space-y-1 pr-1 scrollbar-thin">
+            <div className="mb-4">
+              <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2 flex items-center justify-between">
+                <span>Existing Classes</span>
+                <span className="bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded-full text-[9px] font-extrabold">{existingClasses.length}</span>
+              </h4>
+              {existingClasses.length > 0 ? (
+                <div className="max-h-36 overflow-y-auto space-y-1.5 pr-1 scrollbar-thin">
                   {existingClasses.map((cls) => (
-                    <div key={cls.id} className="flex items-center justify-between bg-slate-50 border border-slate-100 rounded-xl px-3 py-1.5 text-xs text-slate-700">
-                      <span>{cls.name}</span>
+                    <div key={cls.id} className="flex items-center justify-between bg-slate-50 hover:bg-slate-100/80 border border-slate-200/80 rounded-xl px-3 py-2 text-xs text-slate-800 font-bold transition-all">
+                      <span className="flex items-center gap-1.5">
+                        <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
+                        {cls.name}
+                      </span>
                       <button
                         type="button"
                         onClick={() => handleDeleteClass(cls.id)}
-                        className="p-1 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                        className="p-1 text-rose-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
                         title="Delete Class"
                       >
-                        <Trash2 className="w-3.5 h-3.5" />
+                        <Trash2 className="w-4 h-4" />
                       </button>
                     </div>
                   ))}
                 </div>
-              </div>
-            )}
+              ) : (
+                <div className="bg-slate-50 border border-slate-100 rounded-xl p-2.5 text-center text-[11px] text-slate-400 italic">
+                  No existing classes created yet.
+                </div>
+              )}
+            </div>
 
             <div className="space-y-2 mb-4">
               <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Add New Classes</h4>

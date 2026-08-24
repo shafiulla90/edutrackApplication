@@ -488,47 +488,57 @@ export default function AttendanceMgmtPage() {
         <div className="space-y-4 animate-in fade-in duration-200">
           
           {/* Green success banner & summary card when attendance is already submitted and we are in read-only mode */}
-          {sessionExists && isReadOnly && sessionInfo && (
-            <div className="space-y-4">
-              <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 p-4 rounded-2xl text-xs font-bold flex items-center gap-2">
-                <Check className="w-5 h-5 shrink-0 text-emerald-600" />
-                <span>
-                  ✅ Attendance for {selectedClass} - {selectedSection} has already been submitted for {formatDateLong(selectedDate)}.
-                </span>
-              </div>
+          {sessionExists && isReadOnly && sessionInfo && (() => {
+            const clsObj = classes.find(c => (c.classSectionId || c.id || c.value) === selectedClass);
+            const secObj = sections.find(s => (s.id || s.value) === selectedSection);
+            const clsNameDisplay = typeof clsObj?.className === 'object' ? (clsObj?.className?.name || 'Class') : String(clsObj?.className || clsObj?.name || selectedClass);
+            const secNameDisplay = typeof secObj?.name === 'object' ? (secObj?.name?.name || '') : String(secObj?.name || secObj?.label || selectedSection);
+            const classLabel = secNameDisplay ? `${clsNameDisplay} - ${secNameDisplay}` : clsNameDisplay;
 
-              {/* Metrics summary card */}
-              <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm space-y-5">
-                <div className="grid grid-cols-3 gap-3">
-                  <div className="text-center py-2.5 bg-slate-50 rounded-2xl border border-slate-100">
-                    <span className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Total</span>
-                    <span className="block text-lg font-extrabold text-slate-800 mt-0.5">{sessionInfo.total}</span>
-                  </div>
-                  <div className="text-center py-2.5 bg-emerald-50/50 rounded-2xl border border-emerald-100/50">
-                    <span className="block text-[10px] font-semibold text-emerald-500 uppercase tracking-wider">Present</span>
-                    <span className="block text-lg font-extrabold text-emerald-600 mt-0.5">{sessionInfo.present}</span>
-                  </div>
-                  <div className="text-center py-2.5 bg-rose-50/50 rounded-2xl border border-rose-100/50">
-                    <span className="block text-[10px] font-semibold text-rose-500 uppercase tracking-wider">Absent</span>
-                    <span className="block text-lg font-extrabold text-rose-600 mt-0.5">{sessionInfo.absent}</span>
-                  </div>
+            const totalVal = students.length > 0 ? students.length : (sessionInfo.totalStudents !== undefined && sessionInfo.totalStudents !== null ? sessionInfo.totalStudents : (sessionInfo.total !== undefined && sessionInfo.total !== null ? sessionInfo.total : 0));
+            const absentVal = sessionInfo.absentCount !== undefined && sessionInfo.absentCount !== null ? sessionInfo.absentCount : (sessionInfo.absent !== undefined && sessionInfo.absent !== null ? sessionInfo.absent : (sessionInfo.absentIds ? sessionInfo.absentIds.length : 0));
+            const presentVal = Math.max(0, totalVal - absentVal);
+
+            const lastUpdatedIso = sessionInfo.lastUpdatedTime || sessionInfo.updatedAt || sessionInfo.createdTime || sessionInfo.createdAt;
+
+            return (
+              <div className="space-y-4">
+                <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 p-4 rounded-2xl text-xs font-bold flex items-center gap-2">
+                  <Check className="w-5 h-5 shrink-0 text-emerald-600" />
+                  <span>
+                    ✅ Attendance for {classLabel} has already been submitted for {formatDateLong(selectedDate)}.
+                  </span>
                 </div>
 
-                <div className="space-y-2 text-xs font-semibold text-slate-500 border-t border-slate-100 pt-4 px-1">
-                  <div className="flex justify-between">
-                    <span>Status:</span>
-                    <span className="text-emerald-600 font-bold">Submitted</span>
+                {/* Metrics summary card */}
+                <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm space-y-5">
+                  <div className="grid grid-cols-3 gap-3">
+                    <div className="text-center py-2.5 bg-slate-50 rounded-2xl border border-slate-100">
+                      <span className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Total</span>
+                      <span className="block text-lg font-extrabold text-slate-800 mt-0.5">{totalVal}</span>
+                    </div>
+                    <div className="text-center py-2.5 bg-emerald-50/50 rounded-2xl border border-emerald-100/50">
+                      <span className="block text-[10px] font-semibold text-emerald-500 uppercase tracking-wider">Present</span>
+                      <span className="block text-lg font-extrabold text-emerald-600 mt-0.5">{presentVal}</span>
+                    </div>
+                    <div className="text-center py-2.5 bg-rose-50/50 rounded-2xl border border-rose-100/50">
+                      <span className="block text-[10px] font-semibold text-rose-500 uppercase tracking-wider">Absent</span>
+                      <span className="block text-lg font-extrabold text-rose-600 mt-0.5">{absentVal}</span>
+                    </div>
                   </div>
-                  <div className="flex justify-between">
-                    <span>{sessionInfo.createdAt !== sessionInfo.updatedAt ? 'Last Updated:' : 'Submitted:'}</span>
-                    <span className="text-slate-700">
-                      {sessionInfo.createdAt !== sessionInfo.updatedAt
-                        ? `${formatLocalDateTime(sessionInfo.updatedAt)} by ${sessionInfo.teacherName}`
-                        : `${formatLocalDateTime(sessionInfo.createdAt)} by ${sessionInfo.teacherName}`
-                      }
-                    </span>
+
+                  <div className="space-y-2 text-xs font-semibold text-slate-500 border-t border-slate-100 pt-4 px-1">
+                    <div className="flex justify-between">
+                      <span>Status:</span>
+                      <span className="text-emerald-600 font-bold">Submitted</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Submitted:</span>
+                      <span className="text-slate-700">
+                        {lastUpdatedIso ? `${formatLocalDateTime(lastUpdatedIso)} by ${sessionInfo.teacherName || 'Teacher'}` : `by ${sessionInfo.teacherName || 'Teacher'}`}
+                      </span>
+                    </div>
                   </div>
-                </div>
 
                 <button
                   onClick={() => {
@@ -546,7 +556,8 @@ export default function AttendanceMgmtPage() {
                 </button>
               </div>
             </div>
-          )}
+            );
+          })()}
 
           {/* Locked warning banner */}
           {isLocked && isReadOnly && (

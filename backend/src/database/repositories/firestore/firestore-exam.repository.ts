@@ -41,22 +41,21 @@ export class FirestoreExamRepository implements IExamRepository {
   async upsertExamMark(data: any): Promise<any> {
     if (!data.tenantId) throw new Error('tenantId is required');
     const tenantId = data.tenantId;
-    const docId = data.id || DeterministicKey.examMark(data.examId, data.studentId, data.subjectId);
+    const examId = data.examId || data.examName || 'exam-default';
+    const studentId = data.studentId || 'student-default';
+    const subjectId = data.subjectId || 'subject-default';
+    const docId = data.id || `${examId}_${studentId}_${subjectId}`;
 
-    const examSnap = await this.db.collectionGroup('exams').where('id', '==', data.examId).limit(1).get();
-    let examRef: FirebaseFirestore.DocumentReference;
-    if (!examSnap.empty) {
-      examRef = examSnap.docs[0].ref;
-    } else {
-      examRef = this.db.collection('tenants').doc(tenantId).collection('exams').doc(data.examId);
-    }
-
-    const markRef = examRef.collection('examMarks').doc(docId);
+    const markRef = this.db.collection('tenants').doc(tenantId).collection('examMarks').doc(docId);
     const payload = {
       ...data,
       id: docId,
-      marksObtained: Number(data.marksObtained),
+      examId,
+      studentId,
+      subjectId,
+      marksObtained: Number(data.marksObtained || 0),
       tenantId,
+      updatedAt: new Date().toISOString(),
     };
     await markRef.set(payload, { merge: true });
     return payload;

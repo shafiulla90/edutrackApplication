@@ -51,7 +51,7 @@ if (isSchoolSubdomain) {
   const [phone, setPhone] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [notFoundInfo, setNotFoundInfo] = useState<{ isNotFound: boolean; portal: string; message: string } | null>(null);
+  const [notFoundInfo, setNotFoundInfo] = useState<{ isNotFound: boolean; portalMismatch?: boolean; correctPortal?: string; portal: string; message: string } | null>(null);
 
   const recaptchaVerifierRef = useRef<RecaptchaVerifier | null>(null);
 
@@ -101,6 +101,10 @@ if (isSchoolSubdomain) {
       setError('Please enter a valid 10-digit mobile number');
       return;
     }
+
+    // Set portal active_role immediately for correct token routing
+    const targetActiveRole = portal === 'teacher' ? 'TEACHER' : (portal === 'parent' || portal === 'student') ? 'PARENT' : 'SCHOOL_ADMIN';
+    sessionStorage.setItem('active_role', targetActiveRole);
 
     // Check if session is already active for this phone number and matching role
     const adminToken = localStorage.getItem('admin_token');
@@ -190,6 +194,8 @@ if (isSchoolSubdomain) {
         }
         setNotFoundInfo({
           isNotFound: true,
+          portalMismatch: data.portalMismatch,
+          correctPortal: data.correctPortal,
           portal: data.portal || portal,
           message: data.message || `${portalTitle} account not found. Please contact your School Administrator.`
         });
@@ -203,32 +209,32 @@ if (isSchoolSubdomain) {
       sessionStorage.setItem('otp_logoUrl', logoUrl);
 
       // Step 2: Trigger Firebase Phone Authentication (Sends real SMS OTP to user phone)
-
-      if (recaptchaVerifierRef.current) {
-        try {
-          recaptchaVerifierRef.current.clear();
-        } catch (e) {}
-        recaptchaVerifierRef.current = null;
-      }
-
-      try {
-        recaptchaVerifierRef.current = new RecaptchaVerifier(auth, 'recaptcha-container', {
-          size: 'invisible',
-        });
-      } catch (err) {
-        console.error('Failed to instantiate RecaptchaVerifier:', err);
-      }
-
       let formattedPhone = cleanedPhone;
       if (!formattedPhone.startsWith('+')) {
         formattedPhone = `+91${formattedPhone}`;
       }
 
       try {
-        const confirmationResult = await signInWithPhoneNumber(auth, formattedPhone, recaptchaVerifierRef.current!);
+        if (!recaptchaVerifierRef.current) {
+          recaptchaVerifierRef.current = new RecaptchaVerifier(auth, 'recaptcha-container', {
+            size: 'invisible',
+            callback: () => {},
+            'expired-callback': () => {
+              if (recaptchaVerifierRef.current) {
+                try { recaptchaVerifierRef.current.clear(); } catch (e) {}
+                recaptchaVerifierRef.current = null;
+              }
+            }
+          });
+        }
+        const confirmationResult = await signInWithPhoneNumber(auth, formattedPhone, recaptchaVerifierRef.current);
         setConfirmationResult(confirmationResult);
       } catch (fbErr: any) {
         console.warn('Firebase Phone Auth client SDK returned error (proceeding with backend OTP):', fbErr);
+        if (recaptchaVerifierRef.current) {
+          try { recaptchaVerifierRef.current.clear(); } catch (e) {}
+          recaptchaVerifierRef.current = null;
+        }
         setConfirmationResult({
           confirm: async (code: string) => {
             return {
@@ -274,6 +280,12 @@ if (isSchoolSubdomain) {
   };
 
   if (notFoundInfo?.isNotFound) {
+    const targetPortal = notFoundInfo.correctPortal || 'admin';
+    const targetPortalName = 
+      targetPortal === 'teacher' ? 'Teacher Portal' :
+      targetPortal === 'parent' ? 'Parent Portal' :
+      'School Admin Portal';
+
     return (
       <main className="min-h-screen bg-slate-950 text-slate-100 flex flex-col justify-center items-center px-4 relative overflow-hidden">
         <div className="absolute top-[20%] left-[10%] w-[300px] h-[300px] rounded-full bg-brand-500/10 blur-[100px] pointer-events-none" />
@@ -286,23 +298,50 @@ if (isSchoolSubdomain) {
             </div>
             <div>
               <h2 className="text-xl font-bold text-white">
-                {portal === 'teacher' ? 'Teacher Account Not Found' : 'Parent Account Not Found'}
+                {notFoundInfo.portalMismatch ? 'Portal Redirection Required' : `${portalTitle} Account Not Found`}
               </h2>
               <p className="text-slate-300 text-sm mt-3 leading-relaxed font-light">
                 {notFoundInfo.message}
               </p>
             </div>
-            <button
-              onClick={() => {
-                setNotFoundInfo(null);
-                setPhone('');
-                setError('');
-              }}
-              className="w-full py-3 px-4 bg-gradient-to-r from-brand-600 to-indigo-600 text-white rounded-xl font-semibold text-sm hover:from-brand-500 hover:to-indigo-500 shadow-lg shadow-brand-500/15 transition-all flex items-center justify-center gap-2 cursor-pointer"
-            >
-              <ArrowLeft className="w-4 h-4" />
-              Back to Login
-            </button>
+            {notFoundInfo.portalMismatch ? (
+              <div className="space-y-3">
+                <button
+                  onClick={() => {
+                    setNotFoundInfo(null);
+                    setPhone('');
+                    setError('');
+                    router.push(`/auth/login?portal=${targetPortal}`);
+                  }}
+                  className="w-full py-3 px-4 bg-gradient-to-r from-brand-600 to-indigo-600 text-white rounded-xl font-semibold text-sm hover:from-brand-500 hover:to-indigo-500 shadow-lg shadow-brand-500/15 transition-all flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  Go to {targetPortalName}
+                  <ArrowRight className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={() => {
+                    setNotFoundInfo(null);
+                    setPhone('');
+                    setError('');
+                  }}
+                  className="w-full py-2.5 px-4 bg-slate-800/80 hover:bg-slate-800 text-slate-300 rounded-xl font-medium text-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  Try Another Number
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={() => {
+                  setNotFoundInfo(null);
+                  setPhone('');
+                  setError('');
+                }}
+                className="w-full py-3 px-4 bg-gradient-to-r from-brand-600 to-indigo-600 text-white rounded-xl font-semibold text-sm hover:from-brand-500 hover:to-indigo-500 shadow-lg shadow-brand-500/15 transition-all flex items-center justify-center gap-2 cursor-pointer"
+              >
+                <ArrowLeft className="w-4 h-4" />
+                Back to Login
+              </button>
+            )}
           </div>
         </div>
       </main>

@@ -44,9 +44,9 @@ function OtpContent() {
 
   useEffect(() => {
     if (!phone) {
-      router.push('/auth/login');
+      router.push(`/auth/login?portal=${encodeURIComponent(portal)}`);
     }
-  }, [phone, router]);
+  }, [phone, portal, router]);
 
   const handleChange = (index: number, value: string) => {
     // Only accept numeric inputs
@@ -116,6 +116,10 @@ function OtpContent() {
         setSuccessMsg('Authenticated! Loading profile...');
         const role = data.user.role;
         if (role === 'TEACHER' || role === 'STAFF' || role === 'DRIVER') {
+          // Clear stale admin or parent tokens so active role is cleanly set to teacher
+          localStorage.removeItem('admin_token');
+          localStorage.removeItem('parent_token');
+          
           localStorage.setItem('teacher_token', data.access_token);
           localStorage.setItem('teacher_tenantId', data.user.tenantId);
           if (data.user.phone) {
@@ -134,7 +138,11 @@ function OtpContent() {
               router.push('/dashboard');
             }, 500);
           }
-        } else if (role === 'PARENT') {
+        } else if (role === 'PARENT' || role === 'STUDENT' || portal === 'parent' || portal === 'student') {
+          // Clear stale admin or teacher tokens
+          localStorage.removeItem('admin_token');
+          localStorage.removeItem('teacher_token');
+          
           localStorage.setItem('parent_token', data.access_token);
           localStorage.setItem('parent_tenantId', data.user.tenantId);
           if (data.user.phone) {
@@ -146,6 +154,10 @@ function OtpContent() {
             router.push('/parent');
           }, 500);
         } else {
+          // Clear stale teacher or parent tokens
+          localStorage.removeItem('teacher_token');
+          localStorage.removeItem('parent_token');
+          
           localStorage.setItem('admin_token', data.access_token);
           localStorage.setItem('admin_tenantId', data.user.tenantId);
           if (data.user.phone) {
@@ -265,7 +277,7 @@ function OtpContent() {
 
         <div className="glass-card p-8 rounded-3xl border border-slate-900/50 bg-slate-900/40 backdrop-blur-xl relative">
           <button
-            onClick={() => router.push('/auth/login')}
+            onClick={() => router.push(`/auth/login?portal=${encodeURIComponent(portal)}`)}
             className="absolute top-6 left-6 text-slate-500 hover:text-slate-300 transition-colors flex items-center gap-1.5 text-xs font-semibold cursor-pointer"
           >
             <ArrowLeft className="w-4 h-4" />

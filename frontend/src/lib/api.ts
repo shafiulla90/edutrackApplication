@@ -11,10 +11,19 @@ export function getActiveRole(): 'TEACHER' | 'SCHOOL_ADMIN' | 'PARENT' | 'DRIVER
   if (typeof window === 'undefined') return 'SCHOOL_ADMIN';
   
   let role = sessionStorage.getItem('active_role') as 'TEACHER' | 'SCHOOL_ADMIN' | 'PARENT' | 'DRIVER' | null;
+  
+  if (typeof window !== 'undefined' && window.location.search) {
+    const params = new URLSearchParams(window.location.search);
+    const p = params.get('portal');
+    if (p === 'teacher') role = 'TEACHER';
+    else if (p === 'parent' || p === 'student') role = 'PARENT';
+    else if (p === 'admin') role = 'SCHOOL_ADMIN';
+  }
+
   if (!role) {
     if (localStorage.getItem('parent_token')) {
       role = 'PARENT';
-    } else if (localStorage.getItem('teacher_token') && !localStorage.getItem('admin_token')) {
+    } else if (localStorage.getItem('teacher_token')) {
       role = 'TEACHER';
     } else {
       role = 'SCHOOL_ADMIN';
@@ -115,7 +124,9 @@ export const api = axios.create({
   },
 });
 
-// Interceptor to inject JWT Token and correct Tenant ID
+// In-flight request deduplication cache for GET requests
+const inFlightRequests = new Map<string, Promise<any>>();
+
 api.interceptors.request.use(
   (config) => {
     if (typeof window !== 'undefined') {
@@ -123,7 +134,6 @@ api.interceptors.request.use(
       if (token) {
         config.headers.Authorization = `Bearer ${token}`;
       }
-      // Inject resolved tenant ID if present
       const tenantId = getTenantFromHostname();
       if (tenantId) {
         config.headers['X-Tenant-ID'] = tenantId;
@@ -134,22 +144,26 @@ api.interceptors.request.use(
   (error) => Promise.reject(error)
 );
 
-// Interceptor to handle 401 and redirect to login
+// Interceptor to handle deduplication & 401 response handling
 api.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    return response;
+  },
   async (error) => {
     if (error.response?.status === 401) {
       if (typeof window !== 'undefined') {
-        // Prevent redirect loop if already on root page, auth pages, or public registration
         const path = window.location.pathname;
         const isPublicPath = path === '/' || path.startsWith('/auth/') || path.startsWith('/register-school');
         if (!isPublicPath) {
+          const role = getActiveRole();
           clearStoredAuth();
-          window.location.href = '/auth/login';
+          const portalParam = role === 'TEACHER' ? 'teacher' : role === 'PARENT' ? 'parent' : 'admin';
+          window.location.href = `/auth/login?portal=${portalParam}`;
         }
       }
     }
     return Promise.reject(error);
   }
 );
+
 export const updateStudent = (id: string, data: Partial<any>) => api.patch(`/students/${id}`, data);

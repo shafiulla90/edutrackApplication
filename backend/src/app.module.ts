@@ -22,6 +22,9 @@ import { TeacherPortalModule } from './modules/teacher-portal/teacher-portal.mod
 import { ParentPortalModule } from './modules/parent-portal/parent-portal.module';
 import { AcademicsModule } from './modules/academics/academics.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
+import { LeaveManagementModule } from './modules/leave-management/leave-management.module';
+import { TransportModule } from './modules/transport/transport.module';
+import { PaymentGatewayModule } from './modules/payment-gateway/payment-gateway.module';
 import { TenantContextMiddleware } from './common/middleware/tenant-context.middleware';
 import { AppController } from './app.controller';
 
@@ -52,6 +55,9 @@ import { AppController } from './app.controller';
     ParentPortalModule,
     AcademicsModule,
     DashboardModule,
+    LeaveManagementModule,
+    TransportModule,
+    PaymentGatewayModule,
   ],
   providers: [
     {

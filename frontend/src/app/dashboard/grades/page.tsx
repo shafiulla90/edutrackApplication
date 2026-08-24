@@ -36,11 +36,12 @@ export default function GradesMarksPage() {
   const { schoolName } = useTenant();
   
   // Metadata options
-  const [classes, setClasses] = useState<ClassSectionOption[]>([]);
+  const [rawClassSections, setRawClassSections] = useState<any[]>([]);
+  const [uniqueClasses, setUniqueClasses] = useState<string[]>([]);
+  const [selectedClassName, setSelectedClassName] = useState('');
+  const [availableSections, setAvailableSections] = useState<string[]>([]);
+  const [selectedSectionName, setSelectedSectionName] = useState('ALL');
   const [examTypes, setExamTypes] = useState<string[]>([]);
-
-  // Selection filters
-  const [selectedClassSectionId, setSelectedClassSectionId] = useState('');
   const [selectedExamName, setSelectedExamName] = useState('');
 
   // Results list
@@ -102,15 +103,28 @@ export default function GradesMarksPage() {
   const fetchMetadata = async () => {
     try {
       const classRes = await api.get('/exams/classes');
-      setClasses(classRes.data);
-      if (classRes.data.length > 0) {
-        setSelectedClassSectionId(classRes.data[0].value);
+      const classData: any[] = Array.isArray(classRes.data) ? classRes.data : (classRes.data?.data || []);
+      setRawClassSections(classData);
+
+      // Extract unique Class names
+      const classNamesSet = new Set<string>();
+      classData.forEach((c: any) => {
+        let cName = c.className || (c.label ? c.label.split('-')[0].trim() : '');
+        if (cName) classNamesSet.add(cName);
+      });
+      const uniqueClassList = Array.from(classNamesSet);
+      setUniqueClasses(uniqueClassList);
+
+      if (uniqueClassList.length > 0) {
+        setSelectedClassName(uniqueClassList[0]);
       }
 
       const typeRes = await api.get('/exams/exam-types');
-      setExamTypes(typeRes.data);
-      if (typeRes.data.length > 0) {
-        setSelectedExamName(typeRes.data[0]);
+      const rawTypes = Array.isArray(typeRes.data) ? typeRes.data : (typeRes.data?.data || []);
+      const formattedTypes = rawTypes.map((t: any) => typeof t === 'string' ? t : (t.name || t.id));
+      setExamTypes(formattedTypes);
+      if (formattedTypes.length > 0) {
+        setSelectedExamName(formattedTypes[0]);
       }
     } catch (err: any) {
       console.error('Error fetching grades metadata:', err);
@@ -118,18 +132,60 @@ export default function GradesMarksPage() {
     }
   };
 
+  // Update available sections when selected class changes
   useEffect(() => {
-    if (selectedClassSectionId && selectedExamName) {
-      fetchGrades();
+    if (!selectedClassName) {
+      setAvailableSections([]);
+      return;
     }
-  }, [selectedClassSectionId, selectedExamName]);
+    const matchingSections = rawClassSections.filter((c: any) => {
+      const cName = c.className || (c.label ? c.label.split('-')[0].trim() : '');
+      return cName === selectedClassName;
+    });
 
-  const fetchGrades = async () => {
+    const secSet = new Set<string>();
+    matchingSections.forEach((c: any) => {
+      let sName = c.sectionName || (c.label && c.label.includes('-') ? c.label.split('-').slice(1).join('-').trim() : '');
+      if (sName) secSet.add(sName);
+    });
+
+    const secList = Array.from(secSet);
+    setAvailableSections(secList);
+    setSelectedSectionName('ALL');
+  }, [selectedClassName, rawClassSections]);
+
+  const getActiveClassSectionId = () => {
+    if (!selectedClassName) return '';
+    const matching = rawClassSections.filter((c: any) => {
+      const cName = c.className || (c.label ? c.label.split('-')[0].trim() : '');
+      return cName === selectedClassName;
+    });
+
+    if (selectedSectionName !== 'ALL') {
+      const matchSec = matching.find((c: any) => {
+        const sName = c.sectionName || (c.label && c.label.includes('-') ? c.label.split('-').slice(1).join('-').trim() : '');
+        return sName === selectedSectionName;
+      });
+      if (matchSec) return matchSec.value;
+    }
+
+    return matching[0]?.value || '';
+  };
+
+  useEffect(() => {
+    const activeCsId = getActiveClassSectionId();
+    if (selectedClassName && selectedExamName) {
+      fetchGrades(activeCsId);
+    }
+  }, [selectedClassName, selectedSectionName, selectedExamName]);
+
+  const fetchGrades = async (csId?: string) => {
+    const activeCsId = csId !== undefined ? csId : getActiveClassSectionId();
     setIsLoading(true);
     setErrorMsg('');
     try {
       const res = await api.get(
-        `/exams/grades-report?classSectionId=${selectedClassSectionId}&examName=${encodeURIComponent(
+        `/exams/grades-report?classSectionId=${activeCsId}&className=${encodeURIComponent(selectedClassName)}&sectionName=${encodeURIComponent(selectedSectionName)}&examName=${encodeURIComponent(
           selectedExamName
         )}`
       );
@@ -144,7 +200,8 @@ export default function GradesMarksPage() {
 
   const handleResetFilters = () => {
     setSearch('');
-    if (classes.length > 0) setSelectedClassSectionId(classes[0].value);
+    if (uniqueClasses.length > 0) setSelectedClassName(uniqueClasses[0]);
+    setSelectedSectionName('ALL');
     if (examTypes.length > 0) setSelectedExamName(examTypes[0]);
   };
 
@@ -187,7 +244,9 @@ export default function GradesMarksPage() {
     return 'F';
   };
 
-  const classLabel = classes.find(c => c.value === selectedClassSectionId)?.label || 'Class Section';
+  const classLabel = selectedSectionName !== 'ALL'
+    ? `${selectedClassName} - ${selectedSectionName}`
+    : selectedClassName || 'Class Section';
 
   return (
     <div className="space-y-6 animate-in">
@@ -203,7 +262,7 @@ export default function GradesMarksPage() {
         </div>
         <div className="flex items-center gap-2">
           <button
-            onClick={fetchGrades}
+            onClick={() => fetchGrades()}
             className="px-4 py-2.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 font-semibold text-[13px] flex items-center gap-2 shadow-xs transition-colors"
           >
             <RefreshCw className="w-4 h-4 text-slate-500" />
@@ -226,9 +285,9 @@ export default function GradesMarksPage() {
       )}
 
       {/* Filters config bar */}
-      <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 print:hidden">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3 print:hidden">
         {/* Search */}
-        <div className="relative flex items-center bg-white border border-slate-200 rounded-xl px-3 py-2 sm:col-span-2 shadow-xs focus-within:border-[#2E5BFF]">
+        <div className="relative flex items-center bg-white border border-slate-200 rounded-xl px-3 py-2 md:col-span-2 shadow-xs focus-within:border-[#2E5BFF]">
           <Search className="w-4 h-4 text-slate-400 mr-2" />
           <input
             type="text"
@@ -241,12 +300,24 @@ export default function GradesMarksPage() {
 
         {/* Class select */}
         <select
-          value={selectedClassSectionId}
-          onChange={(e) => setSelectedClassSectionId(e.target.value)}
-          className="border border-slate-200 rounded-xl p-2.5 text-[13px] text-slate-755 font-bold bg-white shadow-xs outline-none"
+          value={selectedClassName}
+          onChange={(e) => setSelectedClassName(e.target.value)}
+          className="border border-slate-200 rounded-xl p-2.5 text-[13px] text-slate-755 font-bold bg-white shadow-xs outline-none cursor-pointer"
         >
-          {classes.map(c => (
-            <option key={c.value} value={c.value}>{c.label}</option>
+          {uniqueClasses.map(cName => (
+            <option key={cName} value={cName}>{cName}</option>
+          ))}
+        </select>
+
+        {/* Section select */}
+        <select
+          value={selectedSectionName}
+          onChange={(e) => setSelectedSectionName(e.target.value)}
+          className="border border-slate-200 rounded-xl p-2.5 text-[13px] text-slate-755 font-bold bg-white shadow-xs outline-none cursor-pointer"
+        >
+          <option value="ALL">All Sections</option>
+          {availableSections.map(sName => (
+            <option key={sName} value={sName}>{sName}</option>
           ))}
         </select>
 
@@ -254,7 +325,7 @@ export default function GradesMarksPage() {
         <select
           value={selectedExamName}
           onChange={(e) => setSelectedExamName(e.target.value)}
-          className="border border-slate-200 rounded-xl p-2.5 text-[13px] text-slate-755 font-bold bg-white shadow-xs outline-none"
+          className="border border-slate-200 rounded-xl p-2.5 text-[13px] text-slate-755 font-bold bg-white shadow-xs outline-none cursor-pointer"
         >
           {examTypes.map(t => (
             <option key={t} value={t}>{t}</option>

@@ -795,22 +795,27 @@ function TeacherDashboardView() {
           <div className="py-8 text-center text-slate-400 text-xs italic">No teaching periods scheduled for today.</div>
         ) : (
           <div className="space-y-3">
-            {data?.today?.classes?.map((cls: any) => (
-              <div key={cls.id} className="bg-slate-50 border border-slate-100 rounded-2xl p-4 flex justify-between items-center">
-                <div>
-                  <h4 className="font-bold text-sm text-slate-800">{cls.className}</h4>
-                  <p className="text-xs text-slate-500 font-medium mt-0.5">{cls.subjectName} • Period {cls.periodNumber}</p>
-                  <p className="text-[11px] text-slate-400 font-mono mt-1">{cls.time}</p>
+            {data?.today?.classes?.map((cls: any, idx: number) => {
+              const clsName = typeof cls.className === 'object' ? (cls.className?.name || 'Class') : String(cls.className || cls.name || 'Class');
+              const subName = typeof cls.subjectName === 'object' ? (cls.subjectName?.name || 'Subject') : String(cls.subjectName || cls.subject || 'Subject');
+              const timeVal = typeof cls.time === 'object' ? (cls.time?.name || '') : String(cls.time || '');
+              return (
+                <div key={cls.id || idx} className="bg-slate-50 border border-slate-100 rounded-2xl p-4 flex justify-between items-center">
+                  <div>
+                    <h4 className="font-bold text-sm text-slate-800">{clsName}</h4>
+                    <p className="text-xs text-slate-500 font-medium mt-0.5">{subName} • Period {cls.periodNumber || 1}</p>
+                    {timeVal && <p className="text-[11px] text-slate-400 font-mono mt-1">{timeVal}</p>}
+                  </div>
+                  <Link
+                    href={`/dashboard/homework?classSectionId=${encodeURIComponent(cls.classSectionId || cls.id || '')}&subjectId=${encodeURIComponent(cls.subjectId || '')}&subjectName=${encodeURIComponent(subName)}&className=${encodeURIComponent(clsName)}&periodNumber=${encodeURIComponent(cls.periodNumber || '')}&create=true`}
+                    className="px-3.5 py-1.5 bg-[#2E5BFF] hover:bg-blue-600 text-white rounded-xl text-xs font-semibold shadow-xs flex items-center gap-1.5 transition-all cursor-pointer"
+                  >
+                    <BookOpen className="w-3.5 h-3.5" />
+                    Assign Homework
+                  </Link>
                 </div>
-                <Link
-                  href={`/dashboard/homework?classSectionId=${encodeURIComponent(cls.classSectionId)}&subjectId=${encodeURIComponent(cls.subjectId || '')}&subjectName=${encodeURIComponent(cls.subjectName)}&className=${encodeURIComponent(cls.className)}&periodNumber=${encodeURIComponent(cls.periodNumber || '')}&create=true`}
-                  className="px-3.5 py-1.5 bg-[#2E5BFF] hover:bg-blue-600 text-white rounded-xl text-xs font-semibold shadow-xs flex items-center gap-1.5 transition-all cursor-pointer"
-                >
-                  <BookOpen className="w-3.5 h-3.5" />
-                  Assign Homework
-                </Link>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
@@ -838,15 +843,24 @@ function TeacherDashboardView() {
 import DriverTransportTrackerPage from './transport-tracker/page';
 
 export default function DashboardOverview() {
-  const { currentUser } = useTenant();
+  const { currentUser, loading } = useTenant();
 
-  const isDriver = currentUser?.role === 'DRIVER' || currentUser?.staffProfile?.staffRole === 'Driver' || currentUser?.staffProfile?.designation?.toLowerCase().includes('driver');
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center py-20">
+        <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+      </div>
+    );
+  }
+
+  const activeRole = typeof window !== 'undefined' ? sessionStorage.getItem('active_role') : null;
+  const isDriver = currentUser?.role === 'DRIVER' || currentUser?.staffProfile?.staffRole === 'Driver' || currentUser?.staffProfile?.designation?.toLowerCase().includes('driver') || activeRole === 'DRIVER';
 
   if (isDriver) {
     return <DriverTransportTrackerPage />;
   }
 
-  if (currentUser?.role === 'TEACHER') {
+  if (currentUser?.role === 'TEACHER' || activeRole === 'TEACHER') {
     return <TeacherDashboardView />;
   }
 

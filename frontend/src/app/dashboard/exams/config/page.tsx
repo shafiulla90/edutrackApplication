@@ -87,12 +87,16 @@ export default function ExamConfigPage() {
         api.get('/academics/classes'),
         api.get('/academics/subjects'),
       ]);
-      setConfigs(cfgRes.data);
-      setExamTypes(typeRes.data);
-      setComponents(compRes.data);
-      setAcademicYears(ayRes.data);
-      setClasses(classRes.data);
-      setSubjects(subRes.data);
+      setConfigs(Array.isArray(cfgRes.data) ? cfgRes.data : []);
+
+      const rawTypes = Array.isArray(typeRes.data) ? typeRes.data : (typeRes.data?.data || []);
+      const formattedTypes = rawTypes.map((t: any) => typeof t === 'string' ? t : (t.name || t.id));
+      setExamTypes(formattedTypes);
+
+      setComponents(Array.isArray(compRes.data) ? compRes.data : []);
+      setAcademicYears(Array.isArray(ayRes.data) ? ayRes.data : (ayRes.data?.data || []));
+      setClasses(Array.isArray(classRes.data) ? classRes.data : (classRes.data?.data || []));
+      setSubjects(Array.isArray(subRes.data) ? subRes.data : (subRes.data?.data || []));
     } catch (err) {
       console.error('Failed to load exam config:', err);
     } finally {
@@ -104,17 +108,14 @@ export default function ExamConfigPage() {
 
   // Handle auto-populating subject configs when Academic Year, Class, and Exam Type are selected
   useEffect(() => {
-    if (showAddOverride && overrideData.academicYearId && overrideData.classId && overrideData.examTypeName && overrideData.subjectConfigs.length === 0) {
-      // Find global config passing percentage
+    if (showAddOverride && overrideData.examTypeName && overrideData.subjectConfigs.length === 0 && subjects.length > 0) {
       const globalCfg = configs.find(c => c.isGlobal);
       const passPct = globalCfg ? globalCfg.passingPercentage : 35;
       const maxM = globalCfg ? globalCfg.maxMarks : 100;
       const calcPassM = Math.round((passPct / 100) * maxM);
 
-      // We populate all subjects in the system as default.
-      // In a more complex setup, we'd fetch subjects assigned to this specific class.
       const initialConfigs = subjects.map(s => ({
-        subjectId: s.id,
+        subjectId: s.id || s.value || s.name,
         subjectType: 'Theory',
         maxMarks: maxM,
         passingPercentage: passPct,
@@ -122,7 +123,7 @@ export default function ExamConfigPage() {
       }));
       setOverrideData(prev => ({ ...prev, subjectConfigs: initialConfigs }));
     }
-  }, [overrideData.academicYearId, overrideData.classId, overrideData.examTypeName, showAddOverride, subjects, configs]);
+  }, [overrideData.examTypeName, showAddOverride, subjects, configs]);
 
   const handleAddComponent = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -137,12 +138,14 @@ export default function ExamConfigPage() {
   };
 
   const handleDeleteComponent = async (id: string) => {
-    if (!confirm('Delete this subject component type?')) return;
+    setComponents(prev => prev.filter(c => c.id !== id));
     try {
       await api.delete(`/exam-config/components/${id}`);
       await fetchAll();
     } catch (err: any) {
+      console.error('Failed to delete component:', err);
       alert(err.response?.data?.message || 'Failed to delete component');
+      await fetchAll();
     }
   };
 
@@ -363,7 +366,9 @@ export default function ExamConfigPage() {
                   >
                     <option value="">Select Year...</option>
                     {academicYears.map(ay => (
-                      <option key={ay.id} value={ay.id}>{ay.name}</option>
+                      <option key={ay.id || ay.value || ay.name} value={ay.id || ay.value || ay.name}>
+                        {ay.name || ay.label || ay.year}
+                      </option>
                     ))}
                   </select>
                 </div>
@@ -372,12 +377,15 @@ export default function ExamConfigPage() {
                   <select 
                     value={overrideData.classId}
                     onChange={e => setOverrideData({...overrideData, classId: e.target.value})}
-                    disabled={!overrideData.academicYearId}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-semibold outline-none focus:border-[#2E5BFF] disabled:opacity-50"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-semibold outline-none focus:border-[#2E5BFF]"
                   >
                     <option value="">Select Class...</option>
-                    {classes.filter(c => c.academicYearId === overrideData.academicYearId).map(c => (
-                      <option key={c.id} value={c.id}>{c.name}</option>
+                    {classes
+                      .filter(c => !overrideData.academicYearId || !c.academicYearId || c.academicYearId === overrideData.academicYearId)
+                      .map(c => (
+                        <option key={c.id || c.value || c.name || c.className} value={c.id || c.value || c.name || c.className}>
+                          {c.name || c.className || c.label}
+                        </option>
                     ))}
                   </select>
                 </div>
@@ -389,9 +397,12 @@ export default function ExamConfigPage() {
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-semibold outline-none focus:border-[#2E5BFF]"
                   >
                     <option value="">Select Exam Type...</option>
-                    {examTypes.map(t => (
-                      <option key={t} value={t}>{t}</option>
-                    ))}
+                    {examTypes.map((t: any) => {
+                      const val = typeof t === 'string' ? t : (t.name || t.id);
+                      return (
+                        <option key={val} value={val}>{val}</option>
+                      );
+                    })}
                   </select>
                 </div>
               </div>

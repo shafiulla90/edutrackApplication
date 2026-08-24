@@ -24,6 +24,18 @@ export class FirestoreAcademicRepository implements IAcademicRepository {
 
   async findAcademicYears(tenantId: string): Promise<any[]> {
     const snap = await this.db.collection('tenants').doc(tenantId).collection('academicYears').get();
+    if (snap.empty) {
+      const ref = this.db.collection('tenants').doc(tenantId).collection('academicYears').doc('ay-2026-2027');
+      const initialAY = {
+        id: 'ay-2026-2027',
+        name: '2026-2027',
+        isActive: true,
+        tenantId,
+        createdAt: new Date().toISOString()
+      };
+      await ref.set(initialAY, { merge: true });
+      return [initialAY];
+    }
     return snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
   }
 
@@ -37,7 +49,12 @@ export class FirestoreAcademicRepository implements IAcademicRepository {
     let query: FirebaseFirestore.Query = this.db.collection('tenants').doc(tenantId).collection('classes');
     if (academicYearId) query = query.where('academicYearId', '==', academicYearId);
     const snap = await query.get();
-    return snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+    let results = snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+    if (results.length === 0 && academicYearId) {
+      const allSnap = await this.db.collection('tenants').doc(tenantId).collection('classes').get();
+      results = allSnap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+    }
+    return results;
   }
 
   async findClassById(id: string): Promise<any | null> {

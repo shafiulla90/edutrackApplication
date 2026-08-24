@@ -9,23 +9,30 @@ export class ParentPortalController {
   constructor(private readonly portalService: ParentPortalService) {}
 
   @Get('dashboard')
-  async getDashboard(@Request() req: any, @Query('parentId') queryParentId?: string) {
-    const userId = queryParentId || req?.user?.email || req?.user?.id || 'user-parent';
+  async getDashboard(@Request() req: any, @Query('parentId') queryParentId?: string, @Query('studentId') queryStudentId?: string) {
+    const userId = queryParentId || req?.user?.phone || req?.user?.email || req?.user?.id || 'user-parent';
     const tenantId = getTenantIdFromReq(req);
-    return this.portalService.getDashboardStats(userId, tenantId);
+    return this.portalService.getDashboardStats(userId, tenantId, req?.user, queryStudentId);
   }
 
   @Get('children')
   async getChildren(@Request() req: any, @Query('parentId') queryParentId?: string) {
-    const parentIdentity = queryParentId || req?.user?.email || req?.user?.id || 'user-parent';
+    const parentIdentity = queryParentId || req?.user?.phone || req?.user?.email || req?.user?.id || 'user-parent';
     const tenantId = getTenantIdFromReq(req);
-    return this.portalService.getChildren(parentIdentity, tenantId);
+    return this.portalService.getChildren(parentIdentity, tenantId, req?.user);
   }
 
   @Get('children/:studentId/dashboard')
   async getChildDashboard(@Request() req: any, @Param('studentId') studentId: string) {
     const userId = req?.user?.id || 'user-parent';
     return this.portalService.getChildDashboard(userId, studentId);
+  }
+
+  @Get('children/:studentId/profile')
+  async getStudentProfile(@Request() req: any, @Param('studentId') studentId: string) {
+    const userId = req?.user?.id || 'user-parent';
+    const tenantId = getTenantIdFromReq(req);
+    return this.portalService.getStudentProfile(userId, studentId, tenantId);
   }
 
   @Get('children/:studentId/attendance')
@@ -48,13 +55,15 @@ export class ParentPortalController {
     @Body() data: any,
   ) {
     const userId = req?.user?.id || 'user-parent';
-    return this.portalService.submitAssignment(userId, studentId, homeworkId, data.base64File, data.fileName);
+    const tenantId = getTenantIdFromReq(req);
+    return this.portalService.submitAssignment(userId, studentId, homeworkId, data.base64File, data.fileName, tenantId);
   }
 
   @Get('children/:studentId/exams')
   async getExams(@Request() req: any, @Param('studentId') studentId: string) {
     const userId = req?.user?.id || 'user-parent';
-    return this.portalService.getExams(userId, studentId);
+    const tenantId = getTenantIdFromReq(req);
+    return this.portalService.getExams(userId, studentId, tenantId);
   }
 
   @Get('children/:studentId/fees')
@@ -88,7 +97,8 @@ export class ParentPortalController {
   @Get('children/:studentId/timetable')
   async getTimetable(@Request() req: any, @Param('studentId') studentId: string) {
     const userId = req?.user?.id || 'user-parent';
-    return this.portalService.getTimetable(userId, studentId);
+    const tenantId = getTenantIdFromReq(req);
+    return this.portalService.getTimetable(userId, studentId, tenantId);
   }
 
   @Get('children/:studentId/announcements')
@@ -100,13 +110,15 @@ export class ParentPortalController {
   @Get('children/:studentId/teacher-complaints')
   async getTeacherComplaints(@Request() req: any, @Param('studentId') studentId: string) {
     const userId = req?.user?.id || 'user-parent';
-    return this.portalService.getTeacherComplaints(userId, studentId);
+    const tenantId = getTenantIdFromReq(req);
+    return this.portalService.getTeacherComplaints(userId, studentId, tenantId);
   }
 
   @Get('complaints')
   async getComplaints(@Request() req: any) {
     const userId = req?.user?.id || 'user-parent';
-    return this.portalService.getComplaints(userId);
+    const tenantId = getTenantIdFromReq(req);
+    return this.portalService.getComplaints(userId, tenantId);
   }
 
   @Post('complaints')
@@ -125,7 +137,8 @@ export class ParentPortalController {
   @Get('children/:studentId/leave')
   async getLeavesHistory(@Request() req: any, @Param('studentId') studentId: string) {
     const userId = req?.user?.id || 'user-parent';
-    return this.portalService.getLeavesHistory(userId, studentId);
+    const tenantId = getTenantIdFromReq(req);
+    return this.portalService.getLeavesHistory(userId, studentId, tenantId);
   }
 
   @Post('children/:studentId/leave')
@@ -135,6 +148,7 @@ export class ParentPortalController {
     @Body() data: any,
   ) {
     const userId = req?.user?.id || 'user-parent';
-    return this.portalService.submitLeaveRequest(userId, studentId, data);
+    const tenantId = getTenantIdFromReq(req);
+    return this.portalService.submitLeaveRequest(userId, studentId, data, tenantId);
   }
 }

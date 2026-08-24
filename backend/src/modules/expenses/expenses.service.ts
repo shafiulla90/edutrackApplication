@@ -27,11 +27,39 @@ export class ExpensesService {
 
   async getExpenseSummary(tenantId: string) {
     if (!tenantId) throw new Error('tenantId is required');
-    const list = await this.billingRepo.findExpensesByTenant(tenantId);
-    const totalAmount = (list || []).reduce((sum, e) => sum + Number(e.amount || 0), 0);
+    const list = (await this.billingRepo.findExpensesByTenant(tenantId)) || [];
+    const now = new Date();
+    const currentYr = now.getFullYear();
+    const currentMo = now.getMonth();
+
+    let currentMonth = 0;
+    let prevMonth = 0;
+    let yearly = 0;
+
+    for (const e of list) {
+      const amt = Number(e.amount || 0);
+      const dt = new Date(e.date || (e as any).createdAt);
+      if (!isNaN(dt.getTime())) {
+        if (dt.getFullYear() === currentYr) {
+          yearly += amt;
+          if (dt.getMonth() === currentMo) {
+            currentMonth += amt;
+          } else if (dt.getMonth() === currentMo - 1 || (currentMo === 0 && dt.getMonth() === 11 && dt.getFullYear() === currentYr - 1)) {
+            prevMonth += amt;
+          }
+        }
+      } else {
+        yearly += amt;
+        currentMonth += amt;
+      }
+    }
+
     return {
+      currentMonth,
+      prevMonth,
+      yearly,
       totalExpenses: list.length,
-      totalAmount,
+      totalAmount: yearly,
       currency: 'INR',
     };
   }

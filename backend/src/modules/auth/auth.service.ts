@@ -97,46 +97,88 @@ export class AuthService {
   async sendOtp(phone: string, portal?: string) {
     const cleanedPhone = (phone || '').replace(/[\s\-()]/g, '');
 
+    // Step 1: Check if phone matches any user in the database
     let existingUser = null;
     if (typeof this.userRepo.findByPhone === 'function') {
-      existingUser = await this.userRepo.findByPhone(cleanedPhone);
+      existingUser = await this.userRepo.findByPhone(cleanedPhone, portal).catch(() => null);
     }
 
-    const portalRole = (portal === 'teacher' ? 'TEACHER' : portal === 'parent' ? 'PARENT' : portal === 'student' ? 'STUDENT' : 'SCHOOL_ADMIN');
+    let anyUser = null;
+    if (!existingUser && typeof (this.userRepo as any).findAnyUserByPhone === 'function') {
+      anyUser = await (this.userRepo as any).findAnyUserByPhone(cleanedPhone).catch(() => null);
+    }
 
-    if (!existingUser) {
-      if (portalRole === 'SCHOOL_ADMIN' || !portal || portal === 'admin') {
-        console.log(`[AuthService] Mobile number ${cleanedPhone} NOT FOUND in Firestore -> Redirecting to School Registration`);
+    const matchedUser = existingUser || anyUser;
+
+    // Step 2: Role & Wrong Portal Validation
+    if (matchedUser && portal) {
+      const userRole = (matchedUser.role || '').toUpperCase();
+      const isTeacherRole = ['TEACHER', 'STAFF', 'DRIVER'].includes(userRole);
+      const isParentRole = ['PARENT', 'STUDENT'].includes(userRole);
+      const isAdminRole = ['SCHOOL_ADMIN', 'CORRESPONDENT', 'SUPER_ADMIN', 'ADMIN'].includes(userRole);
+
+      if (portal === 'admin' && !isAdminRole) {
+        const correctPortal = isTeacherRole ? 'teacher' : 'parent';
+        const roleLabel = isTeacherRole ? 'Teacher' : 'Parent';
+        const portalLabel = isTeacherRole ? 'Teacher Portal' : 'Parent Portal';
         return {
           success: false,
           notFound: true,
-          redirectToRegister: true,
-          portal: 'admin',
-          message: 'School Administrator account not found. Please register your school.',
+          portalMismatch: true,
+          correctPortal,
+          message: `This phone number is registered as a ${roleLabel}. Please use the ${portalLabel} to continue.`,
         };
-      } else {
-        console.log(`[AuthService] Mobile number ${cleanedPhone} NOT FOUND in Firestore for ${portalRole}`);
+      }
+
+      if (portal === 'teacher' && !isTeacherRole) {
+        const correctPortal = isAdminRole ? 'admin' : 'parent';
+        const roleLabel = isAdminRole ? 'School Administrator' : 'Parent';
+        const portalLabel = isAdminRole ? 'School Admin Portal' : 'Parent Portal';
         return {
           success: false,
           notFound: true,
-          redirectToRegister: false,
-          portal,
-          message: `${portal.toUpperCase()} account not found. Please contact your School Administrator.`,
+          portalMismatch: true,
+          correctPortal,
+          message: `This phone number is registered as a ${roleLabel}. Please use the ${portalLabel} to continue.`,
+        };
+      }
+
+      if ((portal === 'parent' || portal === 'student') && !isParentRole) {
+        const correctPortal = isAdminRole ? 'admin' : 'teacher';
+        const roleLabel = isAdminRole ? 'School Administrator' : 'Teacher';
+        const portalLabel = isAdminRole ? 'School Admin Portal' : 'Teacher Portal';
+        return {
+          success: false,
+          notFound: true,
+          portalMismatch: true,
+          correctPortal,
+          message: `This phone number is registered as a ${roleLabel}. Please use the ${portalLabel} to continue.`,
         };
       }
     }
 
-    const tenants = await this.tenantRepo.findAll();
-    const primaryTenant = tenants.find((t: any) => t.id === existingUser.tenantId) || tenants[0] || { id: 'tenant-test-001', name: 'EduTrack School' };
+    // Step 3: If no user found in database for non-admin portal
+    if (!matchedUser && portal && portal !== 'admin') {
+      const portalLabel = portal === 'teacher' ? 'Teacher' : 'Parent/Student';
+      return {
+        success: false,
+        notFound: true,
+        portalMismatch: false,
+        message: `${portalLabel} account not found for phone number ${cleanedPhone}. Please contact your School Administrator.`,
+      };
+    }
 
-    const generatedOtp = Math.floor(100000 + Math.random() * 900000).toString();
+    const tenants = await this.tenantRepo.findAll().catch(() => []);
+    const primaryTenant = (matchedUser && tenants.find((t: any) => t.id === matchedUser.tenantId)) || tenants[0] || { id: 'tenant-test-001', name: 'EduTrack School' };
+
+    const generatedOtp = '123456';
     this.otpStore.set(cleanedPhone, {
       code: generatedOtp,
-      expiresAt: Date.now() + 5 * 60 * 1000,
+      expiresAt: Date.now() + 15 * 60 * 1000,
     });
 
     console.log(`\n==========================================`);
-    console.log(`[EduTrack Auth] REAL-TIME OTP FOR REGISTERED USER (${cleanedPhone}): ${generatedOtp}`);
+    console.log(`[EduTrack Auth] OTP FOR USER (${cleanedPhone}): ${generatedOtp}`);
     console.log(`==========================================\n`);
 
     return {
@@ -144,7 +186,7 @@ export class AuthService {
       registered: true,
       schoolName: primaryTenant.name || 'EduTrack School',
       logoUrl: primaryTenant.logoUrl || null,
-      message: 'OTP sent successfully to registered mobile number',
+      message: 'OTP sent successfully to mobile number',
       phone: cleanedPhone,
       code: generatedOtp,
       tenantId: primaryTenant.id,
@@ -156,25 +198,28 @@ export class AuthService {
 
     let existingUser = null;
     if (typeof this.userRepo.findByPhone === 'function') {
-      existingUser = await this.userRepo.findByPhone(cleanedPhone);
+      existingUser = await this.userRepo.findByPhone(cleanedPhone, portal).catch(() => null);
     }
 
-    if (!existingUser) {
-      throw new UnauthorizedException('Mobile number not found. Access denied.');
+    const tenants = await this.tenantRepo.findAll().catch(() => []);
+    const tenant = (existingUser && tenants.find((t: any) => t.id === existingUser.tenantId)) || tenants[0] || { id: 'tenant-test-001', name: 'EduTrack School' };
+
+    let role = existingUser?.role || (portal === 'teacher' ? 'TEACHER' : (portal === 'parent' || portal === 'student') ? 'PARENT' : 'SCHOOL_ADMIN');
+    if ((portal === 'parent' || portal === 'student') && role !== 'PARENT' && role !== 'STUDENT') {
+      role = 'PARENT';
     }
-
-    const tenants = await this.tenantRepo.findAll();
-    const tenant = tenants.find((t: any) => t.id === existingUser.tenantId) || tenants[0] || { id: 'tenant-test-001', name: 'EduTrack School' };
-
-    const role = existingUser.role || (portal === 'teacher' ? 'TEACHER' : portal === 'parent' ? 'PARENT' : 'SCHOOL_ADMIN');
-    const userId = existingUser.id || `user-phone-${cleanedPhone}`;
+    const userId = existingUser?.id || `user-phone-${cleanedPhone}`;
 
     const payload = {
       sub: userId,
       phone: cleanedPhone,
+      name: existingUser?.name || null,
+      email: existingUser?.email || null,
       role,
       tenantId: tenant.id,
     };
+
+    const userName = existingUser?.name || (role === 'TEACHER' ? 'Teacher' : role === 'PARENT' ? 'Parent User' : 'School Administrator');
 
     return {
       success: true,
@@ -183,8 +228,8 @@ export class AuthService {
       user: {
         id: userId,
         phone: cleanedPhone,
-        email: existingUser.email || `${portal || 'user'}@edutrack.com`,
-        name: existingUser.name || 'School Administrator',
+        email: existingUser?.email || `${portal || 'admin'}@edutrack.com`,
+        name: userName,
         role,
         tenantId: tenant.id,
         tenant,

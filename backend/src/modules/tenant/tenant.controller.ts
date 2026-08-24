@@ -1,12 +1,16 @@
 import { Controller, Get, Post, Put, Body, Request, Param } from '@nestjs/common';
 import { TenantService } from './tenant.service';
+import { JwtService } from '@nestjs/jwt';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { getTenantIdFromReq } from '../../common/utils/tenant.util';
 
 @ApiTags('Tenants')
 @Controller('tenant')
 export class TenantController {
-  constructor(private readonly tenantService: TenantService) {}
+  constructor(
+    private readonly tenantService: TenantService,
+    private readonly jwtService: JwtService,
+  ) {}
 
   @Get('public-branding')
   @ApiOperation({ summary: 'Get public branding for default/current tenant' })
@@ -38,17 +42,22 @@ export class TenantController {
   @ApiOperation({ summary: 'Get tenant setup status and current user details' })
   async getSetupStatus(@Request() req: any) {
     const tenantId = getTenantIdFromReq(req);
-    return this.tenantService.getSetupStatus(tenantId);
+    const authHeader = req.headers?.authorization;
+    let userFromToken = null;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.substring(7);
+      try {
+        userFromToken = this.jwtService.decode(token);
+      } catch (e) {}
+    }
+    return this.tenantService.getSetupStatus(tenantId, userFromToken);
   }
 
   @Put('banking-upi')
   @ApiOperation({ summary: 'Update tenant banking and UPI configuration' })
-  async updateBankingUpi(@Body() body: any) {
-    return {
-      success: true,
-      message: 'Banking & UPI details updated successfully in Cloud Firestore',
-      data: body,
-    };
+  async updateBankingUpi(@Body() body: any, @Request() req: any) {
+    const tenantId = getTenantIdFromReq(req);
+    return this.tenantService.updateBankingUpi(body, tenantId);
   }
 
   @Get()

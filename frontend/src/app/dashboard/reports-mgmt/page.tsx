@@ -118,7 +118,13 @@ export default function ReportsMgmtPage() {
             className="block w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 focus:outline-none focus:ring-1 focus:ring-[#2E5BFF] text-sm"
           >
             <option value="">Select Class Section...</option>
-            {classes.map(c => <option key={c.classSectionId} value={c.classSectionId}>{c.className}</option>)}
+            {classes.map((c, idx) => {
+              const id = c.classSectionId || c.id || `cs-${idx}`;
+              const clsName = typeof c.className === 'object' ? (c.className?.name || 'Class') : String(c.className || c.name || 'Class');
+              const secName = typeof c.sectionName === 'object' ? (c.sectionName?.name || '') : String(c.sectionName || '');
+              const label = secName ? `${clsName} - ${secName}` : clsName;
+              return <option key={String(id)} value={String(id)}>{label}</option>;
+            })}
           </select>
         </div>
 

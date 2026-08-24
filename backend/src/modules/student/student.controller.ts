@@ -28,11 +28,53 @@ export class StudentController {
     );
   }
 
+  @Get('promotion-candidates')
+  @ApiOperation({ summary: 'Get student promotion candidates' })
+  getPromotionCandidates(
+    @Query('sourceYearId') sourceYearId?: string,
+    @Query('className') className?: string,
+    @Query('sectionName') sectionName?: string,
+    @Request() req?: any,
+  ) {
+    const tenantId = getTenantIdFromReq(req);
+    return this.studentService.getPromotionCandidates(tenantId, sourceYearId, className, sectionName);
+  }
+
+  @Post('promote/validate')
+  @ApiOperation({ summary: 'Validate student promotions' })
+  validatePromotions(@Body() body: any, @Request() req?: any) {
+    const tenantId = getTenantIdFromReq(req);
+    const { studentIds, sourceYearId, targetYearId, targetClassName, targetSectionName } = body || {};
+    return this.studentService.validatePromotions(
+      tenantId,
+      studentIds || [],
+      sourceYearId,
+      targetYearId,
+      targetClassName,
+      targetSectionName,
+    );
+  }
+
+  @Post('promote')
+  @ApiOperation({ summary: 'Execute student promotions' })
+  executePromotions(@Body() body: any, @Request() req?: any) {
+    const tenantId = getTenantIdFromReq(req);
+    const { studentIds, sourceYearId, targetYearId, targetClassName, targetSectionName } = body || {};
+    return this.studentService.executePromotions(
+      tenantId,
+      studentIds || [],
+      sourceYearId,
+      targetYearId,
+      targetClassName,
+      targetSectionName,
+    );
+  }
+
   @Get(':id')
   @ApiOperation({ summary: 'Get student by ID' })
-  findOne(@Param('id') id: string, @Request() req) {
+  findOne(@Param('id') id: string, @Query('academicYearId') academicYearId: string, @Request() req: any) {
     const tenantId = getTenantIdFromReq(req);
-    return this.studentService.findOne(id, tenantId);
+    return this.studentService.findOne(id, tenantId, academicYearId);
   }
 
   @Post()

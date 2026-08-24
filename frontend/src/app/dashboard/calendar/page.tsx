@@ -46,7 +46,10 @@ export default function CalendarPage() {
   }
 
   const getEventsForDate = (date: Date) => {
-    const dateStr = date.toISOString().split('T')[0];
+    const yStr = date.getFullYear();
+    const mStr = String(date.getMonth() + 1).padStart(2, '0');
+    const dStr = String(date.getDate()).padStart(2, '0');
+    const dateStr = `${yStr}-${mStr}-${dStr}`;
     return events.filter(e => e.date === dateStr);
   };
 

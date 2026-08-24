@@ -76,7 +76,8 @@ export default function FeesBillingPage() {
 
   // Payment Channels
   const paymentChannels = [
-    { value: 'GPAY_UPI', label: 'GPay UPI', icon: '⚡' },
+    { value: 'RAZORPAY', label: 'Razorpay Online', icon: '⚡' },
+    { value: 'GPAY_UPI', label: 'GPay UPI', icon: '📱' },
     { value: 'PHONEPE_UPI', label: 'PhonePe UPI', icon: '📱' },
     { value: 'CASH', label: 'Physical Cash', icon: '💵' },
     { value: 'NET_BANKING', label: 'Net Banking', icon: '🏦' }
@@ -322,6 +323,20 @@ export default function FeesBillingPage() {
     setConfirmModalOpen(true);
   };
 
+  const loadRazorpayScript = (): Promise<boolean> => {
+    return new Promise((resolve) => {
+      if ((window as any).Razorpay) {
+        resolve(true);
+        return;
+      }
+      const script = document.createElement('script');
+      script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+      script.onload = () => resolve(true);
+      script.onerror = () => resolve(false);
+      document.body.appendChild(script);
+    });
+  };
+
   const handleFinalizePayment = async () => {
     if (!selectedStudent || billingTotal <= 0 || isSubmittingPayment) return;
 
@@ -336,6 +351,110 @@ export default function FeesBillingPage() {
         amount: item.input
       }));
 
+    // Handle Real-Time Razorpay Gateway Payment
+    if (selectedChannel === 'RAZORPAY') {
+      try {
+        setIsSubmittingPayment(true);
+        setIsLoading(true);
+
+        const loaded = await loadRazorpayScript();
+        if (!loaded) {
+          alert('Razorpay SDK failed to load. Please check your internet connection.');
+          setIsSubmittingPayment(false);
+          setIsLoading(false);
+          return;
+        }
+
+        // 1. Create Razorpay order on backend
+        const orderRes = await api.post('/payments/razorpay/create-order', {
+          studentId: studentId,
+          invoiceId: openOppId,
+          itemAmounts: itemsToPay,
+          requestedAmount: billingTotal,
+        });
+
+        const orderData = orderRes.data;
+        if (!orderData || !orderData.orderId) {
+          throw new Error('Failed to generate Razorpay order from server.');
+        }
+
+        // 2. Open Razorpay Checkout modal
+        const options = {
+          key: orderData.keyId,
+          amount: orderData.amountInPaise,
+          currency: orderData.currency || 'INR',
+          name: orderData.schoolName || 'EduTrack SaaS School',
+          description: `Fee Payment - ${orderData.invoiceNumber || openOppId}`,
+          order_id: orderData.orderId,
+          handler: async function (response: any) {
+            setIsLoading(true);
+            try {
+              // 3. Cryptographic Signature Verification on Backend
+              const verifyRes = await api.post('/payments/razorpay/verify', {
+                razorpayOrderId: response.razorpay_order_id,
+                razorpayPaymentId: response.razorpay_payment_id,
+                razorpaySignature: response.razorpay_signature,
+                invoiceId: openOppId,
+                studentId: studentId,
+                transactionId: orderData.transactionId,
+              });
+
+              const currentPending = Number(selectedStudent.totalPendingBalance ?? selectedStudent.outstandingAmount ?? 15000);
+              const nextBalance = Math.max(0, currentPending - billingTotal);
+              const studentName = selectedStudent.account?.name || selectedStudent.name || 'Student';
+
+              setLastPaidStudentName(studentName);
+              setLastPaidAmount(billingTotal);
+              setSuccessInvoiceId(verifyRes.data?.paymentReceiptId || String(openOppId));
+              setSuccessRemainingBalance(nextBalance);
+              setSuccessPaymentDate(new Date().toLocaleString('en-IN'));
+
+              setConfirmModalOpen(false);
+              setSuccessModalOpen(true);
+
+              setToastMessage(`✓ Razorpay Payment Verified: ₹${fmt(billingTotal)} captured for ${studentName}.`);
+              dispatchSchoolSetupUpdated();
+
+              setSelectedStudent(null);
+              setFeeItems([]);
+              setNotes('');
+
+              const txRes = await api.get('/billing/invoices/recent');
+              if (txRes.data) setTransactions(txRes.data);
+            } catch (vErr: any) {
+              console.error('Razorpay signature verification failed:', vErr);
+              alert(vErr.response?.data?.message || 'Payment signature verification failed.');
+            } finally {
+              setIsSubmittingPayment(false);
+              setIsLoading(false);
+            }
+          },
+          prefill: {
+            name: selectedStudent.name || 'Student',
+            email: selectedStudent.email || '',
+            contact: selectedStudent.phone || '',
+          },
+          theme: { color: '#2E5BFF' },
+          modal: {
+            ondismiss: function () {
+              setIsSubmittingPayment(false);
+              setIsLoading(false);
+            },
+          },
+        };
+
+        const rzp = new (window as any).Razorpay(options);
+        rzp.open();
+      } catch (err: any) {
+        console.error('Razorpay checkout error:', err);
+        alert(err.response?.data?.message || err.message || 'Failed to initialize Razorpay checkout.');
+        setIsSubmittingPayment(false);
+        setIsLoading(false);
+      }
+      return;
+    }
+
+    // Manual Collection Channel Flow (Cash, GPay UPI, PhonePe UPI, Net Banking)
     try {
       setIsSubmittingPayment(true);
       setIsLoading(true);
@@ -377,14 +496,12 @@ export default function FeesBillingPage() {
       setNotes('');
       
       const txRes = await api.get('/billing/invoices/recent');
-      setTransactions(txRes.data || []);
+      if (txRes.data) setTransactions(txRes.data);
 
       setTimeout(() => setToastMessage(null), 4000);
     } catch (err: any) {
-      console.error('Payment failed', err);
-      const reason = err.response?.data?.message || err.message || 'Unknown network error occurred.';
-      setErrorMessage(reason);
-      setConfirmModalOpen(false);
+      console.error('Payment submitting failed:', err);
+      setErrorMessage(err.response?.data?.message || 'Payment recording failed. Please try again.');
       setErrorModalOpen(true);
     } finally {
       setIsSubmittingPayment(false);
@@ -1011,8 +1128,23 @@ export default function FeesBillingPage() {
                 </div>
               </div>
 
-              {/* Dynamic details for UPI and Bank */}
-              {selectedChannel.includes('UPI') && (() => {
+              {/* Dynamic details for Razorpay, UPI and Bank */}
+              {selectedChannel === 'RAZORPAY' && (
+                <div className="p-5 bg-blue-50/70 border border-blue-200 rounded-2xl max-w-md mx-auto text-center space-y-3">
+                  <div className="flex items-center justify-center gap-2 text-[#2E5BFF]">
+                    <Sparkles className="w-5 h-5" />
+                    <span className="text-xs font-extrabold uppercase tracking-wider">Razorpay Real-Time Gateway</span>
+                  </div>
+                  <p className="text-xs text-slate-600 font-medium">
+                    Complete <strong>₹{fmt(billingTotal)}</strong> online payment via Razorpay Checkout overlay (UPI QR Code, Cards, Net Banking, Wallets).
+                  </p>
+                  <div className="p-2.5 bg-white border border-blue-100 rounded-xl text-[11px] text-slate-500 font-medium">
+                    🔒 Status becomes <strong className="text-emerald-600">✓ PAID</strong> only after backend cryptographic signature verification.
+                  </div>
+                </div>
+              )}
+
+              {selectedChannel.includes('UPI') && selectedChannel !== 'RAZORPAY' && (() => {
                 const tenant = setupStats?.setup?.tenant;
                 const merchantName = setupStats?.setup?.schoolName || tenant?.name || 'School Merchant';
                 let activeUpiId = '';
@@ -1089,12 +1221,23 @@ export default function FeesBillingPage() {
                 >
                   Cancel
                 </button>
-                <button
-                  onClick={handleOpenConfirmModal}
-                  className="flex-1 px-4 py-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-sm shadow-md shadow-blue-500/10 cursor-pointer"
-                >
-                  ✓ Finalize Payment
-                </button>
+                {selectedChannel === 'RAZORPAY' ? (
+                  <button
+                    onClick={handleFinalizePayment}
+                    disabled={isSubmittingPayment}
+                    className="flex-1 px-4 py-3 rounded-xl bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-500 hover:to-blue-600 text-white font-bold text-sm shadow-md shadow-blue-500/20 cursor-pointer disabled:opacity-50 flex items-center justify-center gap-2"
+                  >
+                    <Sparkles className="w-4 h-4" />
+                    <span>Pay ₹{fmt(billingTotal)} with Razorpay</span>
+                  </button>
+                ) : (
+                  <button
+                    onClick={handleOpenConfirmModal}
+                    className="flex-1 px-4 py-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-sm shadow-md shadow-blue-500/10 cursor-pointer"
+                  >
+                    ✓ Finalize Payment
+                  </button>
+                )}
               </div>
             </>
           )}

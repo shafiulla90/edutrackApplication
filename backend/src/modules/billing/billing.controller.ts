@@ -186,4 +186,11 @@ export class BillingController {
     const tenantId = getTenantIdFromReq(req);
     return this.billingService.getUnpaidFees(oppId, tenantId);
   }
+
+  @Get('financial-command-center')
+  @ApiOperation({ summary: 'Get Financial Command Center analytics & cockpit data' })
+  async getFinancialCommandCenter(@Query() query: any, @Request() req: any) {
+    const tenantId = getTenantIdFromReq(req);
+    return this.billingService.getFinancialCommandCenter(tenantId, query);
+  }
 }

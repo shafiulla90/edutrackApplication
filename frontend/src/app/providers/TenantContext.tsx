@@ -167,56 +167,14 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
     }
   }, [pathname, token]);
 
-  // Automatically fetch profile when the token state changes (login, logout, or startup)
+  // Automatically fetch profile when token changes or on startup
   useEffect(() => {
     fetchTenantData();
   }, [token]);
 
-  // Background polling to sync data dynamically across multiple users
-  useEffect(() => {
-    if (!token) return;
-
-    let previousStats: any = null;
-
-    const interval = setInterval(async () => {
-      try {
-        const response = await api.get('/tenant/setup-status');
-        const data = response.data;
-        
-        // If stats changed, trigger a local custom event dispatch
-        // to update all listening pages automatically.
-        if (previousStats) {
-          const statsChanged = 
-            data.classesCount !== previousStats.classesCount ||
-            data.teachersCount !== previousStats.teachersCount ||
-            data.studentsCount !== previousStats.studentsCount ||
-            data.completionPercentage !== previousStats.completionPercentage ||
-            data.subscription?.status !== previousStats.subscription?.status ||
-            data.subscription?.plan !== previousStats.subscription?.plan;
-            
-          if (statsChanged) {
-            console.log('[TenantContext] Stats or subscription changed in DB, dispatching updates!');
-            setSetupStats(data);
-            setSubscription(data.subscription || null);
-            const { dispatchSchoolSetupUpdated } = await import('@/lib/events');
-            dispatchSchoolSetupUpdated();
-          }
-        } else {
-          // Initialize first comparison baseline
-          setSetupStats(data);
-          setSubscription(data.subscription || null);
-        }
-        previousStats = data;
-      } catch (err) {
-        console.error('Failed background sync of tenant data:', err);
-      }
-    }, 5000); // Check every 5 seconds
-
-    return () => clearInterval(interval);
-  }, [token]);
-
-  // Use the centralized school-setup-updated listener
+  // Event-driven revalidation replaces 5-second interval polling
   useSchoolSetupUpdate(fetchTenantData);
+
 
   return (
     <TenantContext.Provider value={{

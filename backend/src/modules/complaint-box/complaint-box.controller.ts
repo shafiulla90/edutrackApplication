@@ -1,6 +1,6 @@
 import { Controller, Get, Post, Body, Param, Query, Patch, Delete, Request } from '@nestjs/common';
 import { ComplaintBoxService } from './complaint-box.service';
-import { ApiTags, ApiOperation } from '@nestjs/swagger';
+import { ApiTags } from '@nestjs/swagger';
 import { getTenantIdFromReq } from '../../common/utils/tenant.util';
 
 @ApiTags('Complaint Box')
@@ -9,23 +9,27 @@ export class ComplaintBoxController {
   constructor(private readonly complaintBoxService: ComplaintBoxService) {}
 
   @Get('current-teacher')
-  getCurrentTeacher() {
-    return this.complaintBoxService.getCurrentTeacher();
+  getCurrentTeacher(@Request() req?: any) {
+    const tenantId = getTenantIdFromReq(req);
+    return this.complaintBoxService.getCurrentTeacher(tenantId);
   }
 
   @Get('student-classes')
-  getStudentClasses() {
-    return this.complaintBoxService.getStudentClasses();
+  getStudentClasses(@Request() req?: any) {
+    const tenantId = getTenantIdFromReq(req);
+    return this.complaintBoxService.getStudentClasses(tenantId);
   }
 
   @Get('teachers')
-  getTeachers() {
-    return this.complaintBoxService.getTeachers();
+  getTeachers(@Request() req?: any) {
+    const tenantId = getTenantIdFromReq(req);
+    return this.complaintBoxService.getTeachers(tenantId);
   }
 
   @Get('students-by-class/:classSectionId')
-  getStudentsByClass(@Param('classSectionId') classSectionId: string) {
-    return this.complaintBoxService.getStudentsByClass(classSectionId);
+  getStudentsByClass(@Param('classSectionId') classSectionId: string, @Request() req?: any) {
+    const tenantId = getTenantIdFromReq(req);
+    return this.complaintBoxService.getStudentsByClass(classSectionId, tenantId);
   }
 
   @Get('search-students')
@@ -33,8 +37,10 @@ export class ComplaintBoxController {
     @Query('searchTerm') searchTerm?: string,
     @Query('classId') classId?: string,
     @Query('sectionId') sectionId?: string,
+    @Request() req?: any,
   ) {
-    return this.complaintBoxService.searchStudents(searchTerm, classId, sectionId);
+    const tenantId = getTenantIdFromReq(req);
+    return this.complaintBoxService.searchStudents(searchTerm, classId, sectionId, tenantId);
   }
 
   @Post('submit-behavior')
@@ -44,8 +50,9 @@ export class ComplaintBoxController {
   }
 
   @Get('academic-years')
-  getAcademicYears() {
-    return this.complaintBoxService.getAcademicYears();
+  getAcademicYears(@Request() req?: any) {
+    const tenantId = getTenantIdFromReq(req);
+    return this.complaintBoxService.getAcademicYears(tenantId);
   }
 
   @Get('pending-cases')
@@ -55,28 +62,33 @@ export class ComplaintBoxController {
   }
 
   @Get('student-cases/:studentId')
-  getStudentCases(@Param('studentId') studentId: string, @Query('academicYear') academicYear?: string) {
-    return this.complaintBoxService.getStudentCases(studentId, academicYear);
+  getStudentCases(@Param('studentId') studentId: string, @Query('academicYear') academicYear?: string, @Request() req?: any) {
+    const tenantId = getTenantIdFromReq(req);
+    return this.complaintBoxService.getStudentCases(studentId, academicYear, tenantId);
   }
 
   @Patch('case-status/:caseId')
-  updateCaseStatus(@Param('caseId') caseId: string, @Body() dto: any) {
-    return this.complaintBoxService.updateCaseStatus(caseId, dto);
+  updateCaseStatus(@Param('caseId') caseId: string, @Body() dto: any, @Request() req?: any) {
+    const tenantId = getTenantIdFromReq(req);
+    return this.complaintBoxService.updateCaseStatus(caseId, dto, tenantId);
   }
 
   @Get('student-stats/:studentId')
-  getStudentStats(@Param('studentId') studentId: string) {
-    return this.complaintBoxService.getStudentStats(studentId);
+  getStudentStats(@Param('studentId') studentId: string, @Request() req?: any) {
+    const tenantId = getTenantIdFromReq(req);
+    return this.complaintBoxService.getStudentStats(studentId, tenantId);
   }
 
   @Patch('behavior/:caseId')
-  updateBehavior(@Param('caseId') caseId: string, @Body() dto: any) {
-    return this.complaintBoxService.updateBehavior(caseId, dto);
+  updateBehavior(@Param('caseId') caseId: string, @Body() dto: any, @Request() req?: any) {
+    const tenantId = getTenantIdFromReq(req);
+    return this.complaintBoxService.updateBehavior(caseId, dto, tenantId);
   }
 
   @Delete('behavior/:caseId')
-  deleteBehavior(@Param('caseId') caseId: string) {
-    return this.complaintBoxService.deleteBehavior(caseId);
+  deleteBehavior(@Param('caseId') caseId: string, @Request() req?: any) {
+    const tenantId = getTenantIdFromReq(req);
+    return this.complaintBoxService.deleteBehavior(caseId, tenantId);
   }
 
   @Get('parent-complaints')
@@ -86,7 +98,8 @@ export class ComplaintBoxController {
   }
 
   @Patch('parent-complaints/:id/status')
-  updateParentComplaintStatus(@Param('id') id: string, @Body() data: any) {
-    return this.complaintBoxService.updateParentComplaintStatus(id, data);
+  updateParentComplaintStatus(@Param('id') id: string, @Body() data: any, @Request() req?: any) {
+    const tenantId = getTenantIdFromReq(req);
+    return this.complaintBoxService.updateParentComplaintStatus(id, data, tenantId);
   }
 }

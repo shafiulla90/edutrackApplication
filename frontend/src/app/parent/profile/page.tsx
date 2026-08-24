@@ -13,7 +13,7 @@ export default function StudentProfilePage() {
   const fetchProfile = async (childId: string) => {
     try {
       setLoading(true);
-      const res = await api.get(`/parent-portal/children/${childId}/dashboard`);
+      const res = await api.get(`/parent-portal/children/${childId}/profile`);
       setProfileData(res.data);
     } catch (err) {
       console.error('Failed to fetch student profile:', err);
@@ -87,26 +87,26 @@ export default function StudentProfilePage() {
         
         {/* Personal Details */}
         <div className="bg-white border border-slate-200 p-6 rounded-3xl shadow-sm space-y-4">
-          <h3 className="font-bold text-sm text-slate-800 border-b border-slate-105 border-slate-100 pb-2 flex items-center gap-2">
+          <h3 className="font-bold text-sm text-slate-800 border-b border-slate-100 pb-2 flex items-center gap-2">
             <Info className="w-4 h-4 text-[#2E5BFF]" />
             Academic Details
           </h3>
           <div className="space-y-3.5 text-xs text-slate-600">
             <div className="flex justify-between">
               <span className="text-slate-400">Roll Number</span>
-              <strong className="text-slate-700">{selectedChild.rollNo}</strong>
+              <strong className="text-slate-700">{profileData?.student?.rollNo || selectedChild.rollNo}</strong>
             </div>
             <div className="flex justify-between">
               <span className="text-slate-400">Class Section</span>
-              <strong className="text-slate-700">{selectedChild.class} - {selectedChild.section}</strong>
+              <strong className="text-slate-700">{profileData?.student?.class || selectedChild.class} - {profileData?.student?.section || selectedChild.section}</strong>
             </div>
             <div className="flex justify-between">
               <span className="text-slate-400">Blood Group</span>
-              <strong className="text-slate-700">O+ (Positive)</strong>
+              <strong className="text-slate-700">{profileData?.student?.bloodGroup || 'O+ (Positive)'}</strong>
             </div>
             <div className="flex justify-between">
               <span className="text-slate-400">Date of Birth</span>
-              <strong className="text-slate-700">12th August 2016</strong>
+              <strong className="text-slate-700">{profileData?.student?.dob || '12th August 2016'}</strong>
             </div>
           </div>
         </div>
@@ -128,6 +128,12 @@ export default function StudentProfilePage() {
               <div className="flex justify-between">
                 <span className="text-slate-400">Father's Phone</span>
                 <strong className="text-slate-700">{profileData.student.fatherPhone}</strong>
+              </div>
+            )}
+            {profileData?.student?.fatherEmail && profileData.student.fatherEmail !== '' && (
+              <div className="flex justify-between">
+                <span className="text-slate-400">Father's Email</span>
+                <strong className="text-slate-700">{profileData.student.fatherEmail}</strong>
               </div>
             )}
             {profileData?.student?.motherName && profileData.student.motherName !== 'N/A' && (
@@ -172,6 +178,13 @@ export default function StudentProfilePage() {
               <div className="flex justify-between">
                 <span className="text-slate-400">Emergency Phone</span>
                 <strong className="text-slate-700">{profileData.student.emergencyPhone}</strong>
+              </div>
+            )}
+            {(!profileData?.student?.fatherName || profileData.student.fatherName === 'N/A') &&
+             (!profileData?.student?.motherName || profileData.student.motherName === 'N/A') &&
+             (!profileData?.student?.guardianName || profileData.student.guardianName === 'N/A') && (
+              <div className="text-center text-xs text-slate-400 font-medium italic py-4">
+                No Guardian Details Listed
               </div>
             )}
           </div>

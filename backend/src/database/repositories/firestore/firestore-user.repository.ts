@@ -35,36 +35,63 @@ export class FirestoreUserRepository implements IUserRepository {
     return { id: doc.id, ...doc.data() };
   }
 
-  async findByPhone(phone: string): Promise<any | null> {
+  async findAnyUserByPhone(phone: string): Promise<any | null> {
     const cleaned = (phone || '').replace(/[\s\-()]/g, '');
     const cleanNoCountry = cleaned.replace(/^\+91/, '');
+    const formattedWithCountry = `+91${cleanNoCountry}`;
 
-    const snap = await this.db.collection('users').where('phone', '==', cleaned).limit(1).get().catch(() => null);
-    if (snap && !snap.empty) {
-      const doc = snap.docs[0];
-      return { id: doc.id, ...doc.data() };
+    // Query users collection
+    const candidatesMap = new Map<string, any>();
+    const userQueries = [
+      this.db.collection('users').where('phone', '==', cleaned).get(),
+      this.db.collection('users').where('phone', '==', cleanNoCountry).get(),
+      this.db.collection('users').where('phone', '==', formattedWithCountry).get(),
+      this.db.collection('users').where('mobileNumber', '==', cleanNoCountry).get(),
+    ];
+
+    const results = await Promise.all(userQueries.map(q => q.catch(() => null)));
+    results.forEach(snap => {
+      if (snap && !snap.empty) {
+        snap.docs.forEach(doc => {
+          candidatesMap.set(doc.id, { id: doc.id, ...doc.data() });
+        });
+      }
+    });
+
+    const candidates = Array.from(candidatesMap.values());
+    if (candidates.length > 0) {
+      return candidates[0];
     }
 
-    const snap2 = await this.db.collection('users').where('phone', '==', cleanNoCountry).limit(1).get().catch(() => null);
-    if (snap2 && !snap2.empty) {
-      const doc = snap2.docs[0];
-      return { id: doc.id, ...doc.data() };
-    }
-
-    const snap3 = await this.db.collection('users').where('mobileNumber', '==', cleanNoCountry).limit(1).get().catch(() => null);
-    if (snap3 && !snap3.empty) {
-      const doc = snap3.docs[0];
-      return { id: doc.id, ...doc.data() };
-    }
-
-    const staffSnap = await this.db.collection('staffProfiles').where('phone', '==', cleanNoCountry).limit(1).get().catch(() => null);
+    // Check staffProfiles for Teachers
+    const staffSnap = await this.db.collection('staffProfiles').where('phone', '==', cleanNoCountry).get().catch(() => null);
     if (staffSnap && !staffSnap.empty) {
       const staff = staffSnap.docs[0].data();
       if (staff.userId) {
-        return this.findById(staff.userId);
+        const u = await this.findById(staff.userId);
+        if (u) return u;
+      }
+      return { id: `staff-${staffSnap.docs[0].id}`, role: 'TEACHER', tenantId: staff.tenantId || 'tenant-test-001' };
+    }
+
+    // Check studentProfiles for Parent / Student phones
+    const studentFields = ['phone', 'fatherPhone', 'motherPhone', 'parentPhone', 'guardianPhone', 'contactNumber'];
+    const studentQueries = studentFields.map(field => 
+      this.db.collection('studentProfiles').where(field, '==', cleanNoCountry).get()
+    );
+    const stdResults = await Promise.all(studentQueries.map(q => q.catch(() => null)));
+    for (const snap of stdResults) {
+      if (snap && !snap.empty) {
+        const std = snap.docs[0].data();
+        if (std.userId) {
+          const u = await this.findById(std.userId);
+          if (u) return u;
+        }
+        return { id: `student-${snap.docs[0].id}`, role: 'PARENT', tenantId: std.tenantId || 'tenant-test-001' };
       }
     }
 
+    // Check tenants for Admin
     const tenantSnap = await this.db.collection('tenants').where('adminPhone', '==', cleanNoCountry).limit(1).get().catch(() => null);
     if (tenantSnap && !tenantSnap.empty) {
       const tenant = tenantSnap.docs[0].data();
@@ -72,6 +99,92 @@ export class FirestoreUserRepository implements IUserRepository {
     }
 
     return null;
+  }
+
+  async findByPhone(phone: string, portal?: string): Promise<any | null> {
+    const cleaned = (phone || '').replace(/[\s\-()]/g, '');
+    const cleanNoCountry = cleaned.replace(/^\+91/, '');
+    const formattedWithCountry = `+91${cleanNoCountry}`;
+
+    // Target roles according to requested portal
+    let targetRoles: string[] = [];
+    if (portal === 'teacher') {
+      targetRoles = ['TEACHER', 'STAFF', 'DRIVER'];
+    } else if (portal === 'parent' || portal === 'student') {
+      targetRoles = ['PARENT', 'STUDENT'];
+    } else if (portal === 'admin') {
+      targetRoles = ['SCHOOL_ADMIN', 'CORRESPONDENT', 'SUPER_ADMIN', 'ADMIN'];
+    }
+
+    // Query all users matching phone number variations
+    const candidatesMap = new Map<string, any>();
+    const queries = [
+      this.db.collection('users').where('phone', '==', cleaned).get(),
+      this.db.collection('users').where('phone', '==', cleanNoCountry).get(),
+      this.db.collection('users').where('phone', '==', formattedWithCountry).get(),
+      this.db.collection('users').where('mobileNumber', '==', cleanNoCountry).get(),
+    ];
+
+    const results = await Promise.all(queries.map(q => q.catch(() => null)));
+    results.forEach(snap => {
+      if (snap && !snap.empty) {
+        snap.docs.forEach(doc => {
+          candidatesMap.set(doc.id, { id: doc.id, ...doc.data() });
+        });
+      }
+    });
+
+    const candidates = Array.from(candidatesMap.values());
+
+    // If targetRoles is specified, try to find matching user for requested portal
+    if (targetRoles.length > 0) {
+      const match = candidates.find(u => targetRoles.includes(u.role));
+      if (match) return match;
+    } else if (candidates.length > 0) {
+      return candidates[0];
+    }
+
+    // Fallback search in staffProfiles for teachers
+    if (portal === 'teacher' || targetRoles.includes('TEACHER')) {
+      const staffSnap = await this.db.collection('staffProfiles').where('phone', '==', cleanNoCountry).get().catch(() => null);
+      if (staffSnap && !staffSnap.empty) {
+        const staff = staffSnap.docs[0].data();
+        if (staff.userId) {
+          const u = await this.findById(staff.userId);
+          if (u) return u;
+        }
+      }
+    }
+
+    // Fallback search in studentProfiles / parentProfiles for parents & students
+    if (portal === 'parent' || portal === 'student' || targetRoles.includes('PARENT') || targetRoles.includes('STUDENT')) {
+      const studentFields = ['phone', 'fatherPhone', 'motherPhone', 'parentPhone', 'guardianPhone', 'contactNumber'];
+      const studentQueries = studentFields.map(field => 
+        this.db.collection('studentProfiles').where(field, '==', cleanNoCountry).get()
+      );
+      const stdResults = await Promise.all(studentQueries.map(q => q.catch(() => null)));
+      for (const snap of stdResults) {
+        if (snap && !snap.empty) {
+          const std = snap.docs[0].data();
+          if (std.userId) {
+            const u = await this.findById(std.userId);
+            if (u) return u;
+          }
+        }
+      }
+    }
+
+    // Fallback search in tenants for admin
+    if (portal === 'admin' || targetRoles.includes('SCHOOL_ADMIN')) {
+      const tenantSnap = await this.db.collection('tenants').where('adminPhone', '==', cleanNoCountry).limit(1).get().catch(() => null);
+      if (tenantSnap && !tenantSnap.empty) {
+        const tenant = tenantSnap.docs[0].data();
+        return { id: `admin-${tenantSnap.docs[0].id}`, role: 'SCHOOL_ADMIN', tenantId: tenantSnap.docs[0].id, tenant };
+      }
+    }
+
+    // Return any candidate if available, else null
+    return candidates.length > 0 ? candidates[0] : null;
   }
 
   async findUserWithProfile(id: string): Promise<any | null> {

@@ -301,66 +301,72 @@ export default function StudentsDirectory() {
         profilePhotoUrl: data.profilePhotoUrl || null,
       };
 
-      // Group exams
+      // Group exams by exam type/name
       const examsMap: Record<string, any> = {};
       data.examMarks?.forEach((mark: any) => {
-        const exId = mark.exam.id;
-        if (!examsMap[exId]) {
-          examsMap[exId] = {
-            id: exId,
-            name: mark.exam.name,
-            type: mark.exam.type,
+        const exKey = mark.exam?.type || mark.exam?.name || mark.examType || mark.examName || 'Unit Test';
+        if (!examsMap[exKey]) {
+          examsMap[exKey] = {
+            id: exKey,
+            name: exKey,
+            type: exKey,
             subjects: []
           };
         }
-        examsMap[exId].subjects.push({
-          name: mark.subject.name,
-          score: Number(mark.marksObtained),
-          max: 100
+        examsMap[exKey].subjects.push({
+          name: mark.subject?.name || mark.subjectName || 'Subject',
+          score: Number(mark.marksObtained !== undefined ? mark.marksObtained : (mark.score || 0)),
+          max: Number(mark.maxMarks || 100)
         });
       });
 
       const exams = Object.values(examsMap).map((ex: any) => {
         const total = ex.subjects.reduce((sum: number, s: any) => sum + s.score, 0);
-        const avg = ex.subjects.length > 0 ? (total / ex.subjects.length).toFixed(0) : '0';
+        const totalMax = ex.subjects.reduce((sum: number, s: any) => sum + s.max, 0);
+        const avg = totalMax > 0 ? ((total / totalMax) * 100).toFixed(0) : '0';
         return {
           ...ex,
           score: `${avg}%`
         };
       });
 
+      const configuredExams = data.configuredExams && data.configuredExams.length > 0
+        ? data.configuredExams
+        : (exams.map(e => e.type).filter(Boolean));
+
       setActiveStudentDetails({
         products: data.feeItems?.map((item: any) => ({
           id: item.oliId,
           name: item.productName,
-          price: Number(item.totalAmount),
-          grossTotal: Number(item.totalAmount),
-          discountPercent: Number(item.discountPercent),
-          discountAmount: Number(item.discountAmount),
-          netTotal: Number(item.netAmount),
-          paid: Number(item.paidAmount),
-          balance: Number(item.balanceDue)
+          price: Number(item.price || item.totalAmount),
+          grossTotal: Number(item.grossTotal || item.totalAmount),
+          discountPercent: Number(item.discountPercent || 0),
+          discountAmount: Number(item.discountAmount || 0),
+          netTotal: Number(item.netTotal || item.netAmount),
+          paid: Number(item.paidAmount || 0),
+          balance: Number(item.balanceDue || 0)
         })) || [],
         feeSummary: data.feeSummary,
         invoices: data.invoices?.map((inv: any) => ({
           id: inv.id,
-          date: new Date(inv.invoiceDate).toISOString().split('T')[0],
-          number: `INV-${inv.id.substring(0, 8).toUpperCase()}`,
-          mode: inv.paymentMethod || '—',
-          amount: Number(inv.totalAmount),
-          paidAmount: Number(inv.paidAmount),
-          remainingBalance: Number(inv.remainingBalance),
-          status: inv.status === 'PAID' ? 'Paid' : 'Pending',
-          academicYearId: inv.opportunity?.academicYearId || null,
-          academicYearName: inv.opportunity?.academicYear?.name || null,
-          academicYearStart: inv.opportunity?.academicYear?.startDate || null,
-          invoiceDateRaw: inv.invoiceDate,
-          items: inv.invoiceItems?.map((it: any) => ({
+          date: new Date(inv.invoiceDate || inv.date).toISOString().split('T')[0],
+          number: inv.number || inv.invoiceNumber || `INV-${inv.id.substring(0, 8).toUpperCase()}`,
+          mode: inv.paymentMethod || inv.mode || '—',
+          amount: Number(inv.totalAmount || inv.amount),
+          paidAmount: Number(inv.paidAmount || 0),
+          remainingBalance: Number(inv.remainingBalance || 0),
+          status: inv.status === 'PAID' || inv.status === 'Paid' ? 'Paid' : 'Pending',
+          academicYearId: inv.academicYearId || null,
+          academicYearName: inv.academicYearName || null,
+          invoiceDateRaw: inv.invoiceDate || inv.date,
+          items: inv.items?.map((it: any) => ({
             name: it.name,
             amount: Number(it.amount)
           })) || []
         })) || [],
         exams,
+        configuredExams: configuredExams.length > 0 ? configuredExams : ['Unit Test', 'Mid Term', 'Final Exam'],
+        progressPercentage: data.progressPercentage !== undefined ? data.progressPercentage : null,
         cases: casesData.map((c: any) => ({
           id: c.id,
           type: c.behaviorType === 'Praise' ? 'Positive' : 'Negative',
@@ -373,8 +379,8 @@ export default function StudentsDirectory() {
         }))
       });
 
-      if (exams.length > 0) {
-        setSelectedExamTab(exams[0].type || 'Unit Test');
+      if (configuredExams.length > 0) {
+        setSelectedExamTab(configuredExams[0]);
       } else {
         setSelectedExamTab('Unit Test');
       }
@@ -431,15 +437,17 @@ export default function StudentsDirectory() {
   const detailData = activeStudentDetails;
 
   const dynamicExamTabs = useMemo(() => {
-    if (!detailData?.exams || detailData.exams.length === 0) {
-      return ['Unit Test', 'Quarterly', 'Final'];
+    if (detailData?.configuredExams && detailData.configuredExams.length > 0) {
+      return detailData.configuredExams;
     }
     const typesSet = new Set<string>();
-    detailData.exams.forEach((ex: any) => {
-      if (ex.type) typesSet.add(ex.type);
-    });
+    if (detailData?.exams) {
+      detailData.exams.forEach((ex: any) => {
+        if (ex.type) typesSet.add(ex.type);
+      });
+    }
     const list = Array.from(typesSet);
-    return list.length > 0 ? list : ['Unit Test', 'Quarterly', 'Final'];
+    return list.length > 0 ? list : ['Unit Test', 'Mid Term', 'Final Exam'];
   }, [detailData]);
 
   const isPaidClear = activeStudent ? activeStudent.balanceDue <= 0 : false;
@@ -1286,15 +1294,23 @@ export default function StudentsDirectory() {
                 </div>
                 <div className="flex items-center gap-4">
                   <div className="w-16 h-16 rounded-2xl bg-blue-50 border border-blue-100 flex items-center justify-center font-extrabold text-[#2E5BFF] text-2xl shadow-sm">
-                    A
+                    {detailData?.progressPercentage !== null && detailData?.progressPercentage !== undefined
+                      ? (detailData.progressPercentage >= 90 ? 'A+' : detailData.progressPercentage >= 80 ? 'A' : detailData.progressPercentage >= 70 ? 'B' : 'C')
+                      : (detailData?.exams && detailData.exams.length > 0 ? 'A' : '—')}
                   </div>
                   <div>
                     <div className="text-slate-500 text-[10px] font-bold uppercase tracking-wider">Overall Average</div>
-                    <div className="text-2xl font-extrabold text-slate-800">86%</div>
+                    <div className="text-2xl font-extrabold text-slate-800">
+                      {detailData?.progressPercentage !== null && detailData?.progressPercentage !== undefined
+                        ? `${detailData.progressPercentage}%`
+                        : (detailData?.exams && detailData.exams.length > 0 ? `${detailData.exams[0].score}` : 'No marks entered yet')}
+                    </div>
                   </div>
                 </div>
                 <div className="p-3.5 bg-blue-50/20 border border-blue-100/30 rounded-xl text-xs text-slate-600 leading-relaxed font-medium">
-                  Excellent academic standing! Consistently matches exam requirements.
+                  {detailData?.progressPercentage !== null && detailData?.progressPercentage !== undefined
+                    ? `Academic performance calculated from completed exams (${detailData.progressPercentage}% average).`
+                    : 'No completed exam marks entered for this student yet.'}
                 </div>
                 
                 {/* Syllabus progression */}
@@ -1319,7 +1335,7 @@ export default function StudentsDirectory() {
                 
                 {/* Exam Category Tabs */}
                 <div className="flex border-b border-slate-100 gap-4 text-xs font-bold overflow-x-auto whitespace-nowrap scrollbar-none pb-0.5">
-                  {dynamicExamTabs.map((tab) => (
+                  {dynamicExamTabs.map((tab: string) => (
                     <button
                       key={tab}
                       onClick={() => setSelectedExamTab(tab)}

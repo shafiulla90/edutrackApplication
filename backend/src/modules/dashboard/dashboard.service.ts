@@ -17,17 +17,16 @@ export class DashboardService {
     if (!tenantId) throw new Error('tenantId is required');
     const tid = tenantId;
 
-    // 1. Fetch Students
-    const studentRes = await this.studentRepo.findStudentsByTenant(tid, 1, 1000);
+    // 1-3. Parallelize count & item lookups for Students, Teachers, and Classes
+    const [studentRes, teachers, classes] = await Promise.all([
+      this.studentRepo.findStudentsByTenant(tid, 1, 1000),
+      this.teacherRepo.findTeachersByTenant(tid),
+      this.academicRepo.findClasses(tid),
+    ]);
+
     const students = studentRes?.items || [];
     const studentsCount = studentRes?.total !== undefined ? studentRes.total : students.length;
-
-    // 2. Fetch Teachers / Staff
-    const teachers = await this.teacherRepo.findTeachersByTenant(tid);
     const teachersCount = teachers.length;
-
-    // 3. Fetch Classes
-    const classes = await this.academicRepo.findClasses(tid);
     const classesCount = classes.length;
 
     // 4. Build Student Name & Profile Map for Transaction Resolution
@@ -41,92 +40,105 @@ export class DashboardService {
       }
     });
 
-    // 5. Fetch Payments / Revenue & Outstanding Balance
+
+    // 5. Fetch Payments / Revenue & Expense Transactions
     let totalRevenue = 0;
+    let totalExpenses = 0;
     let outstandingReceivables = 0;
     let recentPayments: any[] = [];
 
     if (this.firebase) {
       const db = this.firebase.getFirestore();
       try {
-        const paySnap = await db.collection('tenants').doc(tid).collection('payments').get();
-        paySnap.docs.forEach((doc) => {
-          const d = doc.data();
-          if (d.status === 'SUCCESS' || !d.status) {
-            const amt = d.amountCents !== undefined ? d.amountCents / 100 : Number(d.amount || 0);
-            totalRevenue += amt;
+        const [paySnap, expSnap, invSnap] = await Promise.all([
+          db.collection('tenants').doc(tid).collection('payments').get().catch(() => null),
+          db.collection('tenants').doc(tid).collection('expenses').get().catch(() => null),
+          db.collection('tenants').doc(tid).collection('invoices').get().catch(() => null),
+        ]);
 
-            let matchedStudent = d.studentId ? studentMap.get(d.studentId) : null;
-            if (!matchedStudent && d.rollNo) matchedStudent = studentMap.get(d.rollNo);
+        if (paySnap && !paySnap.empty) {
+          paySnap.docs.forEach((doc) => {
+            const d = doc.data();
+            if (d.status === 'SUCCESS' || !d.status) {
+              const amt = d.amountCents !== undefined ? d.amountCents / 100 : Number(d.amount || 0);
+              totalRevenue += amt;
 
-            let resolvedName = matchedStudent
-              ? (matchedStudent.name || matchedStudent.user?.name || `${matchedStudent.firstName || ''} ${matchedStudent.lastName || ''}`.trim())
-              : null;
-
-            if (!resolvedName && d.studentName && d.studentName.toLowerCase() !== 'student') {
-              resolvedName = d.studentName;
-            }
-
-            if (!resolvedName && d.items && d.items.length > 0 && d.items[0].productName) {
-              resolvedName = d.items[0].productName;
-            }
-
-            if (!resolvedName || resolvedName.toLowerCase() === 'student') {
-              resolvedName = d.particulars && d.particulars.toLowerCase() !== 'student'
-                ? d.particulars
-                : `Fee Collection (${d.paymentMethod || 'UPI/Cash'})`;
-            }
-
-            recentPayments.push({
-              id: doc.id,
-              type: 'Fee Payment',
-              particulars: resolvedName,
-              name: resolvedName,
-              studentName: resolvedName,
-              rollNo: d.rollNo || matchedStudent?.rollNo || 'N/A',
-              amount: amt,
-              date: d.paymentDate || d.createdAt || new Date().toISOString(),
-              paymentMethod: d.paymentMethod || 'UPI / Cash',
-              status: 'COMPLETED',
-            });
-          }
-        });
-
-        const invSnap = await db.collection('tenants').doc(tid).collection('invoices').get();
-        invSnap.docs.forEach((doc) => {
-          const d = doc.data();
-          if (d.status !== 'PAID') {
-            outstandingReceivables += Number(d.remainingBalance || 0);
-          }
-          if (recentPayments.length === 0) {
-            const paid = Number(d.paidAmount || d.amountPaid || 0);
-            if (paid > 0) {
               let matchedStudent = d.studentId ? studentMap.get(d.studentId) : null;
-              let resolvedName = matchedStudent ? (matchedStudent.name || matchedStudent.user?.name) : d.studentName;
+              if (!matchedStudent && d.rollNo) matchedStudent = studentMap.get(d.rollNo);
+
+              let resolvedName = matchedStudent
+                ? (matchedStudent.name || matchedStudent.user?.name || `${matchedStudent.firstName || ''} ${matchedStudent.lastName || ''}`.trim())
+                : null;
+
+              if (!resolvedName && d.studentName && d.studentName.toLowerCase() !== 'student') {
+                resolvedName = d.studentName;
+              }
+
+              if (!resolvedName && d.items && d.items.length > 0 && d.items[0].productName) {
+                resolvedName = d.items[0].productName;
+              }
+
+              if (!resolvedName || resolvedName.toLowerCase() === 'student') {
+                resolvedName = d.particulars && d.particulars.toLowerCase() !== 'student'
+                  ? d.particulars
+                  : `Fee Collection (${d.paymentMethod || 'UPI/Cash'})`;
+              }
+
               recentPayments.push({
                 id: doc.id,
                 type: 'Fee Payment',
-                particulars: resolvedName || 'Fee Collection',
-                name: resolvedName || 'Fee Collection',
-                studentName: resolvedName || 'Fee Collection',
+                particulars: resolvedName,
+                name: resolvedName,
+                studentName: resolvedName,
                 rollNo: d.rollNo || matchedStudent?.rollNo || 'N/A',
-                amount: paid,
+                amount: amt,
                 date: d.paymentDate || d.createdAt || new Date().toISOString(),
                 paymentMethod: d.paymentMethod || 'UPI / Cash',
                 status: 'COMPLETED',
               });
             }
-          }
-        });
+          });
+        }
+
+        if (expSnap && !expSnap.empty) {
+          expSnap.docs.forEach((doc) => {
+            const d = doc.data();
+            const amt = Number(d.amount || 0);
+            totalExpenses += amt;
+            recentPayments.push({
+              id: doc.id,
+              type: 'Expense',
+              particulars: d.title || d.description || 'Staff Salary Payout',
+              name: d.title || d.description || 'Staff Salary Payout',
+              studentName: d.title || d.description || 'Staff Salary Payout',
+              rollNo: 'EXPENSE',
+              amount: -Math.abs(amt), // Negative amount for red color text display
+              date: d.date || d.createdAt || new Date().toISOString(),
+              paymentMethod: d.paymentMethod || 'Bank Transfer',
+              status: 'COMPLETED',
+              isExpense: true,
+            });
+          });
+        }
+
+        if (invSnap && !invSnap.empty) {
+          invSnap.docs.forEach((doc) => {
+            const d = doc.data();
+            if (d.status !== 'PAID') {
+              outstandingReceivables += Number(d.remainingBalance || 0);
+            }
+          });
+        }
       } catch (err) {
         console.warn('DashboardService payments fetch warning:', err);
       }
     }
 
+
     recentPayments.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     recentPayments = recentPayments.slice(0, 10);
 
-    // 6. Recent Admissions (ordered by createdAt descending)
+    // 6. Recent Admissions
     const sortedStudents = [...students].sort((a: any, b: any) => {
       const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
       const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
@@ -158,6 +170,40 @@ export class DashboardService {
       };
     });
 
+    let attendanceRate = 100;
+    let academicAverage = 85.6;
+
+    if (this.firebase) {
+      const db = this.firebase.getFirestore();
+      try {
+        const marksSnap = await db.collection('tenants').doc(tid).collection('examMarks').get().catch(() => null);
+        if (marksSnap && !marksSnap.empty) {
+          const scores = marksSnap.docs.map(d => Number(d.data().marksObtained || 0)).filter(s => !isNaN(s));
+          if (scores.length > 0) {
+            academicAverage = Math.round((scores.reduce((a, b) => a + b, 0) / scores.length) * 10) / 10;
+          }
+        }
+
+        const attSnap = await db.collection('tenants').doc(tid).collection('attendance').get().catch(() => null);
+        if (attSnap && !attSnap.empty) {
+          let totalCount = 0;
+          let presentCount = 0;
+          attSnap.docs.forEach(doc => {
+            const data = doc.data();
+            if (Array.isArray(data.students)) {
+              data.students.forEach((s: any) => {
+                totalCount++;
+                if (s.status === 'PRESENT') presentCount++;
+              });
+            }
+          });
+          if (totalCount > 0) {
+            attendanceRate = Math.round((presentCount / totalCount) * 100);
+          }
+        }
+      } catch (e) {}
+    }
+
     return {
       success: true,
       stats: {
@@ -165,11 +211,11 @@ export class DashboardService {
         teachersCount,
         classesCount,
         totalRevenue,
-        totalExpenses: 0,
-        netIncome: totalRevenue,
+        totalExpenses,
+        netIncome: totalRevenue - totalExpenses,
         outstandingReceivables,
-        attendanceRate: 100,
-        academicAverage: 85.6,
+        attendanceRate,
+        academicAverage,
         pendingLeaveRequests: 0,
         approvedToday: 0,
         rejectedToday: 0,
@@ -183,10 +229,10 @@ export class DashboardService {
       recentAdmissions,
       recentPayments,
       chartData: [
-        { month: 'Jan', feeCollection: totalRevenue * 0.15, salaryExpense: 0, netRevenue: totalRevenue * 0.15 },
-        { month: 'Feb', feeCollection: totalRevenue * 0.20, salaryExpense: 0, netRevenue: totalRevenue * 0.20 },
-        { month: 'Mar', feeCollection: totalRevenue * 0.25, salaryExpense: 0, netRevenue: totalRevenue * 0.25 },
-        { month: 'Apr', feeCollection: totalRevenue * 0.40, salaryExpense: 0, netRevenue: totalRevenue * 0.40 },
+        { month: 'Jan', feeCollection: totalRevenue * 0.15, salaryExpense: totalExpenses * 0.2, netRevenue: totalRevenue * 0.15 - totalExpenses * 0.2 },
+        { month: 'Feb', feeCollection: totalRevenue * 0.20, salaryExpense: totalExpenses * 0.2, netRevenue: totalRevenue * 0.20 - totalExpenses * 0.2 },
+        { month: 'Mar', feeCollection: totalRevenue * 0.25, salaryExpense: totalExpenses * 0.2, netRevenue: totalRevenue * 0.25 - totalExpenses * 0.2 },
+        { month: 'Apr', feeCollection: totalRevenue * 0.40, salaryExpense: totalExpenses * 0.4, netRevenue: totalRevenue * 0.40 - totalExpenses * 0.4 },
       ],
     };
   }
@@ -215,6 +261,7 @@ export class DashboardService {
       const timeline = Object.keys(dateMap).map(date => ({ date, count: dateMap[date] }));
 
       let totalRevenue = 0;
+      let totalExpenses = 0;
       let outstandingReceivables = 0;
 
       if (this.firebase) {
@@ -227,6 +274,12 @@ export class DashboardService {
               const amt = d.amountCents !== undefined ? d.amountCents / 100 : Number(d.amount || 0);
               totalRevenue += amt;
             }
+          });
+
+          const expSnap = await db.collection('tenants').doc(tid).collection('expenses').get();
+          expSnap.docs.forEach((doc) => {
+            const d = doc.data();
+            totalExpenses += Number(d.amount || 0);
           });
 
           const invSnap = await db.collection('tenants').doc(tid).collection('invoices').get();
@@ -252,8 +305,8 @@ export class DashboardService {
         financials: {
           totalRevenue,
           outstandingReceivables,
-          totalExpenses: 0,
-          netCashflow: totalRevenue,
+          totalExpenses,
+          netCashflow: totalRevenue - totalExpenses,
         },
         grading: {
           averageScore: 85.6,
@@ -335,7 +388,6 @@ export class DashboardService {
       ];
     }
 
-    // Default grading export
     return [
       { 'Student Name': 'don don', 'Roll No': 'STU-1844', 'Class': 'Grade 1', 'Average Score': 88.5, 'Grade': 'A', 'Status': 'PASSED' },
       { 'Student Name': 'Lalsagari Shaik Shafiulla', 'Roll No': 'STU-5527', 'Class': 'Class-2', 'Average Score': 92.0, 'Grade': 'A+', 'Status': 'PASSED' }
