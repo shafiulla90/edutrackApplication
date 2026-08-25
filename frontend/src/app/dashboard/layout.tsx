@@ -19,27 +19,64 @@ export default function DashboardLayout({
   const [mobileOpen, setMobileOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const { schoolName, schoolType, adminName, logoUrl, currentUser, loading, subscription, isSubscriptionActive, showLockPopup, setShowLockPopup } = useTenant();
+  const [showAdminExpiringWarning, setShowAdminExpiringWarning] = useState(false);
   const isImpersonating = typeof window !== 'undefined' && sessionStorage.getItem('impersonating_from_platform') === 'true';
   const impersonatedSchool = typeof window !== 'undefined' ? (sessionStorage.getItem('impersonated_school_name') || schoolName) : schoolName;
+
+  const isAdmin = currentUser?.role === 'SCHOOL_ADMIN';
+  const isTeacherOrStaff = currentUser?.role === 'TEACHER' || currentUser?.role === 'DRIVER' || currentUser?.role === 'STAFF';
+
+  // Check whether subscription is approaching expiry (expiring soon - 3 to 4 days before expiry ONLY)
+  const isExpiringSoon = subscription && isSubscriptionActive && (
+    subscription.status === 'EXPIRING_SOON' ||
+    (typeof subscription.daysRemaining === 'number' && subscription.daysRemaining <= (subscription.warningPeriodDays || 4) && subscription.daysRemaining > 0 && subscription.status !== 'EXPIRED' && !subscription.isExpired)
+  );
+
+  // Grace period has been removed from the subscription lifecycle (ACTIVE → EXPIRING_SOON → EXPIRED).
+  // This variable is kept as false to avoid breaking the grace-period warning banner in the JSX.
+  const isGracePeriod = subscription?.isGracePeriod === true || subscription?.status === 'GRACE_PERIOD';
+
+  // Trigger subscription expiring warning popup once per authenticated session for School Admin ONLY
+  // Uses sessionStorage with a simple 'true' flag so:
+  //   - Popup shows on every new browser session / tab open
+  //   - Popup shows on every logout → login cycle (clearStoredAuth removes the key)
+  //   - Popup stays dismissed within the same session after clicking Cancel
+  useEffect(() => {
+    if (isAdmin && isExpiringSoon && isSubscriptionActive) {
+      const alreadyDismissed = typeof window !== 'undefined'
+        ? sessionStorage.getItem('dismissed_admin_expiry_warning') === 'true'
+        : false;
+      if (!alreadyDismissed) {
+        setShowAdminExpiringWarning(true);
+      }
+    }
+  }, [isAdmin, isExpiringSoon, isSubscriptionActive]);
 
   // Subscription state helpers
   const isSubscriptionBlocked = !isSubscriptionActive;
 
-  const isGracePeriod = subscription &&
-    new Date(subscription.expiryDate).getTime() < Date.now() &&
-    new Date(subscription.expiryDate).getTime() + (3 * 24 * 60 * 60 * 1000) >= Date.now();
-
+  // Admin has READ-ONLY access after expiry — can navigate all modules but cannot write.
+  // Teacher/Staff: locked portal, popup shown when they click locked nav links.
   const isModuleLocked = (href: string) => {
     if (currentUser?.role === 'SUPER_ADMIN') return false;
     if (isSubscriptionActive) return false;
+    // Admin: NEVER lock navigation — show read-only banner instead
+    if (isAdmin) return false;
 
     const allowedPrefixes = [
       '/dashboard/settings/subscription',
       '/dashboard/profile',
     ];
-    if (href === '/dashboard') return false;
     return allowedPrefixes.every(prefix => !href.startsWith(prefix));
   };
+
+  // Always close the lock popup when the admin reaches the subscription page.
+  // This handles the case where: popup was open → user clicks Renew → navigates here.
+  useEffect(() => {
+    if (pathname === '/dashboard/settings/subscription' || pathname === '/dashboard/profile') {
+      setShowLockPopup(false);
+    }
+  }, [pathname, setShowLockPopup]);
 
   const [unreadAnnCount, setUnreadAnnCount] = useState(0);
 
@@ -568,29 +605,40 @@ export default function DashboardLayout({
   // Collect all sidebar hrefs to check for more specific nested matches
   const allSidebarHrefs = navSections.flatMap(section => section.items.map(item => item.href));
 
-  // If subscription is expired (after grace period) and user is a teacher/driver, show full screen block
-  if (isSubscriptionBlocked && currentUser?.role !== 'SCHOOL_ADMIN' && currentUser?.role !== 'SUPER_ADMIN') {
+  // If subscription is expired (after grace period) and user is Teacher/Staff, show Application Under Maintenance
+  if (isSubscriptionBlocked && isTeacherOrStaff) {
     return (
-      <div className="fixed inset-0 bg-[#0F172A] flex flex-col items-center justify-center text-white z-[99999] px-6">
-        <div className="max-w-md w-full bg-slate-900 border border-slate-800 rounded-3xl p-8 text-center shadow-2xl">
-          <div className="w-16 h-16 bg-red-500/10 border border-red-500/30 rounded-2xl flex items-center justify-center mx-auto mb-6 text-red-500">
+      <div className="fixed inset-0 bg-[#0F172A] flex flex-col items-center justify-center text-white z-[99999] px-6 select-none">
+        <div className="max-w-md w-full bg-slate-900 border border-slate-800 rounded-3xl p-8 text-center shadow-2xl relative overflow-hidden">
+          <div className="w-16 h-16 bg-amber-500/10 border border-amber-500/30 rounded-2xl flex items-center justify-center mx-auto mb-6 text-amber-400">
             <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
             </svg>
           </div>
-          <h2 className="text-xl font-bold text-slate-100 font-sans tracking-wide">Subscription Expired</h2>
+          <h2 className="text-xl font-bold text-slate-100 font-sans tracking-wide">Application Under Maintenance</h2>
           <p className="text-sm text-slate-400 mt-3 leading-relaxed">
-            Your school's EduTrack subscription has expired. Please contact the administration to renew the service.
+            The school subscription is currently inactive. The application is temporarily under maintenance due to subscription status.
           </p>
-          <button
-            onClick={() => {
-              clearStoredAuth();
-              window.location.href = '/auth/login';
-            }}
-            className="mt-8 w-full flex items-center justify-center gap-2 px-4 py-3 text-sm font-semibold text-white bg-rose-600 hover:bg-rose-500 rounded-2xl transition-all shadow-lg cursor-pointer"
-          >
-            Logout
-          </button>
+          <p className="text-xs text-slate-500 mt-4 font-medium">
+            For further information, please contact your School Administrator.
+          </p>
+          <div className="mt-8 flex gap-3">
+            <button
+              onClick={() => {
+                clearStoredAuth();
+                window.location.href = '/auth/login?portal=teacher';
+              }}
+              className="w-full flex items-center justify-center gap-2 px-4 py-3 text-sm font-semibold text-slate-300 bg-slate-800 hover:bg-slate-700 rounded-2xl transition-all shadow-md cursor-pointer"
+            >
+              Sign Out
+            </button>
+          </div>
+
+          <div className="mt-6 pt-3 border-t border-slate-800 text-center">
+            <p className="text-[10px] text-slate-500 font-bold tracking-wider uppercase">
+              Powered by Covenant Synergy Pvt Ltd
+            </p>
+          </div>
         </div>
       </div>
     );
@@ -823,6 +871,26 @@ export default function DashboardLayout({
         <main className={`p-4 sm:p-8 print:p-0 print:max-w-none print:m-0 flex-1 max-w-7xl w-full mx-auto min-w-0 ${
           currentUser?.role === 'TEACHER' || currentUser?.role === 'SCHOOL_ADMIN' ? 'pb-24 lg:pb-8' : ''
         }`}>
+          {/* ── Expired Admin Read-Only Banner ── */}
+          {isSubscriptionBlocked && isAdmin && !isGracePeriod && (
+            <div className="mb-5 p-4 bg-rose-50 border border-rose-200 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <svg className="w-5 h-5 shrink-0 text-rose-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                  <circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" />
+                </svg>
+                <span className="text-xs sm:text-sm font-semibold text-rose-700">
+                  Subscription Expired — Read-Only Mode. Existing data is visible but changes are disabled.
+                </span>
+              </div>
+              <Link
+                href="/dashboard/settings/subscription"
+                className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-xl shadow-sm text-center shrink-0 transition-all whitespace-nowrap"
+              >
+                Renew Subscription
+              </Link>
+            </div>
+          )}
+
           {isGracePeriod && (
             <div className="mb-6 p-4 bg-amber-500/10 border border-amber-500/30 text-amber-600 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-sm">
               <div className="flex items-center gap-3">
@@ -1121,6 +1189,78 @@ export default function DashboardLayout({
           </button>
         </div>
       )}
+      {/* Admin Subscription Expiring Soon Warning Modal */}
+      {showAdminExpiringWarning && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md flex items-center justify-center z-[99999] px-6 select-none animate-fade-in">
+          <div className="max-w-md w-full bg-white border border-amber-200 rounded-3xl p-8 text-center shadow-2xl relative overflow-hidden">
+            <div className="w-16 h-16 bg-amber-500/10 border border-amber-500/20 rounded-2xl flex items-center justify-center mx-auto mb-5 text-amber-600">
+              <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+            </div>
+
+            <h2 className="text-2xl font-black text-slate-900 tracking-tight font-sans">
+              Subscription Expiring Soon
+            </h2>
+            <p className="text-sm text-slate-600 mt-2 leading-relaxed">
+              Your EduTrack subscription is expiring in <strong className="text-amber-600">{subscription?.daysRemaining ?? 7} days</strong>.
+            </p>
+
+            <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-4 mt-5 space-y-2 text-xs text-left font-sans">
+              <div className="flex justify-between">
+                <span className="text-slate-500 font-medium">Expiry Date:</span>
+                <span className="font-bold text-slate-800">{subscription?.expiryDate ? new Date(subscription.expiryDate).toLocaleDateString('en-IN') : 'Upcoming'}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500 font-medium">Current Plan:</span>
+                <span className="font-bold text-slate-800">{subscription?.plan || 'BASIC'}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500 font-medium">Billing Cycle:</span>
+                <span className="font-bold text-slate-800">{subscription?.billingCycle || '6 Months'}</span>
+              </div>
+            </div>
+
+            <p className="text-[11px] text-slate-500 mt-4 leading-normal">
+              Please renew your subscription before the expiry date to continue using the application without interruption.
+            </p>
+
+            <div className="mt-6 flex flex-col gap-3">
+              <button
+                onClick={() => {
+                  if (typeof window !== 'undefined') {
+                    sessionStorage.setItem('dismissed_admin_expiry_warning', 'true');
+                  }
+                  setShowAdminExpiringWarning(false);
+                  router.push('/dashboard/settings/subscription');
+                }}
+                className="w-full py-3.5 px-4 bg-blue-600 hover:bg-blue-500 text-white rounded-2xl font-extrabold text-xs shadow-lg shadow-blue-600/20 transition-all cursor-pointer flex items-center justify-center gap-2"
+              >
+                <span>Renew Subscription</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  if (typeof window !== 'undefined') {
+                    sessionStorage.setItem('dismissed_admin_expiry_warning', 'true');
+                  }
+                  setShowAdminExpiringWarning(false);
+                }}
+                className="w-full py-3 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-2xl font-bold text-xs transition-all cursor-pointer"
+              >
+                Cancel
+              </button>
+            </div>
+
+            <div className="mt-5 pt-3.5 border-t border-slate-100 text-center">
+              <p className="text-[10px] text-slate-400 font-bold tracking-wider uppercase">
+                Powered by Covenant Synergy Pvt Ltd
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Subscription Lock Popup Modal */}
       {showLockPopup && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md flex items-center justify-center z-[99999] px-6 select-none animate-fade-in">
@@ -1147,47 +1287,53 @@ export default function DashboardLayout({
             </div>
 
             <h2 className="text-2xl font-black text-slate-800 tracking-tight font-sans">
-              Subscription Required
+              {currentUser?.role === 'SCHOOL_ADMIN' ? 'Subscription Required' : 'Application Under Maintenance'}
             </h2>
             <p className="text-sm text-slate-500 mt-3 leading-relaxed">
-              Your school's subscription has expired or there is no active subscription. Please renew your subscription to continue using EduTrack.
+              {currentUser?.role === 'SCHOOL_ADMIN'
+                ? "Your school's subscription has expired. Please renew your subscription to continue using EduTrack."
+                : "The school application is currently unavailable because the school's subscription has expired. For further information, please contact the School Administrator."
+              }
             </p>
 
             <div className="mt-8 flex flex-col gap-3">
               {currentUser?.role === 'SCHOOL_ADMIN' ? (
-                <button
-                  onClick={() => {
-                    setShowLockPopup(false);
-                    router.push('/dashboard/settings/subscription');
-                  }}
-                  className="w-full flex items-center justify-center gap-2 px-5 py-3.5 text-sm font-bold text-white bg-blue-600 hover:bg-blue-500 rounded-2xl transition-all shadow-lg shadow-blue-600/10 cursor-pointer"
-                >
-                  Renew Subscription
-                </button>
+                <>
+                  <button
+                    onClick={() => {
+                      setShowLockPopup(false);
+                      router.push('/dashboard/settings/subscription');
+                    }}
+                    className="w-full flex items-center justify-center gap-2 px-5 py-3.5 text-sm font-bold text-white bg-blue-600 hover:bg-blue-500 rounded-2xl transition-all shadow-lg shadow-blue-600/10 cursor-pointer"
+                  >
+                    Renew Subscription
+                  </button>
+                  <button
+                    onClick={() => setShowLockPopup(false)}
+                    className="w-full flex items-center justify-center gap-2 px-5 py-3 text-sm font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-2xl transition-all cursor-pointer"
+                  >
+                    Close
+                  </button>
+                </>
               ) : (
-                <div className="p-4 bg-slate-50 border border-slate-100 rounded-2xl text-xs text-slate-500 text-center font-medium leading-relaxed">
-                  Please notify your School Administrator to complete renewal payments and unlock operational modules.
-                </div>
+                <>
+                  <div className="p-4 bg-slate-50 border border-slate-100 rounded-2xl text-xs text-slate-600 text-center font-medium leading-relaxed">
+                    The school application is currently unavailable because the school&apos;s subscription has expired. For further information, please contact the School Administrator.
+                  </div>
+                  <button
+                    onClick={() => setShowLockPopup(false)}
+                    className="w-full flex items-center justify-center gap-2 px-5 py-3 text-sm font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-2xl transition-all cursor-pointer"
+                  >
+                    Close
+                  </button>
+                </>
               )}
+            </div>
 
-              <button
-                onClick={() => {
-                  setShowLockPopup(false);
-                  if (currentUser?.role === 'SCHOOL_ADMIN') {
-                    router.push('/dashboard/settings/subscription');
-                  }
-                }}
-                className="w-full flex items-center justify-center gap-2 px-5 py-3.5 text-sm font-bold text-slate-700 bg-slate-100 hover:bg-slate-200/80 rounded-2xl transition-all cursor-pointer"
-              >
-                View Plans
-              </button>
-
-              <a
-                href="mailto:support@edutrack.com"
-                className="w-full flex items-center justify-center gap-2 px-5 py-3.5 text-sm font-bold text-slate-500 hover:text-slate-600 transition-all cursor-pointer text-center"
-              >
-                Contact Support
-              </a>
+            <div className="mt-5 pt-3.5 border-t border-slate-100 text-center">
+              <p className="text-[10px] text-slate-400 font-bold tracking-wider uppercase">
+                Powered by Covenant Synergy Pvt Ltd
+              </p>
             </div>
           </div>
         </div>

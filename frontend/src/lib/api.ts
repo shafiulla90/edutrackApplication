@@ -74,6 +74,7 @@ export function clearStoredAuth() {
     localStorage.removeItem('admin_userPhone');
   }
   sessionStorage.removeItem('active_role');
+  sessionStorage.removeItem('dismissed_admin_expiry_warning');
 }
 
 export function getTenantFromHostname(): string {

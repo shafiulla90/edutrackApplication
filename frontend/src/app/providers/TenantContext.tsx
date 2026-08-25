@@ -15,9 +15,21 @@ interface TenantContextType {
   currentUser: any;
   subscription: {
     plan: string;
+    planCode?: string;
+    planName?: string;
+    billingCycle?: string;
+    amount?: number;
     status: string;
+    storedStatus?: string;
+    startDate?: string;
     expiryDate: string;
-    features: string[];
+    daysRemaining?: number;
+    warningPeriodDays?: number;
+    isExpiringSoon?: boolean;
+    isGracePeriod?: boolean;
+    isExpired?: boolean;
+    isSubscriptionActive?: boolean;
+    features?: string[];
   } | null;
   isSubscriptionActive: boolean;
   showLockPopup: boolean;
@@ -45,20 +57,38 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [showLockPopup, setShowLockPopup] = useState(false);
 
-  const isSubscriptionActive = !token || loading || !subscription || (
-    subscription.status === 'ACTIVE' ||
-    subscription.status === 'PAST_DUE' ||
-    new Date(subscription.expiryDate).getTime() + (3 * 24 * 60 * 60 * 1000) >= Date.now()
-  );
+  // Client-side subscription active check — expiryDate is the source of truth.
+  // This prevents stale backend status (e.g. still showing 'ACTIVE') from incorrectly
+  // granting access when the actual expiry date has passed.
+  const isSubscriptionActive = !token || loading || !subscription || (() => {
+    const expiryDate = subscription?.expiryDate ? new Date(subscription.expiryDate) : null;
+    const isExpiredByDate = expiryDate ? expiryDate.getTime() <= Date.now() : false;
+    if (isExpiredByDate) return false;
+    if (subscription.status === 'EXPIRED') return false;
+    if (subscription.isExpired === true) return false;
+    if (subscription.isSubscriptionActive === false) return false;
+    return true;
+  })();
 
-  // Register Axios response interceptor to handle 402 status codes globally
+  // Register Axios response interceptor to handle SUBSCRIPTION_EXPIRED write-block errors
   useEffect(() => {
     const interceptor = api.interceptors.response.use(
       (response) => response,
       (error) => {
-        if (error.response && error.response.status === 402) {
-          console.warn('Axios Interceptor: 402 Payment Required detected. Triggering subscription renewal popup.');
-          setShowLockPopup(true);
+        if (
+          error.response &&
+          (error.response.status === 402 ||
+           (error.response.status === 403 && (
+             error.response.data?.code === 'SUBSCRIPTION_EXPIRED' ||
+             error.response.data?.code === 'SUBSCRIPTION_EXPIRED_READ_ONLY'
+           )))
+        ) {
+          // Don't show lock popup when user is already on the subscription page
+          const currentPath = typeof window !== 'undefined' ? window.location.pathname : '';
+          if (!currentPath.includes('/settings/subscription')) {
+            console.warn('Axios Interceptor: Subscription expired write-block detected.');
+            setShowLockPopup(true);
+          }
         }
         return Promise.reject(error);
       }

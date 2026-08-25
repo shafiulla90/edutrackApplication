@@ -207,14 +207,49 @@ export class TenantService {
     let subDoc: any = null;
     try {
       const snap = await this.db.collection('tenants').doc(tid).collection('subscription').doc('current').get();
-      if (snap.exists) subDoc = snap.data();
+      if (snap.exists) {
+        subDoc = snap.data();
+      } else {
+        const rootSnap = await this.db.collection('subscriptions').doc(tid).get();
+        if (rootSnap.exists) subDoc = rootSnap.data();
+      }
     } catch (e) {}
 
-    const subStatus = subDoc?.status || 'ACTIVE';
+    const now = Date.now();
     const subPlan = subDoc?.plan || 'BASIC';
     const subPlanCode = subDoc?.planCode || 'BASIC_6_MONTH';
     const subBillingCycle = subDoc?.billingCycle || '6 Months';
-    const subExpiry = subDoc?.expiryDate || new Date(Date.now() + 180 * 24 * 60 * 60 * 1000).toISOString();
+    const subExpiry = subDoc?.expiryDate || new Date(now + 180 * 24 * 60 * 60 * 1000).toISOString();
+    const expiryTime = new Date(subExpiry).getTime();
+    const warningPeriodDays = 4; // Show expiry warning 4 days before expiry
+    const msPerDay = 1000 * 60 * 60 * 24;
+    const daysRemaining = Math.ceil((expiryTime - now) / msPerDay);
+
+    // Strict lifecycle: ACTIVE → EXPIRING_SOON → EXPIRED
+    // No grace period — once expiryDate passes, subscription is EXPIRED immediately
+    let calculatedStatus: 'ACTIVE' | 'EXPIRING_SOON' | 'EXPIRED' = 'ACTIVE';
+    let isSubActive = true;
+
+    if (now >= expiryTime) {
+      // Past expiry date → immediately EXPIRED regardless of any grace window
+      calculatedStatus = 'EXPIRED';
+      isSubActive = false;
+
+      // Sync EXPIRED status back to Firestore if still stale
+      if (this.db && subDoc?.status !== 'EXPIRED') {
+        const expiredUpdate = { status: 'EXPIRED', updatedAt: new Date().toISOString() };
+        this.db.collection('tenants').doc(tid).collection('subscription').doc('current')
+          .set(expiredUpdate, { merge: true }).catch(() => null);
+        this.db.collection('subscriptions').doc(tid)
+          .set(expiredUpdate, { merge: true }).catch(() => null);
+      }
+    } else if (daysRemaining <= warningPeriodDays && daysRemaining > 0) {
+      calculatedStatus = 'EXPIRING_SOON';
+      isSubActive = true;
+    } else {
+      calculatedStatus = 'ACTIVE';
+      isSubActive = true;
+    }
 
     return {
       currentUser: currentUserObj,
@@ -241,8 +276,14 @@ export class TenantService {
         planName: subDoc?.planName || 'EduTrack Basic – 6 Months',
         billingCycle: subBillingCycle,
         amount: subDoc?.amount || 1,
-        status: subStatus,
+        status: calculatedStatus,
+        storedStatus: subDoc?.status || 'ACTIVE',
         expiryDate: subExpiry,
+        daysRemaining: calculatedStatus === 'EXPIRED' ? 0 : Math.max(0, daysRemaining),
+        warningPeriodDays,
+        isExpiringSoon: calculatedStatus === 'EXPIRING_SOON',
+        isExpired: calculatedStatus === 'EXPIRED',
+        isSubscriptionActive: isSubActive,
         features: [
           'Unlimited Students & Staff Profiles',
           'Attendance, Fees & Timetable Management',
@@ -251,7 +292,7 @@ export class TenantService {
           'Transport & Bus GPS Tracking',
         ],
       },
-      isSubscriptionActive: subStatus === 'ACTIVE',
+      isSubscriptionActive: isSubActive,
     };
   }
 

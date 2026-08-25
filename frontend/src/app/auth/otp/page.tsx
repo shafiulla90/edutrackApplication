@@ -157,6 +157,7 @@ function OtpContent() {
           // Clear stale teacher or parent tokens
           localStorage.removeItem('teacher_token');
           localStorage.removeItem('parent_token');
+          sessionStorage.removeItem('dismissed_admin_expiry_warning');
           
           localStorage.setItem('admin_token', data.access_token);
           localStorage.setItem('admin_tenantId', data.user.tenantId);

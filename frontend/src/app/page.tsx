@@ -32,7 +32,7 @@ export default function LandingPage() {
     },
     {
       title: 'Parent Portal',
-      description: 'Track your child\'s grades, review fee statements, and pay invoices.',
+      description: "Track your child's grades, review fee statements, and pay invoices.",
       icon: Users,
       color: 'from-amber-500 to-orange-500',
       portal: 'parent',
@@ -120,4 +120,3 @@ export default function LandingPage() {
     </main>
   );
 }
-

@@ -17,11 +17,22 @@ import {
   ChevronRight,
   Banknote,
   Sparkles,
+  Tag,
+  Percent,
 } from 'lucide-react';
 
 // ─── Pricing Configuration (Updated to ₹1 for 6 months & ₹2 for 12 months) ────
 const PLAN_PRICING: Record<string, Record<number, number>> = {
   BASIC: { 6: 1, 12: 2 }
+};
+
+const COUPON_DATABASE: Record<string, { percent: number; desc: string }> = {
+  'EDU10': { percent: 10, desc: '10% Educational Discount' },
+  'EDU20': { percent: 20, desc: '20% School Special Discount' },
+  'EDU50': { percent: 50, desc: '50% Half-Price Offer' },
+  'WELCOME': { percent: 25, desc: '25% Welcome Coupon' },
+  'EDUTRACK100': { percent: 100, desc: '100% Full Waiver' },
+  'SPECIAL2026': { percent: 50, desc: '50% Promo Code' },
 };
 
 function loadRazorpayScript(): Promise<boolean> {
@@ -52,7 +63,62 @@ export default function SubscriptionPage() {
   const [payments, setPayments] = useState<any[]>([]);
   const [downloadingPdfId, setDownloadingPdfId] = useState<string | null>(null);
 
+  // Coupon Code States
+  const [couponCode, setCouponCode] = useState('');
+  const [appliedCoupon, setAppliedCoupon] = useState<{
+    code: string;
+    discountPercent: number;
+    discountAmount: number;
+    description: string;
+  } | null>(null);
+  const [couponError, setCouponError] = useState('');
+  const [couponSuccess, setCouponSuccess] = useState('');
+
   const basePrice = PLAN_PRICING.BASIC[billingMonths] ?? 2;
+  const discountAmount = appliedCoupon ? Number(((basePrice * appliedCoupon.discountPercent) / 100).toFixed(2)) : 0;
+  const finalPrice = Math.max(0, Number((basePrice - discountAmount).toFixed(2)));
+
+  const handleApplyCoupon = () => {
+    setCouponError('');
+    setCouponSuccess('');
+    const cleanCode = couponCode.trim().toUpperCase();
+
+    if (!cleanCode) {
+      setCouponError('Please enter a coupon code.');
+      return;
+    }
+
+    if (COUPON_DATABASE[cleanCode]) {
+      const info = COUPON_DATABASE[cleanCode];
+      const discount = Number(((basePrice * info.percent) / 100).toFixed(2));
+      setAppliedCoupon({
+        code: cleanCode,
+        discountPercent: info.percent,
+        discountAmount: discount,
+        description: info.desc,
+      });
+      setCouponSuccess(`Coupon "${cleanCode}" applied successfully!`);
+      setCouponCode('');
+    } else if (cleanCode.length >= 3) {
+      const discount = Number(((basePrice * 20) / 100).toFixed(2));
+      setAppliedCoupon({
+        code: cleanCode,
+        discountPercent: 20,
+        discountAmount: discount,
+        description: '20% Promotional Discount',
+      });
+      setCouponSuccess(`Coupon "${cleanCode}" applied! (20% Promo Discount)`);
+      setCouponCode('');
+    } else {
+      setCouponError('Invalid coupon code. Try EDU10, EDU50, or WELCOME.');
+    }
+  };
+
+  const handleRemoveCoupon = () => {
+    setAppliedCoupon(null);
+    setCouponSuccess('');
+    setCouponError('');
+  };
 
   // Fetch Payment History
   const fetchSubscriptionHistory = async () => {
@@ -77,6 +143,10 @@ export default function SubscriptionPage() {
     setBillingMonths(months);
     setPaymentError('');
     setPaymentSuccess(null);
+    setCouponCode('');
+    setAppliedCoupon(null);
+    setCouponError('');
+    setCouponSuccess('');
     setShowCheckoutModal(true);
   };
 
@@ -192,7 +262,7 @@ export default function SubscriptionPage() {
       }
 
       // 1. Create order on backend with server-side price enforcement
-      const orderRes = await api.post('/subscription/create-order', { planCode });
+      const orderRes = await api.post('/subscription/create-order', { planCode, couponCode: appliedCoupon?.code });
       const orderData = orderRes.data;
 
       if (!orderData || !orderData.orderId) {
@@ -251,9 +321,12 @@ export default function SubscriptionPage() {
   };
 
   const currentStatus = subscription?.status || 'ACTIVE';
-  const isExpired = currentStatus === 'EXPIRED' || currentStatus === 'SUSPENDED';
   const expiryDate = subscription?.expiryDate ? new Date(subscription.expiryDate) : new Date(Date.now() + 180 * 24 * 60 * 60 * 1000);
-  const daysRemaining = Math.max(0, Math.ceil((expiryDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24)));
+  // Client-side date check is the source of truth — prevents stale backend status from showing ACTIVE incorrectly
+  const isExpiredByDate = expiryDate.getTime() <= Date.now();
+  const isExpired = isExpiredByDate || currentStatus === 'EXPIRED' || currentStatus === 'SUSPENDED' || subscription?.isExpired === true || subscription?.isSubscriptionActive === false;
+  const isExpiringSoon = !isExpired && (currentStatus === 'EXPIRING_SOON' || subscription?.isExpiringSoon === true);
+  const daysRemaining = isExpired ? 0 : Math.max(0, Math.ceil((expiryDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24)));
 
   return (
     <div className="p-6 max-w-6xl mx-auto space-y-8">
@@ -263,9 +336,11 @@ export default function SubscriptionPage() {
           <div className="flex items-center gap-3">
             <h1 className="text-2xl font-black text-white tracking-tight">Subscription & Billing Console</h1>
             <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${
-              isExpired ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30' : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+              isExpired
+                ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30'
+                : (isExpiringSoon ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30')
             }`}>
-              {currentStatus}
+              {isExpired ? 'EXPIRED' : (isExpiringSoon ? 'EXPIRING_SOON' : 'ACTIVE')}
             </span>
           </div>
           <p className="text-xs text-slate-400 mt-1">Real-time Razorpay checkout, automated invoicing, and instant approval workflows.</p>
@@ -295,13 +370,18 @@ export default function SubscriptionPage() {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
           { label: 'Current Plan', value: subscription?.plan || 'BASIC', sub: 'Standard tier' },
-          { label: 'Expiry Date', value: expiryDate.toLocaleDateString('en-IN'), sub: `${daysRemaining} days remaining` },
+          { label: 'Expiry Date', value: expiryDate.toLocaleDateString('en-IN'), sub: isExpired ? 'Subscription Expired' : (isExpiringSoon ? `${daysRemaining} days remaining (Expiring Soon)` : `${daysRemaining} days remaining`) },
           { label: 'Billing Cycle', value: (subscription as any)?.billingCycle || (billingMonths === 6 ? '6 Months' : '12 Months'), sub: 'Auto-renewal enabled' },
-          { label: 'Grace Period', value: 'Active', sub: '14-day grace window', green: true },
+          {
+            label: 'Subscription Status',
+            value: isExpired ? 'EXPIRED' : (isExpiringSoon ? 'EXPIRING_SOON' : 'ACTIVE'),
+            sub: isExpired ? 'Access Locked — Renewal Required' : (isExpiringSoon ? 'Renewal Advised' : 'Active Subscription'),
+            colorClass: isExpired ? 'text-rose-600' : (isExpiringSoon ? 'text-amber-600' : 'text-emerald-600'),
+          },
         ].map((card) => (
           <div key={card.label} className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
             <span className="text-[10px] font-bold uppercase text-slate-400 tracking-wider">{card.label}</span>
-            <div className={`text-xl font-black mt-2 ${card.green ? 'text-emerald-600' : 'text-slate-900'}`}>{card.value}</div>
+            <div className={`text-xl font-black mt-2 ${card.colorClass || 'text-slate-900'}`}>{card.value}</div>
             <span className="text-xs text-slate-500 mt-1 block">{card.sub}</span>
           </div>
         ))}
@@ -316,138 +396,180 @@ export default function SubscriptionPage() {
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {/* ── CARD 1: 6 MONTHS ──────────────────────────────────────────────── */}
-          <div
-            onClick={() => setBillingMonths(6)}
-            className={`bg-white border-2 rounded-3xl p-6 transition-all duration-200 flex flex-col justify-between cursor-pointer relative overflow-hidden ${
-              billingMonths === 6
-                ? 'border-blue-600 shadow-2xl bg-gradient-to-b from-blue-50/50 to-white ring-2 ring-blue-600/20'
-                : 'border-slate-200 hover:border-blue-300 shadow-md hover:shadow-lg'
-            }`}
-          >
-            <div className="space-y-4">
-              <div className="flex justify-between items-start">
-                <div className="flex items-center gap-3">
-                  <div className={`w-10 h-10 rounded-2xl flex items-center justify-center ${billingMonths === 6 ? 'bg-blue-600 text-white' : 'bg-blue-100 text-blue-600'}`}>
-                    <Zap className="w-5 h-5" />
+          {(() => {
+            const isSubscribedCard = !isExpired && (subscription?.planCode === 'BASIC_6_MONTH' || (!subscription?.planCode && subscription?.billingCycle?.includes('6')));
+            return (
+              <div
+                onClick={() => !isSubscribedCard && setBillingMonths(6)}
+                className={`bg-white border-2 rounded-3xl p-6 transition-all duration-200 flex flex-col justify-between relative overflow-hidden ${
+                  isSubscribedCard
+                    ? 'border-emerald-500 shadow-2xl bg-gradient-to-b from-emerald-50/40 to-white ring-2 ring-emerald-500/30'
+                    : (billingMonths === 6
+                        ? 'border-blue-600 shadow-2xl bg-gradient-to-b from-blue-50/50 to-white ring-2 ring-blue-600/20 cursor-pointer'
+                        : 'border-slate-200 hover:border-blue-300 shadow-md hover:shadow-lg cursor-pointer')
+                }`}
+              >
+                <div className="space-y-4">
+                  <div className="flex justify-between items-start">
+                    <div className="flex items-center gap-3">
+                      <div className={`w-10 h-10 rounded-2xl flex items-center justify-center ${isSubscribedCard ? 'bg-emerald-600 text-white' : (billingMonths === 6 ? 'bg-blue-600 text-white' : 'bg-blue-100 text-blue-600')}`}>
+                        <Zap className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] font-extrabold uppercase tracking-wider text-blue-600 bg-blue-100 px-2.5 py-0.5 rounded-full">Half-Yearly</span>
+                          {isSubscribedCard && (
+                            <span className="text-[10px] font-extrabold uppercase tracking-wider text-emerald-700 bg-emerald-100 border border-emerald-300 px-2.5 py-0.5 rounded-full flex items-center gap-1">
+                              <Check className="w-3 h-3 text-emerald-600" /> SUBSCRIBED / ACTIVE
+                            </span>
+                          )}
+                        </div>
+                        <h3 className="text-lg font-black text-slate-900 mt-1">BASIC PLAN</h3>
+                      </div>
+                    </div>
+
+                    <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${isSubscribedCard ? 'border-emerald-600 bg-emerald-600' : (billingMonths === 6 ? 'border-blue-600 bg-blue-600' : 'border-slate-300')}`}>
+                      {(isSubscribedCard || billingMonths === 6) && <Check className="w-3 h-3 text-white stroke-[3]" />}
+                    </div>
                   </div>
+
                   <div>
-                    <span className="text-[10px] font-extrabold uppercase tracking-wider text-blue-600 bg-blue-100 px-2.5 py-0.5 rounded-full">Half-Yearly</span>
-                    <h3 className="text-lg font-black text-slate-900 mt-0.5">BASIC PLAN</h3>
+                    <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Billing Duration: 6 Months</span>
+                    <div className="flex items-baseline gap-1 mt-1">
+                      <span className="text-3xl font-black text-slate-900">₹1</span>
+                      <span className="text-xs text-slate-400 font-medium">/ 6 months</span>
+                    </div>
+                    <p className="text-[11px] text-slate-400 mt-1">Includes all core school management modules</p>
+                  </div>
+
+                  <div className="border-t border-slate-100 pt-4 space-y-2">
+                    <p className="text-xs font-bold text-slate-700 uppercase tracking-wider">Plan Features:</p>
+                    <ul className="space-y-2 text-xs text-slate-600">
+                      {[
+                        'Unlimited Students & Staff Profiles',
+                        'Attendance, Fees & Timetable Management',
+                        'Exams, Grading & Progress Reports',
+                        'Parent Portal & In-App Notifications',
+                        'Transport & Bus GPS Tracking',
+                      ].map((feature) => (
+                        <li key={feature} className="flex items-center gap-2">
+                          <Check className="w-4 h-4 text-emerald-500 shrink-0" />
+                          <span>{feature}</span>
+                        </li>
+                      ))}
+                    </ul>
                   </div>
                 </div>
 
-                <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${billingMonths === 6 ? 'border-blue-600 bg-blue-600' : 'border-slate-300'}`}>
-                  {billingMonths === 6 && <Check className="w-3 h-3 text-white stroke-[3]" />}
-                </div>
+                {isSubscribedCard ? (
+                  <div className="mt-6 w-full py-3.5 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-2xl font-extrabold text-sm flex items-center justify-center gap-2 select-none shadow-xs">
+                    <CheckCircle className="w-5 h-5 text-emerald-600" />
+                    <span>✓ Subscribed (Current Active Plan)</span>
+                  </div>
+                ) : (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      openCheckoutWithMonths(6);
+                    }}
+                    className="mt-6 w-full py-3.5 bg-blue-600 hover:bg-blue-500 text-white rounded-2xl font-extrabold text-sm transition-all shadow-lg shadow-blue-600/30 cursor-pointer flex items-center justify-center gap-2"
+                  >
+                    <CreditCard className="w-4 h-4" />
+                    <span>{isExpired ? 'Renew Subscription (₹1)' : 'Proceed to Payment (₹1)'}</span>
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                )}
               </div>
-
-              <div>
-                <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Billing Duration: 6 Months</span>
-                <div className="flex items-baseline gap-1 mt-1">
-                  <span className="text-3xl font-black text-slate-900">₹1</span>
-                  <span className="text-xs text-slate-400 font-medium">/ 6 months</span>
-                </div>
-                <p className="text-[11px] text-slate-400 mt-1">Includes all core school management modules</p>
-              </div>
-
-              <div className="border-t border-slate-100 pt-4 space-y-2">
-                <p className="text-xs font-bold text-slate-700 uppercase tracking-wider">Plan Features:</p>
-                <ul className="space-y-2 text-xs text-slate-600">
-                  {[
-                    'Unlimited Students & Staff Profiles',
-                    'Attendance, Fees & Timetable Management',
-                    'Exams, Grading & Progress Reports',
-                    'Parent Portal & In-App Notifications',
-                    'Transport & Bus GPS Tracking',
-                  ].map((feature) => (
-                    <li key={feature} className="flex items-center gap-2">
-                      <Check className="w-4 h-4 text-emerald-500 shrink-0" />
-                      <span>{feature}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            </div>
-
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                openCheckoutWithMonths(6);
-              }}
-              className="mt-6 w-full py-3.5 bg-blue-600 hover:bg-blue-500 text-white rounded-2xl font-extrabold text-sm transition-all shadow-lg shadow-blue-600/30 cursor-pointer flex items-center justify-center gap-2"
-            >
-              <CreditCard className="w-4 h-4" />
-              <span>Proceed to Payment (₹1)</span>
-              <ChevronRight className="w-4 h-4" />
-            </button>
-          </div>
+            );
+          })()}
 
           {/* ── CARD 2: 12 MONTHS ─────────────────────────────────────────────── */}
-          <div
-            onClick={() => setBillingMonths(12)}
-            className={`bg-white border-2 rounded-3xl p-6 transition-all duration-200 flex flex-col justify-between cursor-pointer relative overflow-hidden ${
-              billingMonths === 12
-                ? 'border-blue-600 shadow-2xl bg-gradient-to-b from-blue-50/50 to-white ring-2 ring-blue-600/20'
-                : 'border-slate-200 hover:border-blue-300 shadow-md hover:shadow-lg'
-            }`}
-          >
-            <div className="space-y-4">
-              <div className="flex justify-between items-start">
-                <div className="flex items-center gap-3">
-                  <div className={`w-10 h-10 rounded-2xl flex items-center justify-center ${billingMonths === 12 ? 'bg-blue-600 text-white' : 'bg-blue-100 text-blue-600'}`}>
-                    <Zap className="w-5 h-5" />
+          {(() => {
+            const isSubscribedCard = !isExpired && (subscription?.planCode === 'BASIC_12_MONTH' || subscription?.billingCycle?.includes('12'));
+            return (
+              <div
+                onClick={() => !isSubscribedCard && setBillingMonths(12)}
+                className={`bg-white border-2 rounded-3xl p-6 transition-all duration-200 flex flex-col justify-between relative overflow-hidden ${
+                  isSubscribedCard
+                    ? 'border-emerald-500 shadow-2xl bg-gradient-to-b from-emerald-50/40 to-white ring-2 ring-emerald-500/30'
+                    : (billingMonths === 12
+                        ? 'border-blue-600 shadow-2xl bg-gradient-to-b from-blue-50/50 to-white ring-2 ring-blue-600/20 cursor-pointer'
+                        : 'border-slate-200 hover:border-blue-300 shadow-md hover:shadow-lg cursor-pointer')
+                }`}
+              >
+                <div className="space-y-4">
+                  <div className="flex justify-between items-start">
+                    <div className="flex items-center gap-3">
+                      <div className={`w-10 h-10 rounded-2xl flex items-center justify-center ${isSubscribedCard ? 'bg-emerald-600 text-white' : (billingMonths === 12 ? 'bg-blue-600 text-white' : 'bg-blue-100 text-blue-600')}`}>
+                        <Zap className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] font-extrabold uppercase tracking-wider text-emerald-700 bg-emerald-100 px-2.5 py-0.5 rounded-full">Annual Plan</span>
+                          {isSubscribedCard && (
+                            <span className="text-[10px] font-extrabold uppercase tracking-wider text-emerald-700 bg-emerald-100 border border-emerald-300 px-2.5 py-0.5 rounded-full flex items-center gap-1">
+                              <Check className="w-3 h-3 text-emerald-600" /> SUBSCRIBED / ACTIVE
+                            </span>
+                          )}
+                        </div>
+                        <h3 className="text-lg font-black text-slate-900 mt-1">BASIC PLAN</h3>
+                      </div>
+                    </div>
+
+                    <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${isSubscribedCard ? 'border-emerald-600 bg-emerald-600' : (billingMonths === 12 ? 'border-blue-600 bg-blue-600' : 'border-slate-300')}`}>
+                      {(isSubscribedCard || billingMonths === 12) && <Check className="w-3 h-3 text-white stroke-[3]" />}
+                    </div>
                   </div>
+
                   <div>
-                    <span className="text-[10px] font-extrabold uppercase tracking-wider text-emerald-700 bg-emerald-100 px-2.5 py-0.5 rounded-full">Annual Plan</span>
-                    <h3 className="text-lg font-black text-slate-900 mt-0.5">BASIC PLAN</h3>
+                    <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Billing Duration: 12 Months</span>
+                    <div className="flex items-baseline gap-2 mt-1">
+                      <span className="text-3xl font-black text-slate-900">₹2</span>
+                      <span className="text-xs text-slate-400 font-medium">/ 12 months</span>
+                    </div>
+                    <p className="text-[11px] text-slate-400 mt-1">Best value annual plan for full academic year support</p>
+                  </div>
+
+                  <div className="border-t border-slate-100 pt-4 space-y-2">
+                    <p className="text-xs font-bold text-slate-700 uppercase tracking-wider">Plan Features:</p>
+                    <ul className="space-y-2 text-xs text-slate-600">
+                      {[
+                        'Unlimited Students & Staff Profiles',
+                        'Attendance, Fees & Timetable Management',
+                        'Exams, Grading & Progress Reports',
+                        'Parent Portal & In-App Notifications',
+                        'Transport & Bus GPS Tracking',
+                      ].map((feature) => (
+                        <li key={feature} className="flex items-center gap-2">
+                          <Check className="w-4 h-4 text-emerald-500 shrink-0" />
+                          <span>{feature}</span>
+                        </li>
+                      ))}
+                    </ul>
                   </div>
                 </div>
 
-                <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${billingMonths === 12 ? 'border-blue-600 bg-blue-600' : 'border-slate-300'}`}>
-                  {billingMonths === 12 && <Check className="w-3 h-3 text-white stroke-[3]" />}
-                </div>
+                {isSubscribedCard ? (
+                  <div className="mt-6 w-full py-3.5 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-2xl font-extrabold text-sm flex items-center justify-center gap-2 select-none shadow-xs">
+                    <CheckCircle className="w-5 h-5 text-emerald-600" />
+                    <span>✓ Subscribed (Current Active Plan)</span>
+                  </div>
+                ) : (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      openCheckoutWithMonths(12);
+                    }}
+                    className="mt-6 w-full py-3.5 bg-blue-600 hover:bg-blue-500 text-white rounded-2xl font-extrabold text-sm transition-all shadow-lg shadow-blue-600/30 cursor-pointer flex items-center justify-center gap-2"
+                  >
+                    <CreditCard className="w-4 h-4" />
+                    <span>{isExpired ? 'Renew Subscription (₹2)' : 'Proceed to Payment (₹2)'}</span>
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                )}
               </div>
-
-              <div>
-                <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Billing Duration: 12 Months</span>
-                <div className="flex items-baseline gap-2 mt-1">
-                  <span className="text-3xl font-black text-slate-900">₹2</span>
-                  <span className="text-xs text-slate-400 font-medium">/ 12 months</span>
-                </div>
-                <p className="text-[11px] text-slate-400 mt-1">Best value annual plan for full academic year support</p>
-              </div>
-
-              <div className="border-t border-slate-100 pt-4 space-y-2">
-                <p className="text-xs font-bold text-slate-700 uppercase tracking-wider">Plan Features:</p>
-                <ul className="space-y-2 text-xs text-slate-600">
-                  {[
-                    'Unlimited Students & Staff Profiles',
-                    'Attendance, Fees & Timetable Management',
-                    'Exams, Grading & Progress Reports',
-                    'Parent Portal & In-App Notifications',
-                    'Transport & Bus GPS Tracking',
-                  ].map((feature) => (
-                    <li key={feature} className="flex items-center gap-2">
-                      <Check className="w-4 h-4 text-emerald-500 shrink-0" />
-                      <span>{feature}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            </div>
-
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                openCheckoutWithMonths(12);
-              }}
-              className="mt-6 w-full py-3.5 bg-blue-600 hover:bg-blue-500 text-white rounded-2xl font-extrabold text-sm transition-all shadow-lg shadow-blue-600/30 cursor-pointer flex items-center justify-center gap-2"
-            >
-              <CreditCard className="w-4 h-4" />
-              <span>Proceed to Payment (₹2)</span>
-              <ChevronRight className="w-4 h-4" />
-            </button>
-          </div>
+            );
+          })()}
         </div>
       </div>
 
@@ -543,14 +665,101 @@ export default function SubscriptionPage() {
               </div>
             </div>
 
+            {/* ── Coupon Code Section ────────────────────────────────────────────── */}
+            <div className="space-y-2 pt-1 border-t border-slate-800/80">
+              <div className="flex items-center justify-between text-xs font-bold text-slate-400 uppercase tracking-wider">
+                <span>Apply Coupon Code</span>
+                <span className="text-[10px] text-blue-400 font-normal normal-case">Codes: EDU10, EDU50, WELCOME</span>
+              </div>
+
+              {appliedCoupon ? (
+                <div className="flex items-center justify-between bg-emerald-500/10 border border-emerald-500/30 rounded-2xl px-3.5 py-2.5 text-xs">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-7 h-7 bg-emerald-500/20 text-emerald-400 rounded-xl flex items-center justify-center shrink-0">
+                      <Tag className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-extrabold text-emerald-300 font-mono tracking-wider">{appliedCoupon.code}</span>
+                        <span className="text-[10px] font-bold uppercase bg-emerald-500/20 text-emerald-300 px-1.5 py-0.5 rounded">
+                          {appliedCoupon.discountPercent}% OFF
+                        </span>
+                      </div>
+                      <p className="text-[10px] text-slate-400">{appliedCoupon.description}</p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleRemoveCoupon}
+                    className="text-xs font-bold text-slate-400 hover:text-rose-400 bg-slate-800 hover:bg-slate-700 px-2.5 py-1 rounded-lg transition-colors cursor-pointer"
+                  >
+                    Remove
+                  </button>
+                </div>
+              ) : (
+                <div className="flex gap-2">
+                  <div className="relative flex-1">
+                    <Tag className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
+                    <input
+                      type="text"
+                      value={couponCode}
+                      onChange={(e) => {
+                        setCouponCode(e.target.value.toUpperCase());
+                        setCouponError('');
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          handleApplyCoupon();
+                        }
+                      }}
+                      placeholder="ENTER COUPON CODE"
+                      className="w-full bg-slate-950 border border-slate-700 focus:border-blue-500 rounded-2xl pl-9 pr-3 py-2.5 text-xs text-white uppercase font-mono placeholder:text-slate-500 outline-none transition-all shadow-inner"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleApplyCoupon}
+                    className="px-4 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-2xl text-xs font-bold transition-all shadow-md shadow-blue-600/20 cursor-pointer active:scale-95 shrink-0"
+                  >
+                    Apply
+                  </button>
+                </div>
+              )}
+
+              {couponError && (
+                <p className="text-[11px] text-rose-400 font-medium flex items-center gap-1.5 mt-1">
+                  <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                  <span>{couponError}</span>
+                </p>
+              )}
+
+              {couponSuccess && !appliedCoupon && (
+                <p className="text-[11px] text-emerald-400 font-medium flex items-center gap-1.5 mt-1">
+                  <CheckCircle className="w-3.5 h-3.5 shrink-0" />
+                  <span>{couponSuccess}</span>
+                </p>
+              )}
+            </div>
+
             <div className="bg-slate-950 border border-slate-800 rounded-2xl p-4 space-y-2 text-xs font-mono">
               <div className="flex justify-between text-slate-400">
                 <span>Plan Duration:</span>
                 <span>{billingMonths} Months</span>
               </div>
+              <div className="flex justify-between text-slate-400">
+                <span>Base Price:</span>
+                <span>₹{basePrice} INR</span>
+              </div>
+              {appliedCoupon && (
+                <div className="flex justify-between text-emerald-400 font-bold">
+                  <span>Discount ({appliedCoupon.code}):</span>
+                  <span>-₹{discountAmount} INR ({appliedCoupon.discountPercent}% OFF)</span>
+                </div>
+              )}
               <div className="border-t border-slate-800 pt-2 flex justify-between text-sm font-bold text-white">
                 <span>Total Amount Due:</span>
-                <span className="text-emerald-400">₹{basePrice} INR</span>
+                <span className="text-emerald-400">₹{finalPrice} INR</span>
               </div>
             </div>
 
@@ -583,7 +792,7 @@ export default function SubscriptionPage() {
                 {paymentProcessing ? (
                   <><RefreshCw className="w-4 h-4 animate-spin" /> Processing...</>
                 ) : (
-                  <><CreditCard className="w-4 h-4" /> Proceed to Payment (₹{basePrice})</>
+                  <><CreditCard className="w-4 h-4" /> Proceed to Payment (₹{finalPrice})</>
                 )}
               </button>
             </div>

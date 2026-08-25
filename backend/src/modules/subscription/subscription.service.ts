@@ -46,19 +46,35 @@ export class SubscriptionService {
 
     if (this.db && tenantId) {
       try {
-        const doc = await this.db.collection('tenants').doc(tenantId).collection('subscription').doc('current').get();
-        if (doc.exists) {
-          subData = doc.data();
+        const tenantDoc = await this.db.collection('tenants').doc(tenantId).collection('subscription').doc('current').get();
+        const rootDoc = await this.db.collection('subscriptions').doc(tenantId).get();
+
+        const tenantData = tenantDoc.exists ? tenantDoc.data() : null;
+        const rootData = rootDoc.exists ? rootDoc.data() : null;
+
+        if (tenantData && rootData) {
+          // Compare updatedAt or expiryDate to use the latest edited record
+          const tenantExpiry = tenantData.expiryDate || '';
+          const rootExpiry = rootData.expiryDate || '';
+
+          if (rootExpiry !== tenantExpiry) {
+            // Root document was edited in Firebase Console! Prefer root data & sync to tenant subcollection
+            subData = rootData;
+            await this.db.collection('tenants').doc(tenantId).collection('subscription').doc('current').set(rootData, { merge: true }).catch(() => null);
+          } else {
+            subData = tenantData;
+          }
         } else {
-          const rootDoc = await this.db.collection('subscriptions').doc(tenantId).get();
-          if (rootDoc.exists) subData = rootDoc.data();
+          subData = tenantData || rootData;
         }
       } catch (err) {}
     }
 
     if (!subData) {
-      // Default active subscription fallback for new/active tenants
-      const expiry = new Date(Date.now() + 180 * 24 * 60 * 60 * 1000).toISOString();
+      // Default active subscription fallback for new/active tenants (6 months duration)
+      const startDate = new Date();
+      const expiryDate = new Date();
+      expiryDate.setMonth(expiryDate.getMonth() + 6);
       subData = {
         tenantId,
         plan: 'BASIC',
@@ -67,24 +83,59 @@ export class SubscriptionService {
         billingCycle: '6 Months',
         amount: 1,
         status: 'ACTIVE',
-        startDate: new Date().toISOString(),
-        expiryDate: expiry,
+        startDate: startDate.toISOString(),
+        expiryDate: expiryDate.toISOString(),
+        gracePeriod: 14,
       };
     }
 
-    const expiryTime = new Date(subData.expiryDate || Date.now() + 180 * 24 * 60 * 60 * 1000).getTime();
-    const daysRemaining = Math.max(0, Math.ceil((expiryTime - Date.now()) / (1000 * 60 * 60 * 24)));
-    const isExpired = daysRemaining === 0 && subData.status !== 'ACTIVE';
+    const now = Date.now();
+    const expDate = subData.expiryDate ? new Date(subData.expiryDate) : new Date(now + 180 * 24 * 60 * 60 * 1000);
+    const expiryTime = expDate.getTime();
+    const warningPeriodDays = 4; // 3-4 day warning window per prompt specification
+
+    const msPerDay = 1000 * 60 * 60 * 24;
+    const daysRemaining = Math.ceil((expiryTime - now) / msPerDay);
+
+    let status: 'ACTIVE' | 'EXPIRING_SOON' | 'EXPIRED' = 'ACTIVE';
+    let isSubscriptionActive = true;
+
+    if (now >= expiryTime) {
+      status = 'EXPIRED';
+      isSubscriptionActive = false;
+
+      // Sync EXPIRED status back to Firestore if not already marked EXPIRED
+      if (this.db && subData.status !== 'EXPIRED') {
+        const expiredUpdate = { status: 'EXPIRED', updatedAt: new Date().toISOString() };
+        this.db.collection('tenants').doc(tenantId).collection('subscription').doc('current').set(expiredUpdate, { merge: true }).catch(() => null);
+        this.db.collection('subscriptions').doc(tenantId).set(expiredUpdate, { merge: true }).catch(() => null);
+      }
+    } else if (daysRemaining <= warningPeriodDays && daysRemaining > 0) {
+      status = 'EXPIRING_SOON';
+      isSubscriptionActive = true;
+    } else {
+      status = 'ACTIVE';
+      isSubscriptionActive = true;
+    }
 
     return {
+      tenantId,
       plan: subData.plan || 'BASIC',
       planCode: subData.planCode || 'BASIC_6_MONTH',
       planName: subData.planName || 'EduTrack Basic – 6 Months',
       billingCycle: subData.billingCycle || '6 Months',
       amount: subData.amount || 1,
-      status: isExpired ? 'EXPIRED' : (subData.status || 'ACTIVE'),
+      status,
+      storedStatus: subData.status || 'ACTIVE',
+      startDate: subData.startDate,
       expiryDate: subData.expiryDate,
-      daysRemaining,
+      daysRemaining: status === 'EXPIRED' ? 0 : Math.max(0, daysRemaining),
+      rawDaysRemaining: daysRemaining,
+      warningPeriodDays,
+      isExpiringSoon: status === 'EXPIRING_SOON',
+      isGracePeriod: false,
+      isExpired: status === 'EXPIRED',
+      isSubscriptionActive,
       features: [
         'Unlimited Students & Staff Profiles',
         'Attendance, Fees & Timetable Management',

@@ -197,9 +197,26 @@ export class PaymentService {
       }
     }
 
-    // Calculate activation & expiry dates
+    // Calculate activation & expiry dates (Extend if active, or fresh from now if expired)
     const startDate = new Date();
-    const expiryDate = new Date();
+    let baseDate = new Date();
+
+    if (this.db) {
+      try {
+        const existingSubDoc = await this.db.collection('tenants').doc(tenantId).collection('subscription').doc('current').get();
+        if (existingSubDoc.exists) {
+          const exData = existingSubDoc.data();
+          if (exData?.expiryDate) {
+            const currentExpiry = new Date(exData.expiryDate);
+            if (currentExpiry.getTime() > Date.now()) {
+              baseDate = currentExpiry;
+            }
+          }
+        }
+      } catch (err) {}
+    }
+
+    const expiryDate = new Date(baseDate);
     expiryDate.setMonth(expiryDate.getMonth() + selectedPlan.months);
 
     const subscriptionData = {
@@ -211,6 +228,7 @@ export class PaymentService {
       billingCycle: `${selectedPlan.months} Months`,
       durationMonths: selectedPlan.months,
       status: 'ACTIVE',
+      gracePeriod: 14,
       startDate: startDate.toISOString(),
       expiryDate: expiryDate.toISOString(),
       lastPaymentId: razorpayPaymentId,

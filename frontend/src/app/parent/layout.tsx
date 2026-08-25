@@ -81,7 +81,37 @@ function ParentLayoutContent({ children }: { children: React.ReactNode }) {
 
   const allParentHrefs = navigationItems.map(item => item.href);
 
-
+  if (!isSubscriptionActive) {
+    return (
+      <div className="fixed inset-0 bg-[#0F172A] flex flex-col items-center justify-center text-white z-[99999] px-6 select-none">
+        <div className="max-w-md w-full bg-slate-900 border border-slate-800 rounded-3xl p-8 text-center shadow-2xl relative overflow-hidden">
+          <div className="w-16 h-16 bg-amber-500/10 border border-amber-500/30 rounded-2xl flex items-center justify-center mx-auto mb-6 text-amber-400">
+            <AlertTriangle className="w-8 h-8" />
+          </div>
+          <h2 className="text-xl font-bold text-slate-100 font-sans tracking-wide">Application Under Maintenance</h2>
+          <p className="text-sm text-slate-400 mt-3 leading-relaxed">
+            The school application is currently unavailable because the school&apos;s subscription has expired.
+          </p>
+          <p className="text-sm text-slate-400 mt-2 leading-relaxed">
+            For further information, please contact the School Administrator.
+          </p>
+          <div className="mt-8 flex gap-3">
+            <button
+              onClick={handleLogout}
+              className="w-full flex items-center justify-center gap-2 px-4 py-3 text-sm font-semibold text-slate-300 bg-slate-800 hover:bg-slate-700 rounded-2xl transition-all shadow-md cursor-pointer"
+            >
+              Sign Out
+            </button>
+          </div>
+          <div className="mt-6 pt-3 border-t border-slate-800 text-center">
+            <p className="text-[10px] text-slate-500 font-bold tracking-wider uppercase">
+              Powered by Covenant Synergy Pvt Ltd
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 flex font-sans select-none overflow-x-hidden relative pb-16 lg:pb-0">
@@ -453,18 +483,20 @@ function ParentLayoutContent({ children }: { children: React.ReactNode }) {
             </button>
             
             {/* Warning Visual Shield */}
-            <div className="w-16 h-16 bg-blue-500/10 border border-blue-500/20 rounded-2xl flex items-center justify-center mx-auto mb-6 text-[#2E5BFF]">
-              <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
-                <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-                <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+            <div className="w-16 h-16 bg-amber-500/10 border border-amber-500/20 rounded-2xl flex items-center justify-center mx-auto mb-6 text-amber-500">
+              <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
               </svg>
             </div>
 
             <h2 className="text-2xl font-black text-slate-800 tracking-tight font-sans">
-              Subscription Required
+              Application Under Maintenance
             </h2>
             <p className="text-sm text-slate-500 mt-3 leading-relaxed">
-              Your school's subscription has expired or there is no active subscription. Please notify your School Administrator to complete renewal payments and unlock your portal access.
+              The school application is currently unavailable because the school&apos;s subscription has expired.
+            </p>
+            <p className="text-sm text-slate-500 mt-2 leading-relaxed">
+              For further information, please contact the School Administrator.
             </p>
 
             <div className="mt-8 flex flex-col gap-3">
@@ -472,15 +504,14 @@ function ParentLayoutContent({ children }: { children: React.ReactNode }) {
                 onClick={() => setShowLockPopup(false)}
                 className="w-full flex items-center justify-center gap-2 px-5 py-3.5 text-sm font-bold text-slate-700 bg-slate-100 hover:bg-slate-200/80 rounded-2xl transition-all cursor-pointer"
               >
-                Close Dialog
+                Close
               </button>
+            </div>
 
-              <a
-                href="mailto:support@edutrack.com"
-                className="w-full flex items-center justify-center gap-2 px-5 py-3.5 text-sm font-bold text-slate-500 hover:text-slate-600 transition-all cursor-pointer text-center"
-              >
-                Contact Support
-              </a>
+            <div className="mt-5 pt-3.5 border-t border-slate-100 text-center">
+              <p className="text-[10px] text-slate-400 font-bold tracking-wider uppercase">
+                Powered by Covenant Synergy Pvt Ltd
+              </p>
             </div>
           </div>
         </div>
