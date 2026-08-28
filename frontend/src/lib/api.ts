@@ -132,10 +132,18 @@ const inFlightRequests = new Map<string, Promise<any>>();
 api.interceptors.request.use(
   (config) => {
     if (typeof window !== 'undefined') {
-      const url = config.url || '';
-      const isPublicRegistration = url.includes('/tenant/register') || url.includes('/tenant/public-branding') || url.includes('/auth/');
+      const url = (config.url || '').toLowerCase();
+      const isPublicRegistration = url.includes('/tenant/register') || url.includes('/tenant/public-branding') || url.includes('/auth/') || url.includes('register');
       
-      if (!isPublicRegistration) {
+      if (isPublicRegistration) {
+        if (config.headers) {
+          delete config.headers.Authorization;
+          delete config.headers.authorization;
+          delete config.headers['Authorization'];
+          delete config.headers['X-Tenant-ID'];
+          delete config.headers['x-tenant-id'];
+        }
+      } else {
         const token = getStoredToken();
         if (token) {
           config.headers.Authorization = `Bearer ${token}`;

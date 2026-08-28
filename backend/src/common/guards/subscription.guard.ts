@@ -18,6 +18,8 @@ export class SubscriptionGuard implements CanActivate {
       return true;
     }
 
+    const handlerName = (context.getHandler()?.name || '').toLowerCase();
+    const className = (context.getClass()?.name || '').toLowerCase();
     const request = context.switchToHttp().getRequest();
     const rawUrl = [
       request.route?.path,
@@ -25,17 +27,21 @@ export class SubscriptionGuard implements CanActivate {
       request.url,
       request.originalUrl,
       request.baseUrl,
+      handlerName,
+      className,
     ].filter(Boolean).join(' ').toLowerCase();
 
     // Registration, Auth, Payment, Public Branding, and Tenant creation routes must NEVER be blocked by subscription checks
     if (
       rawUrl.includes('register') ||
+      rawUrl.includes('publicbranding') ||
       rawUrl.includes('public-branding') ||
+      rawUrl.includes('setupstatus') ||
       rawUrl.includes('setup-status') ||
       rawUrl.includes('subscription') ||
       rawUrl.includes('payment') ||
       rawUrl.includes('auth') ||
-      rawUrl.includes('tenant')
+      rawUrl.includes('tenantcontroller')
     ) {
       return true;
     }
