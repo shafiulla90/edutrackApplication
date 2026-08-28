@@ -1217,7 +1217,7 @@ export default function DashboardLayout({
               </div>
               <div className="flex justify-between">
                 <span className="text-slate-500 font-medium">Billing Cycle:</span>
-                <span className="font-bold text-slate-800">{subscription?.billingCycle || '6 Months'}</span>
+                <span className="font-bold text-slate-800">{subscription?.billingCycle || '1 Month Free Trial'}</span>
               </div>
             </div>
 

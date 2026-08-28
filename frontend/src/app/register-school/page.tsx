@@ -65,27 +65,37 @@ function RegisterSchoolContent() {
 
     setLoading(true);
     try {
-      const response = await api.post('/tenant/register', formData);
+      // Clear any stale local tokens before registering a new institution
+      localStorage.removeItem('admin_token');
+      localStorage.removeItem('token');
+      localStorage.removeItem('admin_tenantId');
+      localStorage.removeItem('tenantId');
+      sessionStorage.clear();
+
+      const response = await api.post('/tenant/register', formData, {
+        headers: { Authorization: '' },
+      });
       const data = response.data;
       
       if (data.success && data.access_token) {
-        // Store JWT token and new Tenant ID in local storage under admin namespace
+        // Store new JWT token and Tenant ID in local storage
         localStorage.setItem('admin_token', data.access_token);
+        localStorage.setItem('token', data.access_token);
         localStorage.setItem('admin_tenantId', data.user.tenantId);
+        localStorage.setItem('tenantId', data.user.tenantId);
         if (data.user.phone) {
           localStorage.setItem('admin_userPhone', data.user.phone);
         }
         sessionStorage.setItem('active_role', 'SCHOOL_ADMIN');
 
-        // Fetch tenant details immediately to verify branding is ready
         try {
           await refresh();
         } catch (err) {
           console.error('Failed to pre-fetch school profile on registration:', err);
         }
 
-        // Redirect directly to the ERP dashboard
-        router.push('/dashboard');
+        // Direct navigation to open dashboard cleanly without errors
+        window.location.href = '/dashboard';
       } else {
         setError('Registration succeeded but login session was not returned.');
       }

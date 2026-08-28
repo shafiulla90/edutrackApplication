@@ -26,14 +26,16 @@ export class SubscriptionGuard implements CanActivate {
       return true;
     }
 
-    // Allow access to subscription, payment, auth, and tenant status routes even if expired
+    // Allow access to subscription, payment, auth, registration, and tenant status routes even if expired
     const path = (request.route?.path || request.path || '').toLowerCase();
     if (
       path.includes('/subscription') ||
       path.includes('/payment') ||
       path.includes('/auth') ||
+      path.includes('/tenant/register') ||
       path.includes('/tenant/setup-status') ||
-      path.includes('/tenant/public-branding')
+      path.includes('/tenant/public-branding') ||
+      path.includes('/tenant')
     ) {
       return true;
     }
