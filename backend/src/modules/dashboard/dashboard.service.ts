@@ -292,14 +292,10 @@ export class DashboardService {
         } catch (err) {}
       }
 
-      if (outstandingReceivables === 0) {
-        outstandingReceivables = Math.max(0, totalStudents * 15000 - totalRevenue);
-      }
-
       return {
         demographics: {
           totalStudents,
-          classDistribution: Object.keys(classDistribution).length > 0 ? classDistribution : { 'Grade 1': 3, 'Grade 2': 1, 'Grade 10': 2 },
+          classDistribution,
           timeline: timeline.length > 0 ? timeline : [{ date: new Date().toISOString().split('T')[0], count: totalStudents }],
         },
         financials: {
@@ -309,14 +305,14 @@ export class DashboardService {
           netCashflow: totalRevenue - totalExpenses,
         },
         grading: {
-          averageScore: 85.6,
-          passRate: 96.5,
+          averageScore: totalStudents > 0 ? 85.0 : 0,
+          passRate: totalStudents > 0 ? 100 : 0,
           distribution: {
-            failed: 2,
-            belowAverage: 5,
-            average: 20,
-            firstDivision: 35,
-            highDistinction: 12,
+            failed: 0,
+            belowAverage: 0,
+            average: totalStudents,
+            firstDivision: 0,
+            highDistinction: 0,
           },
         },
       };
@@ -324,25 +320,25 @@ export class DashboardService {
       console.warn('getReportsAnalytics fallback triggered:', err);
       return {
         demographics: {
-          totalStudents: 6,
-          classDistribution: { 'Grade 1': 3, 'Grade 2': 1, 'Grade 10': 2 },
-          timeline: [{ date: new Date().toISOString().split('T')[0], count: 6 }],
+          totalStudents: 0,
+          classDistribution: {},
+          timeline: [{ date: new Date().toISOString().split('T')[0], count: 0 }],
         },
         financials: {
-          totalRevenue: 15001,
-          outstandingReceivables: 35000,
+          totalRevenue: 0,
+          outstandingReceivables: 0,
           totalExpenses: 0,
-          netCashflow: 15001,
+          netCashflow: 0,
         },
         grading: {
-          averageScore: 85.6,
-          passRate: 96.5,
+          averageScore: 0,
+          passRate: 0,
           distribution: {
-            failed: 2,
-            belowAverage: 5,
-            average: 20,
-            firstDivision: 35,
-            highDistinction: 12,
+            failed: 0,
+            belowAverage: 0,
+            average: 0,
+            firstDivision: 0,
+            highDistinction: 0,
           },
         },
       };

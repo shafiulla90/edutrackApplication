@@ -67,10 +67,7 @@ export class FirestoreStudentRepository implements IStudentRepository {
     if (!tenantId) throw new Error('tenantId is required');
     const tid = tenantId;
     
-    let snap = await this.db.collection('studentProfiles').where('tenantId', '==', tid).get().catch(() => null);
-    if (!snap || snap.empty) {
-      snap = await this.db.collection('studentProfiles').get().catch(() => null);
-    }
+    const snap = await this.db.collection('studentProfiles').where('tenantId', '==', tid).get().catch(() => null);
     if (!snap || snap.empty) return { items: [], data: [], total: 0 };
 
 
@@ -254,10 +251,7 @@ export class FirestoreStudentRepository implements IStudentRepository {
       }
     }
 
-    let snap = await this.db.collection('studentProfiles').where('tenantId', '==', tid).get().catch(() => null);
-    if (!snap || snap.empty) {
-      snap = await this.db.collection('studentProfiles').get().catch(() => null);
-    }
+    const snap = await this.db.collection('studentProfiles').where('tenantId', '==', tid).get().catch(() => null);
     if (!snap || snap.empty) return [];
 
     const normTargetPhone = (phone || parentIdentifier || '').replace(/\D/g, '').slice(-10);

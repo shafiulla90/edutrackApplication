@@ -3,7 +3,7 @@
 import React, { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { School, User, Mail, MapPin, Calendar, Loader2, AlertCircle } from 'lucide-react';
-import { api } from '@/lib/api';
+import { api, clearStoredAuth } from '@/lib/api';
 import { useTenant } from '../providers/TenantContext';
 
 function RegisterSchoolContent() {
@@ -29,6 +29,8 @@ function RegisterSchoolContent() {
 
   // Keep phone prefilled if it changes in URL query
   useEffect(() => {
+    // Purge any old tokens from previous sessions when landing on school registration
+    clearStoredAuth();
     if (phone) {
       setFormData((prev) => ({ ...prev, mobileNumber: phone }));
     } else {

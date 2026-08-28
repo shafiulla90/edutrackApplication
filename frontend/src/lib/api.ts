@@ -59,20 +59,17 @@ export function getStoredUserPhone(): string | null {
 
 export function clearStoredAuth() {
   if (typeof window === 'undefined') return;
-  const role = getActiveRole();
-  if (role === 'PARENT') {
-    localStorage.removeItem('parent_token');
-    localStorage.removeItem('parent_tenantId');
-    localStorage.removeItem('parent_userPhone');
-  } else if (role === 'TEACHER' || role === 'DRIVER') {
-    localStorage.removeItem('teacher_token');
-    localStorage.removeItem('teacher_tenantId');
-    localStorage.removeItem('teacher_userPhone');
-  } else {
-    localStorage.removeItem('admin_token');
-    localStorage.removeItem('admin_tenantId');
-    localStorage.removeItem('admin_userPhone');
-  }
+  localStorage.removeItem('admin_token');
+  localStorage.removeItem('admin_tenantId');
+  localStorage.removeItem('admin_userPhone');
+  localStorage.removeItem('teacher_token');
+  localStorage.removeItem('teacher_tenantId');
+  localStorage.removeItem('teacher_userPhone');
+  localStorage.removeItem('parent_token');
+  localStorage.removeItem('parent_tenantId');
+  localStorage.removeItem('parent_userPhone');
+  localStorage.removeItem('token');
+  localStorage.removeItem('tenantId');
   sessionStorage.removeItem('active_role');
   sessionStorage.removeItem('dismissed_admin_expiry_warning');
 }
