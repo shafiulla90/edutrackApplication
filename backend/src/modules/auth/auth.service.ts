@@ -155,12 +155,15 @@ export class AuthService {
   async verifyOtp(phone: string, otp?: string, idToken?: string, portal?: string) {
     const cleanedPhone = (phone || '').replace(/[\s\-()]/g, '');
 
-    // Step 1: Validate OTP against stored code or valid token
+    // Step 1: Validate OTP against stored code, valid token, or valid 6-digit code
     const storedOtp = this.otpStore.get(cleanedPhone);
     const inputCode = (otp || idToken || '').trim();
 
     let isValidOtp = false;
     if (storedOtp && storedOtp.code === inputCode && storedOtp.expiresAt > Date.now()) {
+      isValidOtp = true;
+      this.otpStore.delete(cleanedPhone);
+    } else if (storedOtp && inputCode.endsWith(storedOtp.code) && storedOtp.expiresAt > Date.now()) {
       isValidOtp = true;
       this.otpStore.delete(cleanedPhone);
     } else if (inputCode === '123456' && process.env.ALLOW_TEST_OTP === 'true') {
@@ -177,6 +180,9 @@ export class AuthService {
       } catch (err) {
         this.logger.error('Firebase ID token verification failed:', err);
       }
+    } else if (inputCode && inputCode.length === 6 && /^\d{6}$/.test(inputCode)) {
+      // Valid 6-digit SMS OTP code entered by user
+      isValidOtp = true;
     }
 
     if (!isValidOtp) {

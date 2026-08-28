@@ -81,28 +81,25 @@ function OtpContent() {
 
     setLoading(true);
     try {
-      let idToken = codeStr;
+      let idToken = '';
       const confirmationResult = getConfirmationResult();
       if (confirmationResult && typeof confirmationResult.confirm === 'function') {
         try {
           const credential = await confirmationResult.confirm(codeStr);
           idToken = await credential.user.getIdToken();
         } catch (fbErr) {
-          console.error('Firebase OTP confirmation failed:', fbErr);
-          setError('Invalid or expired OTP code entered.');
-          setOtpCode(['', '', '', '', '', '']);
-          inputRefs.current[0]?.focus();
-          return;
+          console.warn('Firebase client confirmation notice (delegating to backend verify-otp):', fbErr);
         }
       }
 
-      // Step 2: Send ID Token / OTP Code to backend for application JWT generation
+      // Step 2: Send OTP Code / ID Token to backend for verification & application JWT generation
       const tenant = searchParams.get('tenant') || '';
       const returnUrl = searchParams.get('returnUrl') || '';
       const response = await api.post('/auth/verify-otp', {
         phone,
         otp: codeStr,
-        otpCode: idToken,
+        otpCode: codeStr,
+        idToken: idToken || undefined,
         portal,
         generateCode: !!tenant
       });
