@@ -450,6 +450,7 @@ export default function TeacherClassManagement() {
   const [classNamesInput, setClassNamesInput] = useState([{ id: 1, name: '' }]);
   const [existingClasses, setExistingClasses] = useState<any[]>([]);
   const [newSectionName, setNewSectionName] = useState('');
+  const [sectionNamesInput, setSectionNamesInput] = useState([{ id: 1, name: '' }]);
 
   // ── DELETE CONFIRMATION STATE ──
   const [deleteConfirm, setDeleteConfirm] = useState<{
@@ -1407,16 +1408,32 @@ export default function TeacherClassManagement() {
   }
 
   const handleSaveSection = async () => {
-    if (!newSectionName.trim()) return;
+    const valid = sectionNamesInput.filter(s => s.name.trim());
+    if (valid.length === 0 && !newSectionName.trim()) {
+      showToast('Please enter at least one section name.', 'error');
+      return;
+    }
+    const namesToSave = valid.map(s => s.name.trim());
+    if (newSectionName.trim() && !namesToSave.includes(newSectionName.trim())) {
+      namesToSave.push(newSectionName.trim());
+    }
+
     try {
       setIsLoading(true);
-      await api.post('/timetable/sections', { name: newSectionName.trim() });
-      showToast(`Section "${newSectionName}" created successfully.`, 'success');
+      for (const name of namesToSave) {
+        await api.post('/timetable/sections', { name });
+      }
+      showToast(`${namesToSave.length > 1 ? 'Sections' : 'Section'} created successfully.`, 'success');
       setShowCreateSection(false);
+      setSectionNamesInput([{ id: 1, name: '' }]);
       setNewSectionName('');
       await loadWorkloadDashboard();
+      try {
+        const secRes = await api.get('/timetable/sections');
+        setAvailableSections(secRes.data || []);
+      } catch (e) {}
     } catch (err: any) {
-      console.error('Error creating section:', err);
+      console.error('Error creating sections:', err);
       showToast(err.response?.data?.message || 'Failed to save section.', 'error');
     } finally {
       setIsLoading(false);
@@ -1753,7 +1770,7 @@ export default function TeacherClassManagement() {
                 <button onClick={() => setShowCreateClass(true)} className="action-pill action-pill-primary">
                   <Grid3X3 className="w-3.5 h-3.5 stroke-[2.5]" /> Create Class
                 </button>
-                <button onClick={() => setShowCreateSection(true)} className="action-pill action-pill-primary">
+                <button onClick={() => { setSectionNamesInput([{ id: 1, name: '' }]); setNewSectionName(''); setShowCreateSection(true); }} className="action-pill action-pill-primary">
                   <Layers className="w-3.5 h-3.5 stroke-[2.5]" /> Create Section
                 </button>
                 <button onClick={() => setIsManageTypesOpen(true)} className="action-pill action-pill-primary">
@@ -3628,17 +3645,41 @@ export default function TeacherClassManagement() {
               </div>
             )}
 
-            <div className="mb-4">
+            <div className="space-y-2 mb-4">
               <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Add New Section</h4>
-              <input
-                value={newSectionName}
-                onChange={e => setNewSectionName(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-xs outline-none focus:border-blue-500"
-                placeholder="e.g. Section D"
-              />
+              {sectionNamesInput.map((entry, idx) => (
+                <div key={entry.id} className="flex gap-2 items-center">
+                  <input
+                    value={entry.name}
+                    onChange={e => {
+                      const arr = [...sectionNamesInput];
+                      arr[idx] = { ...arr[idx], name: e.target.value };
+                      setSectionNamesInput(arr);
+                    }}
+                    className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-xs outline-none focus:border-blue-500"
+                    placeholder={`e.g. Section ${String.fromCharCode(65 + idx)}`}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setSectionNamesInput([...sectionNamesInput, { id: Date.now() + idx, name: '' }])}
+                    className="w-9 h-9 rounded-xl bg-blue-100 text-blue-600 flex items-center justify-center font-bold hover:bg-blue-200 shrink-0 cursor-pointer"
+                    title="Add another section field"
+                  >+</button>
+                  {sectionNamesInput.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => setSectionNamesInput(sectionNamesInput.filter((_, i) => i !== idx))}
+                      className="w-9 h-9 rounded-xl bg-red-50 text-red-500 flex items-center justify-center hover:bg-red-100 shrink-0 cursor-pointer"
+                      title="Remove section field"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
+              ))}
             </div>
             <button onClick={handleSaveSection} className="w-full py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs">
-              Save Section
+              ✓ Save Sections
             </button>
           </div>
         </>
