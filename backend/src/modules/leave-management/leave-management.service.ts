@@ -21,7 +21,15 @@ export class LeaveManagementService {
     const leavesRef = this.db.collection('tenants').doc(tid).collection('leaveRequests');
     const snap = await leavesRef.get();
 
-    let items: any[] = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    let items: any[] = snap.docs
+      .map(doc => ({ id: doc.id, ...doc.data() }))
+      .filter((item: any) => {
+        if (item.id && (item.id.startsWith('leave-seed-') || item.id.includes('seed'))) return false;
+        if (item.teacherId === 'staff-001' || item.teacherId === 'staff-002') return false;
+        const applicantName = item.teacher?.user?.name || item.student?.user?.name || item.applicantName || item.name || '';
+        if (['Sarah Jenkins', 'John Smith', 'Mohamd huzaifa', 'QA Final Student', 'Student 1'].includes(applicantName)) return false;
+        return true;
+      });
 
     // Status filter
     if (query.status && query.status !== 'ALL') {
@@ -97,7 +105,15 @@ export class LeaveManagementService {
   async getLeaveStats(tenantId: string) {
     const tid = this.validateTenant(tenantId);
     const snap = await this.db.collection('tenants').doc(tid).collection('leaveRequests').get();
-    const items = snap.docs.map(doc => doc.data());
+    const items = snap.docs
+      .map(doc => doc.data())
+      .filter((item: any) => {
+        if (item.id && (item.id.startsWith('leave-seed-') || item.id.includes('seed'))) return false;
+        if (item.teacherId === 'staff-001' || item.teacherId === 'staff-002') return false;
+        const applicantName = item.teacher?.user?.name || item.student?.user?.name || item.applicantName || item.name || '';
+        if (['Sarah Jenkins', 'John Smith', 'Mohamd huzaifa', 'QA Final Student', 'Student 1'].includes(applicantName)) return false;
+        return true;
+      });
 
     const todayStr = new Date().toISOString().split('T')[0];
     const currentMonthStr = todayStr.substring(0, 7);

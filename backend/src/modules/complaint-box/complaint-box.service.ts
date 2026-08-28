@@ -382,21 +382,19 @@ export class ComplaintBoxService {
     if (!tid) return null;
     if (!this.db) return [];
 
-    await this.seedInitialBehaviorCasesIfEmpty(tid);
-
     try {
       const snap = await this.db.collection('tenants').doc(tid).collection('behaviorCases').get();
       const list: any[] = [];
 
       for (const doc of snap.docs) {
         const d = doc.data();
+        if (doc.id.startsWith('case-seed-') || doc.id.includes('seed')) continue;
         const studentObj = d.student || (d.studentId ? await this.resolveStudentObject(d.studentId, tid) : null);
 
         list.push({
           id: doc.id,
           ...d,
           student: studentObj || { user: { name: d.studentName || 'Student' } },
-          teacher: { user: { name: 'Sarah Jenkins (Admin)' } }
         });
       }
 
@@ -420,11 +418,11 @@ export class ComplaintBoxService {
 
       for (const doc of snap.docs) {
         const d = doc.data();
+        if (doc.id.startsWith('case-seed-') || doc.id.includes('seed')) continue;
         list.push({
           id: doc.id,
           ...d,
           student: d.student || studentObj || { user: { name: d.studentName || 'Student' } },
-          teacher: { user: { name: 'Sarah Jenkins (Admin)' } }
         });
       }
 
@@ -437,10 +435,10 @@ export class ComplaintBoxService {
 
   async getStudentStats(studentId: string, tenantId?: string) {
     const cases = await this.getStudentCases(studentId, undefined, tenantId);
-    const totalCases = cases.length;
-    const complaintCount = cases.filter(c => c.behaviorType === 'Complaint').length;
-    const praiseCount = cases.filter(c => c.behaviorType === 'Praise').length;
-    const resolvedCount = cases.filter(c => c.status === 'RESOLVED' || c.status === 'Closed').length;
+    const totalCases = cases ? cases.length : 0;
+    const complaintCount = cases ? cases.filter(c => c.behaviorType === 'Complaint').length : 0;
+    const praiseCount = cases ? cases.filter(c => c.behaviorType === 'Praise').length : 0;
+    const resolvedCount = cases ? cases.filter(c => c.status === 'RESOLVED' || c.status === 'Closed').length : 0;
 
     return {
       studentId,
@@ -485,44 +483,7 @@ export class ComplaintBoxService {
   }
 
   async seedParentComplaintsIfEmpty(tid: string) {
-    if (!this.db) return;
-    const compRef = this.db.collection('tenants').doc(tid).collection('parentComplaints');
-    const snap = await compRef.get();
-
-    if (snap.empty) {
-      const initial: any[] = [
-        {
-          id: 'pc-001',
-          tenantId: tid,
-          parentName: 'Ramesh Kumar',
-          studentName: 'Student 1',
-          className: 'Class-1',
-          subject: 'Transport Bus Delay',
-          description: 'Morning transport bus Route #4 arrived 30 minutes late today.',
-          status: 'OPEN',
-          priority: 'Medium',
-          createdAt: new Date(Date.now() - 36000000).toISOString(),
-          updatedAt: new Date(Date.now() - 36000000).toISOString(),
-        },
-        {
-          id: 'pc-002',
-          tenantId: tid,
-          parentName: 'Srinivas Rao',
-          studentName: 'QA Final Student',
-          className: 'Class-2',
-          subject: 'Fee Receipt Clarification',
-          description: 'Requesting updated fee breakdown receipt for term 2.',
-          status: 'IN_PROGRESS',
-          priority: 'Low',
-          createdAt: new Date(Date.now() - 86400000).toISOString(),
-          updatedAt: new Date(Date.now() - 86400000).toISOString(),
-        }
-      ];
-
-      for (const item of initial) {
-        await compRef.doc(item.id).set(item);
-      }
-    }
+    return;
   }
 
   async getParentComplaints(status?: string, tenantId?: string) {
@@ -530,12 +491,14 @@ export class ComplaintBoxService {
     if (!tid) return null;
     if (!this.db) return [];
 
-    await this.seedParentComplaintsIfEmpty(tid);
-
     try {
       const snap = await this.db.collection('tenants').doc(tid).collection('parentComplaints').get();
       let list: any[] = [];
-      snap.forEach(doc => list.push({ id: doc.id, ...doc.data() }));
+      snap.forEach(doc => {
+        if (!doc.id.startsWith('pc-00') && !doc.id.includes('seed')) {
+          list.push({ id: doc.id, ...doc.data() });
+        }
+      });
 
       if (status && status !== 'All') {
         list = list.filter(c => (c.status || '').toUpperCase() === status.toUpperCase());
