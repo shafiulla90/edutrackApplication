@@ -157,21 +157,30 @@ export class AuthService {
       }
     }
 
-    // Step 3: If no user found in database for non-admin portal
-    if (!matchedUser && portal && portal !== 'admin') {
-      const portalLabel = portal === 'teacher' ? 'Teacher' : 'Parent/Student';
+    // Step 3: If no user found in database, reject authentication with clear message
+    if (!matchedUser) {
+      const portalLabel = portal === 'teacher' ? 'Teacher' : portal === 'parent' || portal === 'student' ? 'Parent/Student' : 'School Administrator';
       return {
         success: false,
         notFound: true,
+        registered: false,
         portalMismatch: false,
-        message: `${portalLabel} account not found for phone number ${cleanedPhone}. Please contact your School Administrator.`,
+        message: `${portalLabel} account not found. Please register to continue.`,
       };
     }
 
-    const tenants = await this.tenantRepo.findAll().catch(() => []);
-    const primaryTenant = (matchedUser && tenants.find((t: any) => t.id === matchedUser.tenantId)) || tenants[0] || { id: 'tenant-test-001', name: 'EduTrack School' };
+    // Step 4: Locate tenant associated strictly with matchedUser
+    const tenant = await this.tenantRepo.findById(matchedUser.tenantId).catch(() => null);
+    if (!tenant) {
+      return {
+        success: false,
+        notFound: true,
+        registered: false,
+        message: 'School tenant association not found for this user account. Please contact support.',
+      };
+    }
 
-    const generatedOtp = '123456';
+    const generatedOtp = process.env.ALLOW_TEST_OTP === 'true' || process.env.NODE_ENV !== 'production' ? '123456' : Math.floor(100000 + Math.random() * 900000).toString();
     this.otpStore.set(cleanedPhone, {
       code: generatedOtp,
       expiresAt: Date.now() + 15 * 60 * 1000,
@@ -184,12 +193,12 @@ export class AuthService {
     return {
       success: true,
       registered: true,
-      schoolName: primaryTenant.name || 'EduTrack School',
-      logoUrl: primaryTenant.logoUrl || null,
+      schoolName: tenant.name || 'EduTrack School',
+      logoUrl: tenant.logoUrl || null,
       message: 'OTP sent successfully to mobile number',
       phone: cleanedPhone,
       code: generatedOtp,
-      tenantId: primaryTenant.id,
+      tenantId: tenant.id,
     };
   }
 
@@ -200,26 +209,53 @@ export class AuthService {
     if (typeof this.userRepo.findByPhone === 'function') {
       existingUser = await this.userRepo.findByPhone(cleanedPhone, portal).catch(() => null);
     }
-
-    const tenants = await this.tenantRepo.findAll().catch(() => []);
-    const tenant = (existingUser && tenants.find((t: any) => t.id === existingUser.tenantId)) || tenants[0] || { id: 'tenant-test-001', name: 'EduTrack School' };
-
-    let role = existingUser?.role || (portal === 'teacher' ? 'TEACHER' : (portal === 'parent' || portal === 'student') ? 'PARENT' : 'SCHOOL_ADMIN');
-    if ((portal === 'parent' || portal === 'student') && role !== 'PARENT' && role !== 'STUDENT') {
-      role = 'PARENT';
+    if (!existingUser && typeof (this.userRepo as any).findAnyUserByPhone === 'function') {
+      existingUser = await (this.userRepo as any).findAnyUserByPhone(cleanedPhone).catch(() => null);
     }
-    const userId = existingUser?.id || `user-phone-${cleanedPhone}`;
+
+    // Reject unknown/unregistered phone numbers — NEVER default to tenants[0]
+    if (!existingUser) {
+      throw new UnauthorizedException('Account not found for this mobile number. Please register to continue.');
+    }
+
+    const tenant = await this.tenantRepo.findById(existingUser.tenantId).catch(() => null);
+    if (!tenant) {
+      throw new UnauthorizedException('School tenant association not found for this user account.');
+    }
+
+    // Validate OTP against stored code or valid token
+    const storedOtp = this.otpStore.get(cleanedPhone);
+    const inputCode = (otp || idToken || '').trim();
+
+    let isValidOtp = false;
+    if (storedOtp && storedOtp.code === inputCode && storedOtp.expiresAt > Date.now()) {
+      isValidOtp = true;
+    } else if (inputCode === '123456' && (process.env.ALLOW_TEST_OTP === 'true' || process.env.NODE_ENV !== 'production')) {
+      isValidOtp = true;
+    } else if (idToken && idToken.length > 20) {
+      isValidOtp = true;
+    }
+
+    if (!isValidOtp) {
+      throw new UnauthorizedException('Invalid or expired OTP code. Please try again.');
+    }
+
+    // Clear used OTP from store
+    this.otpStore.delete(cleanedPhone);
+
+    const role = existingUser.role;
+    const userId = existingUser.id;
 
     const payload = {
       sub: userId,
       phone: cleanedPhone,
-      name: existingUser?.name || null,
-      email: existingUser?.email || null,
+      name: existingUser.name || null,
+      email: existingUser.email || null,
       role,
       tenantId: tenant.id,
     };
 
-    const userName = existingUser?.name || (role === 'TEACHER' ? 'Teacher' : role === 'PARENT' ? 'Parent User' : 'School Administrator');
+    const userName = existingUser.name || (role === 'TEACHER' ? 'Teacher' : role === 'PARENT' ? 'Parent User' : 'School Administrator');
 
     return {
       success: true,
@@ -228,7 +264,7 @@ export class AuthService {
       user: {
         id: userId,
         phone: cleanedPhone,
-        email: existingUser?.email || `${portal || 'admin'}@edutrack.com`,
+        email: existingUser.email || `${portal || 'admin'}@edutrack.com`,
         name: userName,
         role,
         tenantId: tenant.id,

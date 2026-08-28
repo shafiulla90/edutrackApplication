@@ -330,17 +330,32 @@ if (isSchoolSubdomain) {
                 </button>
               </div>
             ) : (
-              <button
-                onClick={() => {
-                  setNotFoundInfo(null);
-                  setPhone('');
-                  setError('');
-                }}
-                className="w-full py-3 px-4 bg-gradient-to-r from-brand-600 to-indigo-600 text-white rounded-xl font-semibold text-sm hover:from-brand-500 hover:to-indigo-500 shadow-lg shadow-brand-500/15 transition-all flex items-center justify-center gap-2 cursor-pointer"
-              >
-                <ArrowLeft className="w-4 h-4" />
-                Back to Login
-              </button>
+              <div className="space-y-3">
+                <button
+                  onClick={() => {
+                    const activePhone = phone;
+                    setNotFoundInfo(null);
+                    setPhone('');
+                    setError('');
+                    router.push(`/register-school?phone=${encodeURIComponent(activePhone)}`);
+                  }}
+                  className="w-full py-3 px-4 bg-gradient-to-r from-brand-600 to-indigo-600 text-white rounded-xl font-semibold text-sm hover:from-brand-500 hover:to-indigo-500 shadow-lg shadow-brand-500/15 transition-all flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  Register New School
+                  <ArrowRight className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={() => {
+                    setNotFoundInfo(null);
+                    setPhone('');
+                    setError('');
+                  }}
+                  className="w-full py-2.5 px-4 bg-slate-800/80 hover:bg-slate-800 text-slate-300 rounded-xl font-medium text-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  <ArrowLeft className="w-4 h-4" />
+                  Back to Login
+                </button>
+              </div>
             )}
           </div>
         </div>
