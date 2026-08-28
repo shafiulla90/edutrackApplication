@@ -109,18 +109,20 @@ export class ComplaintBoxService {
 
   async getStudentClasses(tenantId?: string) {
     const tid = (tenantId && tenantId !== 'undefined' && tenantId !== 'null') ? tenantId : '';
-    if (!tid) return null;
+    if (!tid) return [];
     const classesMap = new Map<string, { className: string; sectionName: string }>();
 
     if (this.db) {
       try {
-        const [profSnap, tenantSnap] = await Promise.all([
-          this.db.collection('studentProfiles').get(),
-          this.db.collection('tenants').doc(tid).collection('students').get().catch(() => ({ docs: [] } as any))
+        const [profSnap, tenantStudentsSnap, classesSnap, sectionsSnap] = await Promise.all([
+          this.db.collection('studentProfiles').where('tenantId', '==', tid).get().catch(() => ({ docs: [] } as any)),
+          this.db.collection('tenants').doc(tid).collection('students').get().catch(() => ({ docs: [] } as any)),
+          this.db.collection('tenants').doc(tid).collection('classes').get().catch(() => ({ docs: [] } as any)),
+          this.db.collection('tenants').doc(tid).collection('sections').get().catch(() => ({ docs: [] } as any)),
         ]);
 
-        const allDocs = [...profSnap.docs, ...tenantSnap.docs];
-        for (const doc of allDocs) {
+        const allStudentDocs = [...profSnap.docs, ...tenantStudentsSnap.docs];
+        for (const doc of allStudentDocs) {
           const data = doc.data();
           if (data && (data.name || data.user?.name || data.firstName)) {
             const { className, sectionName } = this.extractStudentClassAndSection(data);
@@ -130,14 +132,20 @@ export class ComplaintBoxService {
             }
           }
         }
+
+        if (classesSnap.docs && classesSnap.docs.length > 0) {
+          const secName = (sectionsSnap.docs && sectionsSnap.docs[0]?.data()?.name) || 'Section-A';
+          classesSnap.docs.forEach((cDoc: any) => {
+            const cName = cDoc.data()?.name || 'Class';
+            const key = `${cName} - ${secName}`;
+            if (!classesMap.has(key)) {
+              classesMap.set(key, { className: cName, sectionName: secName });
+            }
+          });
+        }
       } catch (err) {
         console.error('Error fetching student classes for complaint box:', err);
       }
-    }
-
-    if (classesMap.size === 0) {
-      classesMap.set('Class-1 - Section-A', { className: 'Class-1', sectionName: 'Section-A' });
-      classesMap.set('Class-2 - Section-A', { className: 'Class-2', sectionName: 'Section-A' });
     }
 
     const result: any[] = [];
@@ -155,16 +163,16 @@ export class ComplaintBoxService {
 
   async getStudentsByClass(classSectionId: string, tenantId?: string) {
     const tid = (tenantId && tenantId !== 'undefined' && tenantId !== 'null') ? tenantId : '';
-    if (!tid) return null;
+    if (!tid) return [];
     if (!this.db) return [];
 
     try {
       const [profSnap, tenantSnap] = await Promise.all([
-        this.db.collection('studentProfiles').get(),
+        this.db.collection('studentProfiles').where('tenantId', '==', tid).get().catch(() => ({ docs: [] } as any)),
         this.db.collection('tenants').doc(tid).collection('students').get().catch(() => ({ docs: [] } as any))
       ]);
 
-      const targetClassName = classSectionId.split(' - ')[0].trim().toLowerCase();
+      const targetClassName = classSectionId ? classSectionId.split(' - ')[0].trim().toLowerCase() : '';
       const students: any[] = [];
       const seenIds = new Set<string>();
 
@@ -179,9 +187,9 @@ export class ComplaintBoxService {
         const { className, sectionName } = this.extractStudentClassAndSection(data);
         const studentClassLower = className.toLowerCase();
 
-        const matchesClass = studentClassLower.includes(targetClassName) || targetClassName.includes(studentClassLower);
+        const matchesClass = !targetClassName || studentClassLower.includes(targetClassName) || targetClassName.includes(studentClassLower);
 
-        if (matchesClass || !classSectionId) {
+        if (matchesClass) {
           seenIds.add(doc.id);
           students.push({
             id: doc.id,
@@ -210,12 +218,12 @@ export class ComplaintBoxService {
 
   async searchStudents(searchTerm?: string, classId?: string, sectionId?: string, tenantId?: string) {
     const tid = (tenantId && tenantId !== 'undefined' && tenantId !== 'null') ? tenantId : '';
-    if (!tid) return null;
+    if (!tid) return [];
     if (!this.db) return [];
 
     try {
       const [profSnap, tenantSnap] = await Promise.all([
-        this.db.collection('studentProfiles').get(),
+        this.db.collection('studentProfiles').where('tenantId', '==', tid).get().catch(() => ({ docs: [] } as any)),
         this.db.collection('tenants').doc(tid).collection('students').get().catch(() => ({ docs: [] } as any))
       ]);
 
@@ -257,36 +265,51 @@ export class ComplaintBoxService {
 
   async getTeachers(tenantId?: string) {
     const tid = (tenantId && tenantId !== 'undefined' && tenantId !== 'null') ? tenantId : '';
-    if (!tid) return null;
-    if (!this.db) {
-      return [
-        { id: 'teacher-001', user: { name: 'Sarah Jenkins (Admin)' } },
-        { id: 'teacher-002', user: { name: 'Rahul Sharma (Mathematics)' } },
-      ];
-    }
+    if (!tid) return [];
+    if (!this.db) return [];
 
     try {
-      const snap = await this.db.collection('staffProfiles').get();
-      const teachers: any[] = [
-        { id: 'teacher-admin', user: { name: 'Sarah Jenkins (Admin)' } }
-      ];
+      const [staffSnap, userSnap] = await Promise.all([
+        this.db.collection('staffProfiles').where('tenantId', '==', tid).get().catch(() => ({ docs: [] } as any)),
+        this.db.collection('users').where('tenantId', '==', tid).where('role', 'in', ['TEACHER', 'STAFF', 'SCHOOL_ADMIN']).get().catch(() => ({ docs: [] } as any)),
+      ]);
 
-      snap.forEach(doc => {
-        const d = doc.data();
-        const tName = d.name || d.user?.name || d.firstName;
-        if (tName) {
-          teachers.push({
-            id: doc.id,
-            user: { name: `${tName} (${d.designation || d.role || 'Staff'})` }
-          });
-        }
-      });
+      const teachers: any[] = [];
+      const seenIds = new Set<string>();
+
+      if (staffSnap.docs) {
+        staffSnap.docs.forEach((doc: any) => {
+          const d = doc.data();
+          const tName = d.name || d.user?.name || d.firstName;
+          if (tName) {
+            seenIds.add(doc.id);
+            teachers.push({
+              id: doc.id,
+              user: { name: `${tName} (${d.designation || d.role || 'Staff'})` }
+            });
+          }
+        });
+      }
+
+      if (userSnap.docs) {
+        userSnap.docs.forEach((doc: any) => {
+          if (!seenIds.has(doc.id)) {
+            const d = doc.data();
+            const tName = d.name || d.email;
+            if (tName) {
+              seenIds.add(doc.id);
+              teachers.push({
+                id: doc.id,
+                user: { name: `${tName} (${d.role || 'Staff'})` }
+              });
+            }
+          }
+        });
+      }
 
       return teachers;
     } catch (err) {
-      return [
-        { id: 'teacher-admin', user: { name: 'Sarah Jenkins (Admin)' } }
-      ];
+      return [];
     }
   }
 
