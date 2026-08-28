@@ -112,6 +112,8 @@ export class TenantService {
       trialEndDate: expiryDate.toISOString(),
       startDate: startDate.toISOString(),
       expiryDate: expiryDate.toISOString(),
+      isSubscriptionActive: true,
+      isExpired: false,
       updatedAt: new Date().toISOString(),
     };
 
