@@ -26,7 +26,8 @@ export class ExamsService {
   }
 
   async getExamConfigs(tenantId?: string) {
-    const tid = tenantId || 'tenant-test-001';
+    const tid = (tenantId && tenantId !== 'undefined' && tenantId !== 'null') ? tenantId : '';
+    if (!tid) return null;
     try {
       const snap = await this.db.collection('tenants').doc(tid).collection('examConfigs').get();
       const configs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
@@ -48,7 +49,8 @@ export class ExamsService {
   }
 
   async createExamConfig(tenantId: string, data: any) {
-    const tid = tenantId || 'tenant-test-001';
+    const tid = (tenantId && tenantId !== 'undefined' && tenantId !== 'null') ? tenantId : '';
+    if (!tid) return null;
     const ref = data.id
       ? this.db.collection('tenants').doc(tid).collection('examConfigs').doc(data.id)
       : this.db.collection('tenants').doc(tid).collection('examConfigs').doc();
@@ -83,14 +85,16 @@ export class ExamsService {
   }
 
   async deleteExamConfig(tenantId: string, id: string) {
-    const tid = tenantId || 'tenant-test-001';
+    const tid = (tenantId && tenantId !== 'undefined' && tenantId !== 'null') ? tenantId : '';
+    if (!tid) return null;
     const ref = this.db.collection('tenants').doc(tid).collection('examConfigs').doc(id);
     await ref.delete();
     return { success: true, id };
   }
 
   async getComponents(tenantId?: string) {
-    const tid = tenantId || 'tenant-test-001';
+    const tid = (tenantId && tenantId !== 'undefined' && tenantId !== 'null') ? tenantId : '';
+    if (!tid) return null;
     try {
       const colRef = this.db.collection('tenants').doc(tid).collection('examComponents');
       const snap = await colRef.get();
@@ -121,7 +125,8 @@ export class ExamsService {
   }
 
   async createComponent(tenantId: string, name: string) {
-    const tid = tenantId || 'tenant-test-001';
+    const tid = (tenantId && tenantId !== 'undefined' && tenantId !== 'null') ? tenantId : '';
+    if (!tid) return null;
     const ref = this.db.collection('tenants').doc(tid).collection('examComponents').doc();
     const payload = {
       id: ref.id,
@@ -134,14 +139,16 @@ export class ExamsService {
   }
 
   async deleteComponent(tenantId: string, id: string) {
-    const tid = tenantId || 'tenant-test-001';
+    const tid = (tenantId && tenantId !== 'undefined' && tenantId !== 'null') ? tenantId : '';
+    if (!tid) return null;
     const ref = this.db.collection('tenants').doc(tid).collection('examComponents').doc(id);
     await ref.delete();
     return { success: true, id };
   }
 
   async resolveConfig(tenantId: string, examType: string, classId?: string) {
-    const tid = tenantId || 'tenant-test-001';
+    const tid = (tenantId && tenantId !== 'undefined' && tenantId !== 'null') ? tenantId : '';
+    if (!tid) return null;
     try {
       const configs = await this.getExamConfigs(tid);
       if (classId && examType) {
@@ -172,7 +179,8 @@ export class ExamsService {
     sectionName?: string,
     subjectType?: string,
   ) {
-    const tid = tenantId || 'tenant-test-001';
+    const tid = (tenantId && tenantId !== 'undefined' && tenantId !== 'null') ? tenantId : '';
+    if (!tid) return null;
     
     // Fetch students in tenant from root studentProfiles collection
     let students: any[] = [];
@@ -327,7 +335,8 @@ export class ExamsService {
   }
 
   async saveRosterMarks(tenantId: string, body: any) {
-    const tid = tenantId || 'tenant-test-001';
+    const tid = (tenantId && tenantId !== 'undefined' && tenantId !== 'null') ? tenantId : '';
+    if (!tid) return null;
     const { subjectId, examName, classSectionId, subjectType, marksSheet, marks } = body;
 
     let subjectName = 'Telugu';
@@ -404,7 +413,8 @@ export class ExamsService {
   }
 
   async getStudentReportCard(tenantId: string, studentId: string) {
-    const tid = tenantId || 'tenant-test-001';
+    const tid = (tenantId && tenantId !== 'undefined' && tenantId !== 'null') ? tenantId : '';
+    if (!tid) return null;
     
     // Fetch student info
     let student = null;
@@ -436,7 +446,8 @@ export class ExamsService {
   }
 
   async createExam(name: string, type: string, classSectionId: string, date: Date, tenantId?: string) {
-    const tid = tenantId || 'tenant-test-001';
+    const tid = (tenantId && tenantId !== 'undefined' && tenantId !== 'null') ? tenantId : '';
+    if (!tid) return null;
     if (this.examRepo.createExam) {
       return this.examRepo.createExam({ name, type, classSectionId, date, tenantId: tid });
     }
@@ -444,7 +455,8 @@ export class ExamsService {
   }
 
   async getExams(classSectionId?: string, tenantId?: string) {
-    const tid = tenantId || 'tenant-test-001';
+    const tid = (tenantId && tenantId !== 'undefined' && tenantId !== 'null') ? tenantId : '';
+    if (!tid) return null;
     if (classSectionId) {
       return this.examRepo.findExamsByClassSection(classSectionId);
     }
@@ -455,7 +467,8 @@ export class ExamsService {
   }
 
   async getExamTypes(tenantId?: string) {
-    const tid = tenantId || 'tenant-test-001';
+    const tid = (tenantId && tenantId !== 'undefined' && tenantId !== 'null') ? tenantId : '';
+    if (!tid) return null;
     if (this.examRepo.findExamTypesByTenant) {
       const types = await this.examRepo.findExamTypesByTenant(tid);
       if (types && types.length > 0) return types;
@@ -468,7 +481,8 @@ export class ExamsService {
   }
 
   async createExamType(name: string, tenantId?: string) {
-    const tid = tenantId || 'tenant-test-001';
+    const tid = (tenantId && tenantId !== 'undefined' && tenantId !== 'null') ? tenantId : '';
+    if (!tid) return null;
     if (this.examRepo.createExamType) {
       return this.examRepo.createExamType(name, tid);
     }
@@ -476,7 +490,8 @@ export class ExamsService {
   }
 
   async updateExamType(id: string, name: string, tenantId?: string) {
-    const tid = tenantId || 'tenant-test-001';
+    const tid = (tenantId && tenantId !== 'undefined' && tenantId !== 'null') ? tenantId : '';
+    if (!tid) return null;
     if (this.examRepo.updateExamType) {
       return this.examRepo.updateExamType(id, name, tid);
     }
@@ -484,7 +499,8 @@ export class ExamsService {
   }
 
   async deleteExamType(id: string, tenantId?: string) {
-    const tid = tenantId || 'tenant-test-001';
+    const tid = (tenantId && tenantId !== 'undefined' && tenantId !== 'null') ? tenantId : '';
+    if (!tid) return null;
     if (this.examRepo.deleteExamType) {
       return this.examRepo.deleteExamType(id, tid);
     }
@@ -492,7 +508,8 @@ export class ExamsService {
   }
 
   async saveMarks(marks: any[], examName: string, classSectionId: string, subjectId: string, tenantId?: string) {
-    const tid = tenantId || 'tenant-test-001';
+    const tid = (tenantId && tenantId !== 'undefined' && tenantId !== 'null') ? tenantId : '';
+    if (!tid) return null;
     const saved = [];
     for (const item of marks || []) {
       const payload = {
@@ -546,7 +563,8 @@ export class ExamsService {
   }
 
   async getGradesReport(classSectionId: string, examName: string, className?: string, sectionName?: string, tenantId?: string) {
-    const tid = tenantId || 'tenant-test-001';
+    const tid = (tenantId && tenantId !== 'undefined' && tenantId !== 'null') ? tenantId : '';
+    if (!tid) return null;
 
     let students: any[] = [];
     try {

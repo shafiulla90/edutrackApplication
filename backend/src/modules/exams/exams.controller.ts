@@ -18,12 +18,7 @@ export class ExamsController {
   @Get('subjects')
   @ApiOperation({ summary: 'Get exam subjects' })
   async getSubjects(@Request() req?: any) {
-    let tenantId = 'tenant-test-001';
-    try {
-      tenantId = getTenantIdFromReq(req);
-    } catch (e) {
-      tenantId = req?.user?.tenantId || req?.headers?.['x-tenant-id'] || 'tenant-test-001';
-    }
+    const tenantId = getTenantIdFromReq(req);
     return this.examsService.getSubjects(tenantId);
   }
 

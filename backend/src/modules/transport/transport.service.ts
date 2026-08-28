@@ -13,7 +13,8 @@ export class TransportService {
   // Ensure initial seed data exists if Firestore collection is empty
   async seedInitialDataIfEmpty(tenantId: string) {
     if (!this.db) return;
-    const tid = tenantId || 'tenant-test-001';
+    const tid = (tenantId && tenantId !== 'undefined' && tenantId !== 'null') ? tenantId : '';
+    if (!tid) return [];
     const tenantRef = this.db.collection('tenants').doc(tid);
 
     const busesSnap = await tenantRef.collection('buses').get().catch(() => null);
@@ -211,7 +212,8 @@ export class TransportService {
   // Dashboard Data Aggregator
   async getDashboardData(tenantId: string) {
     await this.seedInitialDataIfEmpty(tenantId);
-    const tid = tenantId || 'tenant-test-001';
+    const tid = (tenantId && tenantId !== 'undefined' && tenantId !== 'null') ? tenantId : '';
+    if (!tid) return [];
 
     let buses: any[] = [];
     let drivers: any[] = [];
@@ -280,14 +282,16 @@ export class TransportService {
   // BUS CRUD
   async getBuses(tenantId: string): Promise<any[]> {
     await this.seedInitialDataIfEmpty(tenantId);
-    const tid = tenantId || 'tenant-test-001';
+    const tid = (tenantId && tenantId !== 'undefined' && tenantId !== 'null') ? tenantId : '';
+    if (!tid) return [];
     if (!this.db) return [];
     const snap = await this.db.collection('tenants').doc(tid).collection('buses').get();
     return snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
   }
 
   async createBus(data: any, tenantId: string) {
-    const tid = tenantId || 'tenant-test-001';
+    const tid = (tenantId && tenantId !== 'undefined' && tenantId !== 'null') ? tenantId : '';
+    if (!tid) return [];
     const id = 'bus-' + randomUUID().slice(0, 8);
     const newBus = {
       id,
@@ -315,7 +319,8 @@ export class TransportService {
   }
 
   async updateBus(id: string, data: any, tenantId: string) {
-    const tid = tenantId || 'tenant-test-001';
+    const tid = (tenantId && tenantId !== 'undefined' && tenantId !== 'null') ? tenantId : '';
+    if (!tid) return [];
     if (this.db) {
       await this.db.collection('tenants').doc(tid).collection('buses').doc(id).update({
         ...data,
@@ -326,7 +331,8 @@ export class TransportService {
   }
 
   async deleteBus(id: string, tenantId: string) {
-    const tid = tenantId || 'tenant-test-001';
+    const tid = (tenantId && tenantId !== 'undefined' && tenantId !== 'null') ? tenantId : '';
+    if (!tid) return [];
     if (this.db) {
       await this.db.collection('tenants').doc(tid).collection('buses').doc(id).delete();
     }
@@ -336,14 +342,16 @@ export class TransportService {
   // DRIVER CRUD
   async getDrivers(tenantId: string): Promise<any[]> {
     await this.seedInitialDataIfEmpty(tenantId);
-    const tid = tenantId || 'tenant-test-001';
+    const tid = (tenantId && tenantId !== 'undefined' && tenantId !== 'null') ? tenantId : '';
+    if (!tid) return [];
     if (!this.db) return [];
     const snap = await this.db.collection('tenants').doc(tid).collection('drivers').get();
     return snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
   }
 
   async createDriver(data: any, tenantId: string) {
-    const tid = tenantId || 'tenant-test-001';
+    const tid = (tenantId && tenantId !== 'undefined' && tenantId !== 'null') ? tenantId : '';
+    if (!tid) return [];
     const id = 'driver-' + randomUUID().slice(0, 8);
     const newDriver = {
       id,
@@ -366,7 +374,8 @@ export class TransportService {
   }
 
   async updateDriver(id: string, data: any, tenantId: string) {
-    const tid = tenantId || 'tenant-test-001';
+    const tid = (tenantId && tenantId !== 'undefined' && tenantId !== 'null') ? tenantId : '';
+    if (!tid) return [];
     if (this.db) {
       await this.db.collection('tenants').doc(tid).collection('drivers').doc(id).update({
         ...data,
@@ -377,7 +386,8 @@ export class TransportService {
   }
 
   async deleteDriver(id: string, tenantId: string) {
-    const tid = tenantId || 'tenant-test-001';
+    const tid = (tenantId && tenantId !== 'undefined' && tenantId !== 'null') ? tenantId : '';
+    if (!tid) return [];
     if (this.db) {
       await this.db.collection('tenants').doc(tid).collection('drivers').doc(id).delete();
     }
@@ -387,14 +397,16 @@ export class TransportService {
   // ROUTES & STOPS
   async getRoutes(tenantId: string): Promise<any[]> {
     await this.seedInitialDataIfEmpty(tenantId);
-    const tid = tenantId || 'tenant-test-001';
+    const tid = (tenantId && tenantId !== 'undefined' && tenantId !== 'null') ? tenantId : '';
+    if (!tid) return [];
     if (!this.db) return [];
     const snap = await this.db.collection('tenants').doc(tid).collection('routes').get();
     return snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
   }
 
   async createRoute(data: any, tenantId: string) {
-    const tid = tenantId || 'tenant-test-001';
+    const tid = (tenantId && tenantId !== 'undefined' && tenantId !== 'null') ? tenantId : '';
+    if (!tid) return [];
     const id = 'route-' + randomUUID().slice(0, 8);
     const newRoute = {
       id,
@@ -413,7 +425,8 @@ export class TransportService {
   }
 
   async addStopToRoute(routeId: string, stopData: any, tenantId: string) {
-    const tid = tenantId || 'tenant-test-001';
+    const tid = (tenantId && tenantId !== 'undefined' && tenantId !== 'null') ? tenantId : '';
+    if (!tid) return [];
     if (!this.db) return { success: false };
     const routeRef = this.db.collection('tenants').doc(tid).collection('routes').doc(routeId);
     const routeDoc = await routeRef.get();
@@ -437,7 +450,8 @@ export class TransportService {
   }
 
   async deleteStopFromRoute(routeId: string, stopId: string, tenantId: string) {
-    const tid = tenantId || 'tenant-test-001';
+    const tid = (tenantId && tenantId !== 'undefined' && tenantId !== 'null') ? tenantId : '';
+    if (!tid) return [];
     if (!this.db) return { success: false };
     const routeRef = this.db.collection('tenants').doc(tid).collection('routes').doc(routeId);
     const routeDoc = await routeRef.get();
@@ -451,7 +465,8 @@ export class TransportService {
   }
 
   async deleteRoute(id: string, tenantId: string) {
-    const tid = tenantId || 'tenant-test-001';
+    const tid = (tenantId && tenantId !== 'undefined' && tenantId !== 'null') ? tenantId : '';
+    if (!tid) return [];
     if (this.db) {
       await this.db.collection('tenants').doc(tid).collection('routes').doc(id).delete();
     }
@@ -461,14 +476,16 @@ export class TransportService {
   // STUDENT ASSIGNMENTS
   async getStudentAssignments(tenantId: string): Promise<any[]> {
     await this.seedInitialDataIfEmpty(tenantId);
-    const tid = tenantId || 'tenant-test-001';
+    const tid = (tenantId && tenantId !== 'undefined' && tenantId !== 'null') ? tenantId : '';
+    if (!tid) return [];
     if (!this.db) return [];
     const snap = await this.db.collection('tenants').doc(tid).collection('transportAssignments').get();
     return snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
   }
 
   async createStudentAssignment(data: any, tenantId: string) {
-    const tid = tenantId || 'tenant-test-001';
+    const tid = (tenantId && tenantId !== 'undefined' && tenantId !== 'null') ? tenantId : '';
+    if (!tid) return [];
     const id = 'assign-' + randomUUID().slice(0, 8);
     const newAssignment = {
       id,
@@ -495,7 +512,8 @@ export class TransportService {
   }
 
   async deleteStudentAssignment(id: string, tenantId: string) {
-    const tid = tenantId || 'tenant-test-001';
+    const tid = (tenantId && tenantId !== 'undefined' && tenantId !== 'null') ? tenantId : '';
+    if (!tid) return [];
     if (this.db) {
       await this.db.collection('tenants').doc(tid).collection('transportAssignments').doc(id).delete();
     }
@@ -505,7 +523,8 @@ export class TransportService {
   // TRIP HISTORY
   async getTripHistory(tenantId: string): Promise<any[]> {
     await this.seedInitialDataIfEmpty(tenantId);
-    const tid = tenantId || 'tenant-test-001';
+    const tid = (tenantId && tenantId !== 'undefined' && tenantId !== 'null') ? tenantId : '';
+    if (!tid) return [];
     if (!this.db) return [];
     const snap = await this.db.collection('tenants').doc(tid).collection('tripHistory').get();
     return snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -513,7 +532,8 @@ export class TransportService {
 
   // GPS TELEMETRY & APP LOGIC
   async updateGpsTelemetry(data: any, tenantId: string) {
-    const tid = tenantId || 'tenant-test-001';
+    const tid = (tenantId && tenantId !== 'undefined' && tenantId !== 'null') ? tenantId : '';
+    if (!tid) return [];
     const busId = data.busId || 'bus-001';
     if (this.db) {
       await this.db.collection('tenants').doc(tid).collection('buses').doc(busId).update({
@@ -543,7 +563,8 @@ export class TransportService {
   }
 
   async handleDriverTripAction(data: any, tenantId: string) {
-    const tid = tenantId || 'tenant-test-001';
+    const tid = (tenantId && tenantId !== 'undefined' && tenantId !== 'null') ? tenantId : '';
+    if (!tid) return [];
     const busId = data.busId || 'bus-001';
     const action = data.action; // START_TRIP | STOP_TRIP | SOS
 

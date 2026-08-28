@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Put, Delete, Patch, Body, Param, Query, Request } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Patch, Body, Param, Query, Request, UnauthorizedException } from '@nestjs/common';
 import { TeacherPortalService } from './teacher-portal.service';
 import { JwtService } from '@nestjs/jwt';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
@@ -21,8 +21,11 @@ export class TeacherPortalController {
         } catch (e) {}
       }
     }
-    const userId = user?.sub || user?.id || req?.headers?.['x-user-id'] || 'user-active';
-    const tenantId = user?.tenantId || req?.headers?.['x-tenant-id'] || 'tenant-test-001';
+    if (!user || !user.tenantId) {
+      throw new UnauthorizedException('Tenant context missing or invalid. Please log in.');
+    }
+    const userId = user?.sub || user?.id || 'user-active';
+    const tenantId = user.tenantId;
     return { userId, tenantId };
   }
 

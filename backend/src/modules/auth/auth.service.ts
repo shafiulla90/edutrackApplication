@@ -180,9 +180,6 @@ export class AuthService {
       } catch (err) {
         this.logger.error('Firebase ID token verification failed:', err);
       }
-    } else if (inputCode && inputCode.length === 6 && /^\d{6}$/.test(inputCode)) {
-      // Valid 6-digit SMS OTP code entered by user
-      isValidOtp = true;
     }
 
     if (!isValidOtp) {

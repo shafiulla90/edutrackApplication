@@ -24,7 +24,8 @@ export class StudentService {
     const profile = await this.studentRepo.findProfileById(id);
     if (!profile) return null;
 
-    const tid = tenantId || profile.tenantId || 'tenant-test-001';
+    const tid = tenantId || profile.tenantId || '';
+    if (!tid) return null;
     const db = (this.studentRepo as any).db;
 
     let invoices: any[] = [];
@@ -467,8 +468,8 @@ export class StudentService {
     targetClassName?: string,
     targetSectionName?: string,
   ) {
-    if (!tenantId) throw new Error('tenantId is required');
-    const tid = tenantId || 'tenant-test-001';
+    if (!tenantId || tenantId === 'undefined' || tenantId === 'null') throw new Error('tenantId is required');
+    const tid = tenantId;
 
     // 1. Resolve Target Academic Year & Class
     const targetYearDoc = await this.resolveAcademicYearDoc(tid, targetYearId);
@@ -574,8 +575,8 @@ export class StudentService {
     targetClassName?: string,
     targetSectionName?: string,
   ) {
-    if (!tenantId) throw new Error('tenantId is required');
-    const tid = tenantId || 'tenant-test-001';
+    if (!tenantId || tenantId === 'undefined' || tenantId === 'null') throw new Error('tenantId is required');
+    const tid = tenantId;
     const db = (this.studentRepo as any).db;
 
     // 1. Resolve Target Academic Year & Class

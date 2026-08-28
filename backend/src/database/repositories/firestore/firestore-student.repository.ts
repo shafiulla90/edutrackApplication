@@ -350,7 +350,8 @@ export class FirestoreStudentRepository implements IStudentRepository {
 
   async findStudentsByClassSection(classSectionId: string, tenantId?: string): Promise<any[]> {
     if (!classSectionId) return [];
-    const tid = tenantId || 'tenant-test-001';
+    const tid = (tenantId && tenantId !== 'undefined' && tenantId !== 'null') ? tenantId : '';
+    if (!tid) return [];
 
     let targetClassId = classSectionId;
     let targetSectionId = '';

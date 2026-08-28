@@ -412,7 +412,10 @@ export class TimetableService {
   }
 
   async getTeachersForSubjectInClass(tenantId: string, subjectId?: string, classSectionId?: string) {
-    const tid = tenantId || 'tenant-test-001';
+    if (!tenantId || tenantId === 'undefined' || tenantId === 'null') {
+      throw new BadRequestException('Tenant ID is required');
+    }
+    const tid = tenantId;
     const db = this.firebase?.getFirestore();
     const teachers = await this.teacherRepo.findTeachersByTenant(tid);
 
@@ -591,7 +594,10 @@ export class TimetableService {
       throw new BadRequestException('No teacher data provided.');
     }
 
-    const tid = tenantId || 'tenant-test-001';
+    if (!tenantId || tenantId === 'undefined' || tenantId === 'null') {
+      throw new BadRequestException('Tenant ID is required');
+    }
+    const tid = tenantId;
     let created = 0;
     let skillsCreated = 0;
     const skipped: string[] = [];

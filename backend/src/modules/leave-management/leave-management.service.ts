@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { FirebaseService } from '../../database/firebase.service';
 
 @Injectable()
@@ -9,143 +9,15 @@ export class LeaveManagementService {
     return this.firebaseService.getFirestore();
   }
 
-  private async ensureSeeded(tenantId: string) {
-    const tid = tenantId || 'tenant-test-001';
-    const leavesRef = this.db.collection('tenants').doc(tid).collection('leaveRequests');
-    const snap = await leavesRef.limit(1).get();
-
-    if (snap.empty) {
-      const today = new Date().toISOString().split('T')[0];
-      const initialLeaves = [
-        {
-          id: 'leave-seed-001',
-          tenantId: tid,
-          applicantType: 'TEACHER',
-          leaveType: 'Casual',
-          startDate: '2026-08-22',
-          endDate: '2026-08-23',
-          reason: 'Attending family function in native village',
-          status: 'PENDING',
-          appliedDate: today,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-          teacherId: 'teacher-001',
-          teacher: {
-            id: 'teacher-001',
-            user: { name: 'Sarah Jenkins', email: 'sarah.jenkins@school.com' },
-            employeeId: 'EMP-101',
-            department: 'Mathematics',
-          },
-        },
-        {
-          id: 'leave-seed-002',
-          tenantId: tid,
-          applicantType: 'STUDENT',
-          leaveType: 'Medical',
-          startDate: '2026-08-21',
-          endDate: '2026-08-23',
-          reason: 'High fever and doctor advised rest for 3 days',
-          status: 'PENDING',
-          appliedDate: today,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-          studentId: '2f07f05a-e5b7-445c-b08e-a5b7d469907c',
-          student: {
-            id: '2f07f05a-e5b7-445c-b08e-a5b7d469907c',
-            user: { name: 'Mohamd huzaifa', email: 'huzaifa@student.com' },
-            rollNo: 'STU-6901',
-            classSection: {
-              class: { name: 'Class-1' },
-              section: { name: 'Section-A' },
-            },
-          },
-        },
-        {
-          id: 'leave-seed-003',
-          tenantId: tid,
-          applicantType: 'TEACHER',
-          leaveType: 'Medical',
-          startDate: '2026-08-20',
-          endDate: '2026-08-20',
-          reason: 'Dental appointment and root canal procedure',
-          status: 'APPROVED',
-          approver: 'School Administrator',
-          approvedDate: today,
-          appliedDate: '2026-08-19',
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-          teacherId: 'teacher-002',
-          teacher: {
-            id: 'teacher-002',
-            user: { name: 'John Smith', email: 'john.smith@school.com' },
-            employeeId: 'EMP-102',
-            department: 'Science',
-          },
-        },
-        {
-          id: 'leave-seed-004',
-          tenantId: tid,
-          applicantType: 'STUDENT',
-          leaveType: 'Emergency',
-          startDate: '2026-08-19',
-          endDate: '2026-08-19',
-          reason: 'Family urgent trip out of station',
-          status: 'REJECTED',
-          approver: 'School Administrator',
-          rejectedDate: today,
-          remarks: 'Prior notice required for personal travel',
-          appliedDate: '2026-08-18',
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-          studentId: '88ca002a-5893-43d0-891a-c0028839dd02',
-          student: {
-            id: '88ca002a-5893-43d0-891a-c0028839dd02',
-            user: { name: 'Student 1', email: 'student1@school.com' },
-            rollNo: 'STU-1000',
-            classSection: {
-              class: { name: 'Class-1' },
-              section: { name: 'Section-A' },
-            },
-          },
-        },
-        {
-          id: 'leave-seed-005',
-          tenantId: tid,
-          applicantType: 'STUDENT',
-          leaveType: 'Casual',
-          startDate: '2026-08-25',
-          endDate: '2026-08-26',
-          reason: 'Attending sibling wedding ceremony',
-          status: 'PENDING',
-          appliedDate: today,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-          studentId: '4f59593b-c4d6-4f09-967d-8fbd4df9926e',
-          student: {
-            id: '4f59593b-c4d6-4f09-967d-8fbd4df9926e',
-            user: { name: 'QA Final Student', email: 'qastudent@school.com' },
-            rollNo: 'STU-QA-999',
-            classSection: {
-              class: { name: 'Class-2' },
-              section: { name: 'Section-A' },
-            },
-          },
-        },
-      ];
-
-      const batch = this.db.batch();
-      for (const item of initialLeaves) {
-        const ref = leavesRef.doc(item.id);
-        batch.set(ref, item);
-      }
-      await batch.commit();
+  private validateTenant(tenantId: string): string {
+    if (!tenantId || tenantId === 'undefined' || tenantId === 'null') {
+      throw new UnauthorizedException('Tenant context missing or invalid');
     }
+    return tenantId;
   }
 
   async getLeaveApplications(tenantId: string, query: any) {
-    const tid = tenantId || 'tenant-test-001';
-    await this.ensureSeeded(tid);
-
+    const tid = this.validateTenant(tenantId);
     const leavesRef = this.db.collection('tenants').doc(tid).collection('leaveRequests');
     const snap = await leavesRef.get();
 
@@ -223,9 +95,7 @@ export class LeaveManagementService {
   }
 
   async getLeaveStats(tenantId: string) {
-    const tid = tenantId || 'tenant-test-001';
-    await this.ensureSeeded(tid);
-
+    const tid = this.validateTenant(tenantId);
     const snap = await this.db.collection('tenants').doc(tid).collection('leaveRequests').get();
     const items = snap.docs.map(doc => doc.data());
 
@@ -264,7 +134,7 @@ export class LeaveManagementService {
   }
 
   async createLeave(tenantId: string, body: any, user?: any) {
-    const tid = tenantId || 'tenant-test-001';
+    const tid = this.validateTenant(tenantId);
     const leavesRef = this.db.collection('tenants').doc(tid).collection('leaveRequests');
     const docRef = leavesRef.doc();
     const today = new Date().toISOString().split('T')[0];
@@ -312,7 +182,7 @@ export class LeaveManagementService {
   }
 
   async updateStatus(tenantId: string, id: string, status: string, comments?: string, approverName?: string) {
-    const tid = tenantId || 'tenant-test-001';
+    const tid = this.validateTenant(tenantId);
     const docRef = this.db.collection('tenants').doc(tid).collection('leaveRequests').doc(id);
     const snap = await docRef.get();
     if (!snap.exists) {
@@ -341,7 +211,6 @@ export class LeaveManagementService {
 
     await docRef.update(updateData);
 
-    // If this is a student leave request, push notification for the parent
     if (leaveData.studentId || leaveData.applicantType === 'STUDENT') {
       try {
         const studentName = leaveData.studentName || leaveData.student?.user?.name || leaveData.student?.name || 'Student';
@@ -366,7 +235,7 @@ export class LeaveManagementService {
   }
 
   async bulkUpdateStatus(tenantId: string, ids: string[], status: string, comments?: string, approverName?: string) {
-    const tid = tenantId || 'tenant-test-001';
+    const tid = this.validateTenant(tenantId);
     const batch = this.db.batch();
     const normStatus = status.toUpperCase() === 'APPROVED' ? 'APPROVED' : (status.toUpperCase() === 'REJECTED' ? 'REJECTED' : status);
     const today = new Date().toISOString().split('T')[0];
@@ -392,9 +261,7 @@ export class LeaveManagementService {
   }
 
   async getHistory(tenantId: string, applicantType: string, applicantId: string) {
-    const tid = tenantId || 'tenant-test-001';
-    await this.ensureSeeded(tid);
-
+    const tid = this.validateTenant(tenantId);
     const leavesRef = this.db.collection('tenants').doc(tid).collection('leaveRequests');
     const snap = await leavesRef.get();
 
@@ -411,7 +278,7 @@ export class LeaveManagementService {
   }
 
   async deleteLeave(tenantId: string, id: string) {
-    const tid = tenantId || 'tenant-test-001';
+    const tid = this.validateTenant(tenantId);
     await this.db.collection('tenants').doc(tid).collection('leaveRequests').doc(id).delete();
     return { success: true, id };
   }

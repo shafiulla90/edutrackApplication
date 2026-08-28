@@ -18,7 +18,8 @@ export class TeacherPortalService {
   }
 
   async getDashboardStats(teacherId: string, tenantId: string) {
-    const tid = tenantId || 'tenant-test-001';
+    const tid = (tenantId && tenantId !== 'undefined' && tenantId !== 'null') ? tenantId : '';
+    if (!tid) return null;
 
     const classes = await this.getAssignedClasses(teacherId, tid);
 
@@ -121,7 +122,8 @@ export class TeacherPortalService {
   }
 
   async getProfile(userId: string, tenantId: string) {
-    const tid = tenantId || 'tenant-test-001';
+    const tid = (tenantId && tenantId !== 'undefined' && tenantId !== 'null') ? tenantId : '';
+    if (!tid) return null;
     let dbUser: any = null;
     let staffProf: any = null;
 
@@ -283,7 +285,8 @@ export class TeacherPortalService {
   }
 
   async updateProfile(userId: string, tenantId: string, data: any) {
-    const tid = tenantId || 'tenant-test-001';
+    const tid = (tenantId && tenantId !== 'undefined' && tenantId !== 'null') ? tenantId : '';
+    if (!tid) return null;
     const { name, phone, qualification } = data;
 
     if (this.db) {
@@ -356,7 +359,8 @@ export class TeacherPortalService {
   }
 
   async getAssignedClasses(teacherId: string, tenantId: string) {
-    const tid = tenantId || 'tenant-test-001';
+    const tid = (tenantId && tenantId !== 'undefined' && tenantId !== 'null') ? tenantId : '';
+    if (!tid) return null;
     let res: any[] = [];
     if (this.teacherRepo.findTeacherAssignments) {
       res = await this.teacherRepo.findTeacherAssignments(teacherId, tid).catch(() => []);
@@ -410,7 +414,8 @@ export class TeacherPortalService {
   }
 
   async getStudentsForClassSection(teacherId: string, tenantId: string, classSectionId: string) {
-    const tid = tenantId || 'tenant-test-001';
+    const tid = (tenantId && tenantId !== 'undefined' && tenantId !== 'null') ? tenantId : '';
+    if (!tid) return null;
     let classVal = classSectionId || 'Class-1';
     let sectionVal = 'Section-A';
 
@@ -450,7 +455,8 @@ export class TeacherPortalService {
   }
 
   async getClassesForAttendance(teacherId: string, tenantId: string) {
-    const tid = tenantId || 'tenant-test-001';
+    const tid = (tenantId && tenantId !== 'undefined' && tenantId !== 'null') ? tenantId : '';
+    if (!tid) return null;
     const assigned = await this.getAssignedClasses(teacherId, tid);
     const map = new Map<string, string>();
     assigned.forEach((c: any) => {
@@ -486,7 +492,8 @@ export class TeacherPortalService {
   }
 
   async getSectionsForAttendance(teacherId: string, tenantId: string, classVal: string) {
-    const tid = tenantId || 'tenant-test-001';
+    const tid = (tenantId && tenantId !== 'undefined' && tenantId !== 'null') ? tenantId : '';
+    if (!tid) return null;
     const assigned = await this.getAssignedClasses(teacherId, tid);
     const map = new Map<string, string>();
     const normClassVal = (classVal || '').toLowerCase().trim();
@@ -550,7 +557,8 @@ export class TeacherPortalService {
   }
 
   async getStudentsForAttendance(teacherId: string, tenantId: string, classVal: string, sectionVal: string) {
-    const tid = tenantId || 'tenant-test-001';
+    const tid = (tenantId && tenantId !== 'undefined' && tenantId !== 'null') ? tenantId : '';
+    if (!tid) return null;
     let students = await this.studentRepo.findStudentsByClassSection(classVal, tid).catch(() => []);
 
     if (!students || students.length === 0) {
@@ -596,7 +604,8 @@ export class TeacherPortalService {
   }
 
   async saveAttendanceSheet(teacherId: string, tenantId: string, data: any) {
-    const tid = tenantId || 'tenant-test-001';
+    const tid = (tenantId && tenantId !== 'undefined' && tenantId !== 'null') ? tenantId : '';
+    if (!tid) return null;
     const classVal = data.classVal || data.classSectionId || data.classId || 'Class-1';
     const sectionVal = data.sectionVal || data.sectionId || 'Section-A';
     const dateVal = data.dateStr || data.date || new Date().toISOString().split('T')[0];
@@ -681,7 +690,8 @@ export class TeacherPortalService {
   }
 
   async getAttendanceHistory(teacherId: string, tenantId: string) {
-    const tid = tenantId || 'tenant-test-001';
+    const tid = (tenantId && tenantId !== 'undefined' && tenantId !== 'null') ? tenantId : '';
+    if (!tid) return null;
     if (this.db) {
       const snap = await this.db.collection('tenants').doc(tid).collection('attendance').get().catch(() => null);
       if (snap && !snap.empty) {
@@ -692,7 +702,8 @@ export class TeacherPortalService {
   }
 
   async getExamMarksEntryList(teacherId: string, tenantId: string, subjectId: string, examName: string, classSectionId: string, subjectType?: string) {
-    const tid = tenantId || 'tenant-test-001';
+    const tid = (tenantId && tenantId !== 'undefined' && tenantId !== 'null') ? tenantId : '';
+    if (!tid) return null;
     let students: any[] = [];
 
     if (this.db) {
@@ -847,7 +858,8 @@ export class TeacherPortalService {
 
 
   async saveExamMarksList(teacherId: string, tenantId: string, data: any) {
-    const tid = tenantId || 'tenant-test-001';
+    const tid = (tenantId && tenantId !== 'undefined' && tenantId !== 'null') ? tenantId : '';
+    if (!tid) return null;
     if (this.db && data && Array.isArray(data.marks)) {
       const batch = this.db.batch();
       data.marks.forEach((m: any) => {
@@ -871,7 +883,8 @@ export class TeacherPortalService {
   }
 
   async getTeacherWeeklySchedule(teacherId: string, tenantId: string) {
-    const tid = tenantId || 'tenant-test-001';
+    const tid = (tenantId && tenantId !== 'undefined' && tenantId !== 'null') ? tenantId : '';
+    if (!tid) return null;
     if (!this.db) return [];
 
     const targetTeacherIds = new Set<string>();
@@ -1057,7 +1070,8 @@ export class TeacherPortalService {
   }
 
   async getHomeworks(teacherId: string, tenantId: string) {
-    const tid = tenantId || 'tenant-test-001';
+    const tid = (tenantId && tenantId !== 'undefined' && tenantId !== 'null') ? tenantId : '';
+    if (!tid) return null;
     if (this.db) {
       const snap = await this.db.collection('tenants').doc(tid).collection('homeworks').get().catch(() => null);
       if (snap && !snap.empty) {
@@ -1123,7 +1137,8 @@ export class TeacherPortalService {
   }
 
   async createHomework(teacherId: string, tenantId: string, data: any) {
-    const tid = tenantId || 'tenant-test-001';
+    const tid = (tenantId && tenantId !== 'undefined' && tenantId !== 'null') ? tenantId : '';
+    if (!tid) return null;
     if (this.db && data) {
       let className = data.className || '';
       let sectionName = data.sectionName || '';
@@ -1188,7 +1203,8 @@ export class TeacherPortalService {
   }
 
   async updateHomework(teacherId: string, tenantId: string, id: string, data: any) {
-    const tid = tenantId || 'tenant-test-001';
+    const tid = (tenantId && tenantId !== 'undefined' && tenantId !== 'null') ? tenantId : '';
+    if (!tid) return null;
     if (this.db && id && data) {
       let className = data.className || '';
       let sectionName = data.sectionName || '';
@@ -1220,7 +1236,8 @@ export class TeacherPortalService {
   }
 
   async deleteHomework(teacherId: string, tenantId: string, id: string) {
-    const tid = tenantId || 'tenant-test-001';
+    const tid = (tenantId && tenantId !== 'undefined' && tenantId !== 'null') ? tenantId : '';
+    if (!tid) return null;
     if (this.db && id) {
       await this.db.collection('tenants').doc(tid).collection('homeworks').doc(id).delete();
     }
@@ -1228,7 +1245,8 @@ export class TeacherPortalService {
   }
 
   async sendHomeworkToParents(teacherId: string, tenantId: string, id: string) {
-    const tid = tenantId || 'tenant-test-001';
+    const tid = (tenantId && tenantId !== 'undefined' && tenantId !== 'null') ? tenantId : '';
+    if (!tid) return null;
     let totalCount = 0;
     try {
       let csId = '';
@@ -1259,7 +1277,8 @@ export class TeacherPortalService {
   }
 
   async getAnnouncements(userId: string, tenantId: string) {
-    const tid = tenantId || 'tenant-test-001';
+    const tid = (tenantId && tenantId !== 'undefined' && tenantId !== 'null') ? tenantId : '';
+    if (!tid) return null;
     if (!this.db) return [];
     try {
       const snap = await this.db.collection('tenants').doc(tid).collection('announcements').get();
@@ -1274,7 +1293,8 @@ export class TeacherPortalService {
   }
 
   async createAnnouncement(userId: string, tenantId: string, data: any) {
-    const tid = tenantId || 'tenant-test-001';
+    const tid = (tenantId && tenantId !== 'undefined' && tenantId !== 'null') ? tenantId : '';
+    if (!tid) return null;
     if (!this.db) return { id: 'ann-' + Date.now(), ...data, tenantId: tid };
     const docRef = this.db.collection('tenants').doc(tid).collection('announcements').doc();
     const item: any = {
@@ -1297,7 +1317,8 @@ export class TeacherPortalService {
   }
 
   async deleteAnnouncement(userId: string, tenantId: string, id: string) {
-    const tid = tenantId || 'tenant-test-001';
+    const tid = (tenantId && tenantId !== 'undefined' && tenantId !== 'null') ? tenantId : '';
+    if (!tid) return null;
     if (this.db && id) {
       await this.db.collection('tenants').doc(tid).collection('announcements').doc(id).delete();
     }
@@ -1305,7 +1326,8 @@ export class TeacherPortalService {
   }
 
   async markAnnouncementAsRead(userId: string, tenantId: string, id: string) {
-    const tid = tenantId || 'tenant-test-001';
+    const tid = (tenantId && tenantId !== 'undefined' && tenantId !== 'null') ? tenantId : '';
+    if (!tid) return null;
     if (this.db && id && userId) {
       const docRef = this.db.collection('tenants').doc(tid).collection('announcements').doc(id);
       const snap = await docRef.get();
@@ -1345,7 +1367,8 @@ export class TeacherPortalService {
   }
 
   async getCalendarTimeline(userId: string, tenantId: string, month: number, year: number) {
-    const tid = tenantId || 'tenant-test-001';
+    const tid = (tenantId && tenantId !== 'undefined' && tenantId !== 'null') ? tenantId : '';
+    if (!tid) return null;
     const events: any[] = [];
 
     const toDateStr = (dateVal: any) => {
@@ -1457,7 +1480,8 @@ export class TeacherPortalService {
   }
 
   async getStudentProgressDetails(userId: string, tenantId: string, studentId: string) {
-    const tid = tenantId || 'tenant-test-001';
+    const tid = (tenantId && tenantId !== 'undefined' && tenantId !== 'null') ? tenantId : '';
+    if (!tid) return null;
 
     let studentProfile: any = null;
     if (this.db) {
@@ -1578,7 +1602,8 @@ export class TeacherPortalService {
   }
 
   async getMySalaryDetails(userId: string, tenantId: string) {
-    const tid = tenantId || 'tenant-test-001';
+    const tid = (tenantId && tenantId !== 'undefined' && tenantId !== 'null') ? tenantId : '';
+    if (!tid) return null;
 
     let staffProfile: any = null;
     if (this.db) {
@@ -1635,7 +1660,8 @@ export class TeacherPortalService {
   }
 
   async getMySalaryHistory(userId: string, tenantId: string) {
-    const tid = tenantId || 'tenant-test-001';
+    const tid = (tenantId && tenantId !== 'undefined' && tenantId !== 'null') ? tenantId : '';
+    if (!tid) return null;
 
     let staffProfile: any = null;
     if (this.db) {

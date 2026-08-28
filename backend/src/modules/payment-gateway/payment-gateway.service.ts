@@ -48,7 +48,8 @@ export class PaymentGatewayService {
 
   async getRazorpayConfig(tenantId: string): Promise<any> {
     if (!tenantId) throw new BadRequestException('tenantId is required');
-    const tid = tenantId || 'tenant-test-001';
+    const tid = (tenantId && tenantId !== 'undefined' && tenantId !== 'null') ? tenantId : '';
+    if (!tid) throw new BadRequestException('Tenant ID is required');
 
     let configData: any = null;
     if (this.db) {
@@ -97,7 +98,8 @@ export class PaymentGatewayService {
 
   async saveRazorpayConfig(tenantId: string, payload: any): Promise<any> {
     if (!tenantId) throw new BadRequestException('tenantId is required');
-    const tid = tenantId || 'tenant-test-001';
+    const tid = (tenantId && tenantId !== 'undefined' && tenantId !== 'null') ? tenantId : '';
+    if (!tid) throw new BadRequestException('Tenant ID is required');
 
     // Retrieve existing config to keep old secrets if not updated
     const existing = await this.getRawConfigInternal(tid);
@@ -140,7 +142,8 @@ export class PaymentGatewayService {
 
   async disableRazorpayConfig(tenantId: string): Promise<any> {
     if (!tenantId) throw new BadRequestException('tenantId is required');
-    const tid = tenantId || 'tenant-test-001';
+    const tid = (tenantId && tenantId !== 'undefined' && tenantId !== 'null') ? tenantId : '';
+    if (!tid) throw new BadRequestException('Tenant ID is required');
 
     if (this.db) {
       await this.db.collection('tenants').doc(tid).collection('paymentGatewayConfig').doc('razorpay').set({
@@ -156,7 +159,8 @@ export class PaymentGatewayService {
 
   async testConnection(tenantId: string): Promise<{ success: boolean; message: string }> {
     if (!tenantId) throw new BadRequestException('tenantId is required');
-    const tid = tenantId || 'tenant-test-001';
+    const tid = (tenantId && tenantId !== 'undefined' && tenantId !== 'null') ? tenantId : '';
+    if (!tid) throw new BadRequestException('Tenant ID is required');
 
     const rawConfig = await this.getRawConfigInternal(tid);
     if (!rawConfig.keyId || !rawConfig.keySecret) {
@@ -191,7 +195,8 @@ export class PaymentGatewayService {
 
   async createRazorpayOrder(tenantId: string, userId: string, payload: any): Promise<any> {
     if (!tenantId) throw new BadRequestException('tenantId is required');
-    const tid = tenantId || 'tenant-test-001';
+    const tid = (tenantId && tenantId !== 'undefined' && tenantId !== 'null') ? tenantId : '';
+    if (!tid) throw new BadRequestException('Tenant ID is required');
     const { studentId, invoiceId, itemAmounts, requestedAmount } = payload || {};
 
     if (!invoiceId || !studentId) {
@@ -381,7 +386,8 @@ export class PaymentGatewayService {
 
   async verifyPaymentSignature(tenantId: string, payload: any): Promise<any> {
     if (!tenantId) throw new BadRequestException('tenantId is required');
-    const tid = tenantId || 'tenant-test-001';
+    const tid = (tenantId && tenantId !== 'undefined' && tenantId !== 'null') ? tenantId : '';
+    if (!tid) throw new BadRequestException('Tenant ID is required');
     const { razorpayOrderId, razorpayPaymentId, razorpaySignature, invoiceId, studentId, transactionId } = payload || {};
 
     if (!razorpayOrderId || !razorpayPaymentId || !razorpaySignature) {
@@ -544,7 +550,10 @@ export class PaymentGatewayService {
     }
 
     const entity = payload?.payload?.payment?.entity || payload?.payload?.order?.entity;
-    const tid = entity?.notes?.tenantId || queryTenantId || 'tenant-test-001';
+    const tid = entity?.notes?.tenantId || queryTenantId;
+    if (!tid || tid === 'undefined' || tid === 'null') {
+      throw new BadRequestException('Tenant ID missing in webhook payload');
+    }
 
     // Verify webhook signature against tenant secret
     const rawConfig = await this.getRawConfigInternal(tid);

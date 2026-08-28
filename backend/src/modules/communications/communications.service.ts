@@ -19,7 +19,8 @@ export class CommunicationsService {
   }
 
   async sendNotification(data: any, tenantId?: string) {
-    const tid = tenantId || 'tenant-test-001';
+    const tid = (tenantId && tenantId !== 'undefined' && tenantId !== 'null') ? tenantId : '';
+    if (!tid) return null;
     if (this.db) {
       const docRef = this.db.collection('notifications').doc();
       const notif = {
@@ -50,7 +51,8 @@ export class CommunicationsService {
   }
 
   async getNotifications(recipientId: string, tenantId?: string, recipientRole?: string, inputLinkedStudentIds: string[] = []) {
-    const tid = tenantId || 'tenant-test-001';
+    const tid = (tenantId && tenantId !== 'undefined' && tenantId !== 'null') ? tenantId : '';
+    if (!tid) return null;
     const notifications: any[] = [];
     const roleStr = String(recipientRole || '').toUpperCase();
     const isParent = roleStr.includes('PARENT') || recipientId.includes('parent') || recipientId === 'user-parent';
@@ -351,7 +353,8 @@ export class CommunicationsService {
   }
 
   async deleteNotification(id: string, tenantId?: string, recipientId?: string, recipientRole?: string) {
-    const tid = tenantId || 'tenant-test-001';
+    const tid = (tenantId && tenantId !== 'undefined' && tenantId !== 'null') ? tenantId : '';
+    if (!tid) return null;
     const currentUserId = recipientId || 'user-parent';
     const roleStr = String(recipientRole || 'PARENT').toUpperCase();
     const isParent = !recipientRole || roleStr.includes('PARENT') || currentUserId.includes('parent') || currentUserId === 'user-parent' || currentUserId === 'user-active';

@@ -18,7 +18,10 @@ export class TeacherService {
       throw new BadRequestException('Name and Email are required.');
     }
 
-    const tid = tenantId || 'tenant-test-001';
+    if (!tenantId || tenantId === 'undefined' || tenantId === 'null') {
+      throw new BadRequestException('Tenant ID is required');
+    }
+    const tid = tenantId;
     const role = (data.staffType === 'Non-Teaching' || data.role === 'STAFF') ? 'STAFF' : 'TEACHER';
 
     const existingUser = await this.userRepo.findByEmail(data.email);
@@ -75,7 +78,10 @@ export class TeacherService {
   }
 
   async findAll(tenantId: string, filters?: any) {
-    const tid = tenantId || 'tenant-test-001';
+    if (!tenantId || tenantId === 'undefined' || tenantId === 'null') {
+      throw new BadRequestException('Tenant ID is required');
+    }
+    const tid = tenantId;
     const list = await this.teacherRepo.findTeachersByTenant(tid);
     if (!filters) return list;
     let filtered = [...list];
@@ -155,7 +161,10 @@ export class TeacherService {
   }
 
   async getAllSalaryPayments(tenantId: string) {
-    const tid = tenantId || 'tenant-test-001';
+    if (!tenantId || tenantId === 'undefined' || tenantId === 'null') {
+      throw new BadRequestException('Tenant ID is required');
+    }
+    const tid = tenantId;
     if (this.firebase) {
       try {
         const db = this.firebase.getFirestore();
@@ -168,7 +177,10 @@ export class TeacherService {
 
   async paySalary(id: string, tenantId: string, data?: any) {
     const month = data?.month || 'Jun 2026';
-    const tid = tenantId || 'tenant-test-001';
+    if (!tenantId || tenantId === 'undefined' || tenantId === 'null') {
+      throw new BadRequestException('Tenant ID is required');
+    }
+    const tid = tenantId;
     const amount = Number(data?.amount || 34500);
     const staffName = data?.staffName || 'Staff Member';
 
@@ -225,7 +237,10 @@ export class TeacherService {
 
   async payAllSalaries(tenantId: string, data?: any) {
     const month = data?.month || 'Jun 2026';
-    const tid = tenantId || 'tenant-test-001';
+    if (!tenantId || tenantId === 'undefined' || tenantId === 'null') {
+      throw new BadRequestException('Tenant ID is required');
+    }
+    const tid = tenantId;
 
     if (this.firebase) {
       const db = this.firebase.getFirestore();
@@ -271,7 +286,10 @@ export class TeacherService {
   }
 
   async getSalaryInvoices(id: string, tenantId: string) {
-    const tid = tenantId || 'tenant-test-001';
+    if (!tenantId || tenantId === 'undefined' || tenantId === 'null') {
+      throw new BadRequestException('Tenant ID is required');
+    }
+    const tid = tenantId;
     if (this.firebase) {
       try {
         const db = this.firebase.getFirestore();
@@ -309,7 +327,10 @@ export class TeacherService {
   }
 
   async getCases(id: string, tenantId: string) {
-    const tid = tenantId || 'tenant-test-001';
+    if (!tenantId || tenantId === 'undefined' || tenantId === 'null') {
+      throw new BadRequestException('Tenant ID is required');
+    }
+    const tid = tenantId;
     if (this.firebase) {
       try {
         const db = this.firebase.getFirestore();
@@ -347,7 +368,10 @@ export class TeacherService {
   }
 
   async getSchedule(id: string, tenantId: string) {
-    const tid = tenantId || 'tenant-test-001';
+    if (!tenantId || tenantId === 'undefined' || tenantId === 'null') {
+      throw new BadRequestException('Tenant ID is required');
+    }
+    const tid = tenantId;
     if (!this.firebase) return [];
 
     try {

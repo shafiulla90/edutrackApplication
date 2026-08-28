@@ -63,6 +63,63 @@ export class TenantService {
       tenantId: tenant.id,
     };
 
+    // Initialize subscription for newly created tenant based on selected plan
+    const selectedPlan = data.subscriptionPlan || 'TRIAL';
+    const startDate = new Date();
+    const expiryDate = new Date(startDate);
+    
+    let plan = 'FREE';
+    let planCode = 'FREE_1_MONTH';
+    let planName = 'EduTrack Free Trial – 1 Month';
+    let durationMonths = 1;
+    let billingCycle = '1 Month';
+    let amount = 0;
+    let status = 'TRIALING';
+
+    if (selectedPlan === 'BASIC') {
+      plan = 'BASIC';
+      planCode = 'BASIC_6_MONTH';
+      planName = 'EduTrack Basic – 6 Months';
+      durationMonths = 6;
+      billingCycle = '6 Months';
+      amount = 1999;
+      status = 'ACTIVE';
+      expiryDate.setMonth(expiryDate.getMonth() + 6);
+    } else if (selectedPlan === 'PREMIUM') {
+      plan = 'PREMIUM';
+      planCode = 'PREMIUM_12_MONTH';
+      planName = 'EduTrack Premium – 12 Months';
+      durationMonths = 12;
+      billingCycle = '12 Months';
+      amount = 4999;
+      status = 'ACTIVE';
+      expiryDate.setMonth(expiryDate.getMonth() + 12);
+    } else {
+      // FREE / TRIAL plan: 1 calendar month exact calculation
+      expiryDate.setMonth(expiryDate.getMonth() + 1);
+    }
+
+    const subscriptionData = {
+      tenantId: tenant.id,
+      plan,
+      planCode,
+      planName,
+      amount,
+      billingCycle,
+      durationMonths,
+      status,
+      trialStartDate: startDate.toISOString(),
+      trialEndDate: expiryDate.toISOString(),
+      startDate: startDate.toISOString(),
+      expiryDate: expiryDate.toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    if (this.db) {
+      await this.db.collection('tenants').doc(tenant.id).collection('subscription').doc('current').set(subscriptionData, { merge: true }).catch(() => null);
+      await this.db.collection('subscriptions').doc(tenant.id).set(subscriptionData, { merge: true }).catch(() => null);
+    }
+
     const token = this.jwtService.sign(payload);
 
     return {
@@ -81,7 +138,10 @@ export class TenantService {
   }
 
   async getSetupStatus(tenantId?: string, userFromToken?: any) {
-    const tid = tenantId && tenantId !== 'undefined' && tenantId !== 'null' ? tenantId : 'tenant-test-001';
+    if (!tenantId || tenantId === 'undefined' || tenantId === 'null') {
+      throw new NotFoundException('Tenant context missing or invalid');
+    }
+    const tid = tenantId;
     const rawTenant = await this.tenantRepo.findById(tid).catch(() => null);
     const tenant = rawTenant || { id: tid, name: 'EduTrack School', schoolType: 'School', adminName: 'School Administrator', logoUrl: null, email: '', adminPhone: '', phone: '', address: '' };
 
@@ -297,7 +357,10 @@ export class TenantService {
   }
 
   async updateBankingUpi(data: any, tenantId?: string) {
-    const tid = tenantId || 'tenant-test-001';
+    if (!tenantId || tenantId === 'undefined' || tenantId === 'null') {
+      throw new NotFoundException('Tenant context missing or invalid');
+    }
+    const tid = tenantId;
     const updatePayload: any = {
       updatedAt: new Date().toISOString(),
     };

@@ -71,7 +71,7 @@ export class FirestoreUserRepository implements IUserRepository {
         const u = await this.findById(staff.userId);
         if (u) return u;
       }
-      return { id: `staff-${staffSnap.docs[0].id}`, role: 'TEACHER', tenantId: staff.tenantId || 'tenant-test-001' };
+      return { id: `staff-${staffSnap.docs[0].id}`, role: 'TEACHER', tenantId: staff.tenantId || '' };
     }
 
     // Check studentProfiles for Parent / Student phones
@@ -87,7 +87,7 @@ export class FirestoreUserRepository implements IUserRepository {
           const u = await this.findById(std.userId);
           if (u) return u;
         }
-        return { id: `student-${snap.docs[0].id}`, role: 'PARENT', tenantId: std.tenantId || 'tenant-test-001' };
+        return { id: `student-${snap.docs[0].id}`, role: 'PARENT', tenantId: std.tenantId || '' };
       }
     }
 

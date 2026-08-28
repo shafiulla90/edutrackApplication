@@ -327,12 +327,13 @@ export class FirestoreBillingRepository implements IBillingRepository {
   }
 
   async createExpense(data: any): Promise<any> {
-    const tenantId = data.tenantId || 'tenant-test-001';
-    const ref = data.id ? this.db.collection('tenants').doc(tenantId).collection('expenses').doc(data.id) : this.db.collection('tenants').doc(tenantId).collection('expenses').doc();
+    const tid = data?.tenantId;
+    if (!tid || tid === 'undefined' || tid === 'null') throw new Error('tenantId is required');
+    const ref = data.id ? this.db.collection('tenants').doc(tid).collection('expenses').doc(data.id) : this.db.collection('tenants').doc(tid).collection('expenses').doc();
     const payload = {
       ...data,
       id: ref.id,
-      tenantId,
+      tenantId: tid,
       amountCents: toCents(data.amount),
       date: formatDateISO(data.date),
     };
@@ -341,7 +342,8 @@ export class FirestoreBillingRepository implements IBillingRepository {
   }
 
   async updateExpense(id: string, data: any, tenantId?: string): Promise<any> {
-    const tid = tenantId || data.tenantId || 'tenant-test-001';
+    const tid = (tenantId && tenantId !== 'undefined' && tenantId !== 'null') ? tenantId : (data?.tenantId || '');
+    if (!tid) throw new Error('tenantId is required');
     const ref = this.db.collection('tenants').doc(tid).collection('expenses').doc(id);
     const payload: any = {
       ...data,
@@ -356,14 +358,16 @@ export class FirestoreBillingRepository implements IBillingRepository {
   }
 
   async deleteExpense(id: string, tenantId?: string): Promise<any> {
-    const tid = tenantId || 'tenant-test-001';
+    const tid = (tenantId && tenantId !== 'undefined' && tenantId !== 'null') ? tenantId : '';
+    if (!tid) throw new Error('tenantId is required');
     const ref = this.db.collection('tenants').doc(tid).collection('expenses').doc(id);
     await ref.delete();
     return { success: true, id };
   }
 
   async createFeeProducts(productNames: string[], tenantId: string): Promise<any[]> {
-    const tid = tenantId || 'tenant-test-001';
+    const tid = (tenantId && tenantId !== 'undefined' && tenantId !== 'null') ? tenantId : '';
+    if (!tid) throw new Error('tenantId is required');
     const batch = this.db.batch();
     const created: any[] = [];
     for (const name of productNames || []) {
@@ -383,13 +387,15 @@ export class FirestoreBillingRepository implements IBillingRepository {
   }
 
   async getAllFeeProducts(tenantId: string): Promise<any[]> {
-    const tid = tenantId || 'tenant-test-001';
+    const tid = (tenantId && tenantId !== 'undefined' && tenantId !== 'null') ? tenantId : '';
+    if (!tid) throw new Error('tenantId is required');
     const snap = await this.db.collection('tenants').doc(tid).collection('feeProducts').get();
     return snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
   }
 
   async updateFeeProduct(id: string, name: string, tenantId: string): Promise<any> {
-    const tid = tenantId || 'tenant-test-001';
+    const tid = (tenantId && tenantId !== 'undefined' && tenantId !== 'null') ? tenantId : '';
+    if (!tid) throw new Error('tenantId is required');
     const ref = this.db.collection('tenants').doc(tid).collection('feeProducts').doc(id);
     const payload = { name: name.trim(), updatedAt: new Date().toISOString() };
     await ref.set(payload, { merge: true });
@@ -397,14 +403,16 @@ export class FirestoreBillingRepository implements IBillingRepository {
   }
 
   async deleteFeeProduct(id: string, tenantId: string): Promise<any> {
-    const tid = tenantId || 'tenant-test-001';
+    const tid = (tenantId && tenantId !== 'undefined' && tenantId !== 'null') ? tenantId : '';
+    if (!tid) throw new Error('tenantId is required');
     const ref = this.db.collection('tenants').doc(tid).collection('feeProducts').doc(id);
     await ref.delete();
     return { id, success: true };
   }
 
   async savePriceBook(classId: string, academicYearId: string, priceItems: any[], tenantId: string): Promise<any> {
-    const tid = tenantId || 'tenant-test-001';
+    const tid = (tenantId && tenantId !== 'undefined' && tenantId !== 'null') ? tenantId : '';
+    if (!tid) throw new Error('tenantId is required');
     const batch = this.db.batch();
     const cleanItems = (priceItems || []).map((item) => {
       const ref = item.id ? this.db.collection('tenants').doc(tid).collection('priceBooks').doc(item.id) : this.db.collection('tenants').doc(tid).collection('priceBooks').doc();
@@ -426,7 +434,8 @@ export class FirestoreBillingRepository implements IBillingRepository {
   }
 
   async getPriceBook(classId: string, academicYearId: string, tenantId: string): Promise<any[]> {
-    const tid = tenantId || 'tenant-test-001';
+    const tid = (tenantId && tenantId !== 'undefined' && tenantId !== 'null') ? tenantId : '';
+    if (!tid) throw new Error('tenantId is required');
     let query: FirebaseFirestore.Query = this.db.collection('tenants').doc(tid).collection('priceBooks');
     if (classId) query = query.where('classId', '==', classId);
     if (academicYearId) query = query.where('academicYearId', '==', academicYearId);

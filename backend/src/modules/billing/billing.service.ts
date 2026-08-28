@@ -710,7 +710,8 @@ export class BillingService {
   }
 
   async getStudentBillingAccount(studentId: string, tenantId?: string) {
-    const tid = tenantId || 'tenant-test-001';
+    const tid = (tenantId && tenantId !== 'undefined' && tenantId !== 'null') ? tenantId : '';
+    if (!tid) return null;
     let profile: any = null;
     try {
       profile = await this.studentRepo.findProfileById(studentId);
@@ -773,7 +774,8 @@ export class BillingService {
   }
 
   async getUnpaidFees(oppId: string, tenantId?: string) {
-    const tid = tenantId || 'tenant-test-001';
+    const tid = (tenantId && tenantId !== 'undefined' && tenantId !== 'null') ? tenantId : '';
+    if (!tid) return [];
     const studentId = oppId;
 
     let paidAmount = 0;

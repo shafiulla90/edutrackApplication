@@ -52,7 +52,8 @@ export class ComplaintBoxService {
   // Helper to resolve complete student profile object by studentId
   private async resolveStudentObject(studentId: string, tenantId?: string) {
     if (!this.db || !studentId) return null;
-    const tid = tenantId || 'tenant-test-001';
+    const tid = (tenantId && tenantId !== 'undefined' && tenantId !== 'null') ? tenantId : '';
+    if (!tid) return null;
 
     try {
       // Check studentProfiles first, then tenant students collection
@@ -107,7 +108,8 @@ export class ComplaintBoxService {
   }
 
   async getStudentClasses(tenantId?: string) {
-    const tid = tenantId || 'tenant-test-001';
+    const tid = (tenantId && tenantId !== 'undefined' && tenantId !== 'null') ? tenantId : '';
+    if (!tid) return null;
     const classesMap = new Map<string, { className: string; sectionName: string }>();
 
     if (this.db) {
@@ -152,7 +154,8 @@ export class ComplaintBoxService {
   }
 
   async getStudentsByClass(classSectionId: string, tenantId?: string) {
-    const tid = tenantId || 'tenant-test-001';
+    const tid = (tenantId && tenantId !== 'undefined' && tenantId !== 'null') ? tenantId : '';
+    if (!tid) return null;
     if (!this.db) return [];
 
     try {
@@ -206,7 +209,8 @@ export class ComplaintBoxService {
   }
 
   async searchStudents(searchTerm?: string, classId?: string, sectionId?: string, tenantId?: string) {
-    const tid = tenantId || 'tenant-test-001';
+    const tid = (tenantId && tenantId !== 'undefined' && tenantId !== 'null') ? tenantId : '';
+    if (!tid) return null;
     if (!this.db) return [];
 
     try {
@@ -252,7 +256,8 @@ export class ComplaintBoxService {
   }
 
   async getTeachers(tenantId?: string) {
-    const tid = tenantId || 'tenant-test-001';
+    const tid = (tenantId && tenantId !== 'undefined' && tenantId !== 'null') ? tenantId : '';
+    if (!tid) return null;
     if (!this.db) {
       return [
         { id: 'teacher-001', user: { name: 'Sarah Jenkins (Admin)' } },
@@ -290,7 +295,8 @@ export class ComplaintBoxService {
   }
 
   async submitStudentBehavior(dto: any, tenantId?: string) {
-    const tid = tenantId || 'tenant-test-001';
+    const tid = (tenantId && tenantId !== 'undefined' && tenantId !== 'null') ? tenantId : '';
+    if (!tid) return null;
     const studentObj = await this.resolveStudentObject(dto.studentId, tid);
 
     if (!this.db) return { id: 'case-' + Date.now(), ...dto, student: studentObj };
@@ -372,7 +378,8 @@ export class ComplaintBoxService {
   }
 
   async getPendingCases(academicYear?: string, tenantId?: string) {
-    const tid = tenantId || 'tenant-test-001';
+    const tid = (tenantId && tenantId !== 'undefined' && tenantId !== 'null') ? tenantId : '';
+    if (!tid) return null;
     if (!this.db) return [];
 
     await this.seedInitialBehaviorCasesIfEmpty(tid);
@@ -402,7 +409,8 @@ export class ComplaintBoxService {
   }
 
   async getStudentCases(studentId: string, academicYear?: string, tenantId?: string) {
-    const tid = tenantId || 'tenant-test-001';
+    const tid = (tenantId && tenantId !== 'undefined' && tenantId !== 'null') ? tenantId : '';
+    if (!tid) return null;
     if (!this.db || !studentId) return [];
 
     try {
@@ -444,7 +452,8 @@ export class ComplaintBoxService {
   }
 
   async updateCaseStatus(caseId: string, dto: any, tenantId?: string) {
-    const tid = tenantId || 'tenant-test-001';
+    const tid = (tenantId && tenantId !== 'undefined' && tenantId !== 'null') ? tenantId : '';
+    if (!tid) return null;
     if (this.db && caseId) {
       await this.db.collection('tenants').doc(tid).collection('behaviorCases').doc(caseId).update({
         status: dto.status || 'RESOLVED',
@@ -455,7 +464,8 @@ export class ComplaintBoxService {
   }
 
   async updateBehavior(caseId: string, dto: any, tenantId?: string) {
-    const tid = tenantId || 'tenant-test-001';
+    const tid = (tenantId && tenantId !== 'undefined' && tenantId !== 'null') ? tenantId : '';
+    if (!tid) return null;
     if (this.db && caseId) {
       await this.db.collection('tenants').doc(tid).collection('behaviorCases').doc(caseId).update({
         ...dto,
@@ -466,7 +476,8 @@ export class ComplaintBoxService {
   }
 
   async deleteBehavior(caseId: string, tenantId?: string) {
-    const tid = tenantId || 'tenant-test-001';
+    const tid = (tenantId && tenantId !== 'undefined' && tenantId !== 'null') ? tenantId : '';
+    if (!tid) return null;
     if (this.db && caseId) {
       await this.db.collection('tenants').doc(tid).collection('behaviorCases').doc(caseId).delete();
     }
@@ -515,7 +526,8 @@ export class ComplaintBoxService {
   }
 
   async getParentComplaints(status?: string, tenantId?: string) {
-    const tid = tenantId || 'tenant-test-001';
+    const tid = (tenantId && tenantId !== 'undefined' && tenantId !== 'null') ? tenantId : '';
+    if (!tid) return null;
     if (!this.db) return [];
 
     await this.seedParentComplaintsIfEmpty(tid);
@@ -538,7 +550,8 @@ export class ComplaintBoxService {
   }
 
   async updateParentComplaintStatus(id: string, data: any, tenantId?: string) {
-    const tid = tenantId || 'tenant-test-001';
+    const tid = (tenantId && tenantId !== 'undefined' && tenantId !== 'null') ? tenantId : '';
+    if (!tid) return null;
     if (this.db && id) {
       await this.db.collection('tenants').doc(tid).collection('parentComplaints').doc(id).update({
         status: data.status || 'RESOLVED',

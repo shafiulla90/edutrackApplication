@@ -14,20 +14,52 @@ export class SubscriptionService {
     return this.firebaseService ? this.firebaseService.getFirestore() : null;
   }
 
-  async assignFreePlanToNewTenant(tenantId: string) {
+  async assignFreePlanToNewTenant(tenantId: string, planChoice: string = 'FREE') {
     const startDate = new Date();
-    const expiryDate = new Date();
-    expiryDate.setMonth(expiryDate.getMonth() + 6);
+    const expiryDate = new Date(startDate);
+    
+    let plan = 'FREE';
+    let planCode = 'FREE_1_MONTH';
+    let planName = 'EduTrack Free Trial – 1 Month';
+    let durationMonths = 1;
+    let billingCycle = '1 Month';
+    let amount = 0;
+    let status = 'TRIALING';
+
+    if (planChoice === 'BASIC') {
+      plan = 'BASIC';
+      planCode = 'BASIC_6_MONTH';
+      planName = 'EduTrack Basic – 6 Months';
+      durationMonths = 6;
+      billingCycle = '6 Months';
+      amount = 1999;
+      status = 'ACTIVE';
+      expiryDate.setMonth(expiryDate.getMonth() + 6);
+    } else if (planChoice === 'PREMIUM') {
+      plan = 'PREMIUM';
+      planCode = 'PREMIUM_12_MONTH';
+      planName = 'EduTrack Premium – 12 Months';
+      durationMonths = 12;
+      billingCycle = '12 Months';
+      amount = 4999;
+      status = 'ACTIVE';
+      expiryDate.setMonth(expiryDate.getMonth() + 12);
+    } else {
+      // FREE / TRIAL plan: 1 calendar month exact calculation
+      expiryDate.setMonth(expiryDate.getMonth() + 1);
+    }
 
     const subscriptionData = {
       tenantId,
-      plan: 'BASIC',
-      planCode: 'BASIC_6_MONTH',
-      planName: 'EduTrack Basic – 6 Months',
-      amount: 1,
-      billingCycle: '6 Months',
-      durationMonths: 6,
-      status: 'ACTIVE',
+      plan,
+      planCode,
+      planName,
+      amount,
+      billingCycle,
+      durationMonths,
+      status,
+      trialStartDate: startDate.toISOString(),
+      trialEndDate: expiryDate.toISOString(),
       startDate: startDate.toISOString(),
       expiryDate: expiryDate.toISOString(),
       updatedAt: new Date().toISOString(),
@@ -53,12 +85,10 @@ export class SubscriptionService {
         const rootData = rootDoc.exists ? rootDoc.data() : null;
 
         if (tenantData && rootData) {
-          // Compare updatedAt or expiryDate to use the latest edited record
           const tenantExpiry = tenantData.expiryDate || '';
           const rootExpiry = rootData.expiryDate || '';
 
           if (rootExpiry !== tenantExpiry) {
-            // Root document was edited in Firebase Console! Prefer root data & sync to tenant subcollection
             subData = rootData;
             await this.db.collection('tenants').doc(tenantId).collection('subscription').doc('current').set(rootData, { merge: true }).catch(() => null);
           } else {
@@ -71,21 +101,22 @@ export class SubscriptionService {
     }
 
     if (!subData) {
-      // Default active subscription fallback for new/active tenants (6 months duration)
+      // Default 1-month free trial for new tenants
       const startDate = new Date();
-      const expiryDate = new Date();
-      expiryDate.setMonth(expiryDate.getMonth() + 6);
+      const expiryDate = new Date(startDate);
+      expiryDate.setMonth(expiryDate.getMonth() + 1);
       subData = {
         tenantId,
-        plan: 'BASIC',
-        planCode: 'BASIC_6_MONTH',
-        planName: 'EduTrack Basic – 6 Months',
-        billingCycle: '6 Months',
-        amount: 1,
-        status: 'ACTIVE',
+        plan: 'FREE',
+        planCode: 'FREE_1_MONTH',
+        planName: 'EduTrack Free Trial – 1 Month',
+        billingCycle: '1 Month',
+        amount: 0,
+        status: 'TRIALING',
+        trialStartDate: startDate.toISOString(),
+        trialEndDate: expiryDate.toISOString(),
         startDate: startDate.toISOString(),
         expiryDate: expiryDate.toISOString(),
-        gracePeriod: 14,
       };
     }
 

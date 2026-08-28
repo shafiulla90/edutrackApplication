@@ -60,7 +60,7 @@ export class ParentPortalService {
   }
 
   async getChildren(userId: string, tenantId?: string, userObj?: any) {
-    if (!tenantId) tenantId = 'tenant-test-001';
+    if (!tenantId || tenantId === 'undefined' || tenantId === 'null') return [];
     if (this.studentRepo.findStudentsByParent) {
       const res = await this.studentRepo.findStudentsByParent(userId, tenantId, userObj);
       if (res && res.length > 0) return res;
@@ -84,7 +84,8 @@ export class ParentPortalService {
   }
 
   async getChildDashboard(userId: string, studentId: string, tenantId?: string) {
-    const tid = tenantId || 'tenant-test-001';
+    const tid = (tenantId && tenantId !== 'undefined' && tenantId !== 'null') ? tenantId : '';
+    if (!tid) return null;
     let studentName = 'Student';
     let pendingFees = 0;
 
@@ -187,7 +188,8 @@ export class ParentPortalService {
   }
 
   async getStudentProfile(userId: string, studentId: string, tenantId?: string) {
-    const tid = tenantId || 'tenant-test-001';
+    const tid = (tenantId && tenantId !== 'undefined' && tenantId !== 'null') ? tenantId : '';
+    if (!tid) return null;
     let sData: any = null;
 
     if (this.db && studentId) {
@@ -399,7 +401,8 @@ export class ParentPortalService {
   }
 
   async getAttendance(userId: string, studentId: string, tenantId?: string) {
-    const tid = tenantId || 'tenant-test-001';
+    const tid = (tenantId && tenantId !== 'undefined' && tenantId !== 'null') ? tenantId : '';
+    if (!tid) return null;
     const emptyResult = {
       records: [],
       summary: {
@@ -524,7 +527,8 @@ export class ParentPortalService {
 
 
   async getHomework(userId: string, studentId: string, tenantId?: string) {
-    const tid = tenantId || 'tenant-test-001';
+    const tid = (tenantId && tenantId !== 'undefined' && tenantId !== 'null') ? tenantId : '';
+    if (!tid) return null;
     if (!this.db) return [];
     try {
       let studentData: any = null;
@@ -600,7 +604,8 @@ export class ParentPortalService {
   }
 
   async submitAssignment(userId: string, studentId: string, homeworkId: string, base64File: string, fileName: string, tenantId?: string) {
-    const tid = tenantId || 'tenant-test-001';
+    const tid = (tenantId && tenantId !== 'undefined' && tenantId !== 'null') ? tenantId : '';
+    if (!tid) return null;
     if (this.db && homeworkId && studentId) {
       try {
         const subId = `${homeworkId}_${studentId}`;
@@ -625,7 +630,8 @@ export class ParentPortalService {
   }
 
   async getExams(userId: string, studentId: string, tenantId?: string) {
-    const tid = tenantId || 'tenant-test-001';
+    const tid = (tenantId && tenantId !== 'undefined' && tenantId !== 'null') ? tenantId : '';
+    if (!tid) return null;
     if (!this.db || !studentId) return { exams: [], schedules: [] };
     try {
       let studentDoc: any = null;
@@ -800,7 +806,8 @@ export class ParentPortalService {
   }
 
   async getFees(userId: string, studentId: string, tenantId?: string) {
-    const tid = tenantId || 'tenant-test-001';
+    const tid = (tenantId && tenantId !== 'undefined' && tenantId !== 'null') ? tenantId : '';
+    if (!tid) return null;
     let rawInvoices: any[] = [];
 
     if (this.db && studentId) {
@@ -968,7 +975,8 @@ export class ParentPortalService {
   }
 
   async getTimetable(userId: string, studentId: string, tenantId?: string) {
-    const tid = tenantId || 'tenant-test-001';
+    const tid = (tenantId && tenantId !== 'undefined' && tenantId !== 'null') ? tenantId : '';
+    if (!tid) return null;
     if (!this.db) return [];
     try {
       let classSectionId = '';
@@ -1082,7 +1090,8 @@ export class ParentPortalService {
   }
 
   async getAnnouncements(userId: string, studentId: string, tenantId?: string) {
-    const tid = tenantId || 'tenant-test-001';
+    const tid = (tenantId && tenantId !== 'undefined' && tenantId !== 'null') ? tenantId : '';
+    if (!tid) return null;
     if (!this.db) return [];
     try {
       let classSectionId = '';
@@ -1115,7 +1124,8 @@ export class ParentPortalService {
   }
 
   async getTeacherComplaints(userId: string, studentId: string, tenantId?: string) {
-    const tid = tenantId || 'tenant-test-001';
+    const tid = (tenantId && tenantId !== 'undefined' && tenantId !== 'null') ? tenantId : '';
+    if (!tid) return null;
     if (!this.db) return [];
     try {
       let linkedStudentIds: string[] = [];
@@ -1157,7 +1167,8 @@ export class ParentPortalService {
   }
 
   async getComplaints(userId: string, tenantId?: string) {
-    const tid = tenantId || 'tenant-test-001';
+    const tid = (tenantId && tenantId !== 'undefined' && tenantId !== 'null') ? tenantId : '';
+    if (!tid) return null;
     if (!this.db) return [];
     try {
       const snap = await this.db.collection('tenants').doc(tid).collection('parentComplaints').get().catch(() => null);
@@ -1186,7 +1197,8 @@ export class ParentPortalService {
   }
 
   async submitComplaint(userId: string, tenantId: string, data: any) {
-    const tid = tenantId || 'tenant-test-001';
+    const tid = (tenantId && tenantId !== 'undefined' && tenantId !== 'null') ? tenantId : '';
+    if (!tid) return null;
     const docRef = this.db ? this.db.collection('tenants').doc(tid).collection('parentComplaints').doc() : null;
     const complaintObj = {
       id: docRef ? docRef.id : 'pc-' + Date.now(),
@@ -1212,7 +1224,8 @@ export class ParentPortalService {
   }
 
   async getLeavesHistory(userId: string, studentId: string, tenantId?: string) {
-    const tid = tenantId || 'tenant-test-001';
+    const tid = (tenantId && tenantId !== 'undefined' && tenantId !== 'null') ? tenantId : '';
+    if (!tid) return null;
     if (!this.db || !studentId) return [];
     try {
       const snap = await this.db.collection('tenants').doc(tid).collection('leaveRequests')
@@ -1232,7 +1245,8 @@ export class ParentPortalService {
   }
 
   async submitLeaveRequest(userId: string, studentId: string, data: any, tenantId?: string) {
-    const tid = tenantId || 'tenant-test-001';
+    const tid = (tenantId && tenantId !== 'undefined' && tenantId !== 'null') ? tenantId : '';
+    if (!tid) return null;
     let studentData: any = {};
     if (this.db && studentId) {
       let sDoc = await this.db.collection('studentProfiles').doc(studentId).get().catch(() => null);

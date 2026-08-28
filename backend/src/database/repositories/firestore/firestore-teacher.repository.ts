@@ -91,7 +91,8 @@ export class FirestoreTeacherRepository implements ITeacherRepository {
 
 
   async findTeacherAssignments(teacherId: string, tenantId?: string): Promise<any[]> {
-    const tid = tenantId || 'tenant-test-001';
+    const tid = (tenantId && tenantId !== 'undefined' && tenantId !== 'null') ? tenantId : '';
+    if (!tid) return [];
     let assignments: any[] = [];
 
     if (tid) {

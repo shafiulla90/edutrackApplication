@@ -18,34 +18,20 @@ export class TenantContextMiddleware implements NestMiddleware {
       }
     }
 
-    const headerTenantId = req.headers['x-tenant-id'];
-    
-    // JWT tenant identity is non-bypassable and authoritative
-    const jwtTenantId = userPayload?.tenantId || null;
-    let resolvedTenantId = jwtTenantId;
-
-    if (!resolvedTenantId && headerTenantId && headerTenantId !== 'undefined' && headerTenantId !== 'null') {
-      resolvedTenantId = headerTenantId;
-    }
-
-    if (userPayload) {
-      // If client sends a conflicting X-Tenant-ID header, validate authorization
+    if (userPayload && userPayload.tenantId) {
+      const headerTenantId = req.headers['x-tenant-id'] || req.headers['X-Tenant-ID'];
       if (headerTenantId && headerTenantId !== userPayload.tenantId && userPayload.role !== 'SUPER_ADMIN') {
         console.warn(`TenantContextMiddleware: Client X-Tenant-ID (${headerTenantId}) overridden by authenticated JWT tenant (${userPayload.tenantId})`);
       }
       req.user = {
         ...userPayload,
-        tenantId: userPayload.tenantId || resolvedTenantId,
+        tenantId: userPayload.tenantId,
       };
-    } else if (resolvedTenantId) {
-      req.user = {
-        id: 'user-header',
-        tenantId: resolvedTenantId,
-        role: 'SCHOOL_ADMIN',
-      };
+      req.tenantId = userPayload.tenantId;
+    } else {
+      req.user = null;
+      req.tenantId = null;
     }
-
-    req.tenantId = resolvedTenantId;
     next();
   }
 }
