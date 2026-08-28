@@ -1,0 +1,10 @@
+node_modules
+.next
+out
+deploy
+edutrack-deploy
+zip-test
+*.zip
+*.zip.zip
+*.7z
+*.log

@@ -103,10 +103,11 @@ export function getTenantFromHostname(): string {
       return sub;
     }
   } else if (hostname.endsWith('.vercel.app')) {
-    const parts = hostname.replace('.vercel.app', '').split('.');
-    if (parts.length > 1 && parts[0] !== 'www') {
-      return parts[0];
+    const prefix = hostname.replace('.vercel.app', '');
+    if (prefix !== 'edutrack-saas-frontend' && prefix !== 'edu-track-saa-s' && prefix !== 'www' && prefix !== 'api' && prefix !== 'edutrack-backend-api') {
+      return prefix;
     }
+    return '';
   } else {
     const parts = hostname.split('.');
     if (parts.length > 1 && parts[0] !== 'localhost' && parts[0] !== 'www' && isNaN(Number(parts[0]))) {

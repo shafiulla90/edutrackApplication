@@ -3,6 +3,7 @@ import { initializeApp, cert, getApps, App } from 'firebase-admin/app';
 import { getFirestore, Firestore } from 'firebase-admin/firestore';
 import { getAuth, Auth } from 'firebase-admin/auth';
 import * as fs from 'fs';
+import * as path from 'path';
 
 @Injectable()
 export class FirebaseService implements OnModuleInit, OnModuleDestroy {
@@ -43,6 +44,17 @@ export class FirebaseService implements OnModuleInit, OnModuleDestroy {
         credential = cert(serviceAccount);
       } catch (err) {
         this.logger.error('Failed to parse FIREBASE_SERVICE_ACCOUNT_JSON', err);
+      }
+    }
+
+    const localSaPath = path.join(process.cwd(), 'firebase-service-account.json');
+    if (!credential && fs.existsSync(localSaPath)) {
+      try {
+        this.logger.log(`Initializing Firebase Admin SDK using local firebase-service-account.json file`);
+        const serviceAccount = JSON.parse(fs.readFileSync(localSaPath, 'utf8'));
+        credential = cert(serviceAccount);
+      } catch (err) {
+        this.logger.error('Failed to parse local firebase-service-account.json', err);
       }
     }
 

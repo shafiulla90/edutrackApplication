@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Put, Body, Request, Param } from '@nestjs/common';
+import { Controller, Get, Post, Put, Body, Request, Param, Query } from '@nestjs/common';
 import { TenantService } from './tenant.service';
 import { JwtService } from '@nestjs/jwt';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
@@ -14,9 +14,17 @@ export class TenantController {
 
   @Get('public-branding')
   @ApiOperation({ summary: 'Get public branding for default/current tenant' })
-  async getPublicBranding() {
+  async getPublicBranding(@Query('phone') phone?: string) {
+    let targetTenant = null;
+    if (phone) {
+      const cleanedPhone = phone.replace(/[\s\-()]/g, '');
+      const user = await (this.tenantService as any).userRepo?.findByPhone(cleanedPhone).catch(() => null);
+      if (user?.tenantId) {
+        targetTenant = await (this.tenantService as any).tenantRepo?.findById(user.tenantId).catch(() => null);
+      }
+    }
     const tenants = await this.tenantService.findAll();
-    const primaryTenant = tenants[0] || {
+    const primaryTenant = targetTenant || tenants[0] || {
       id: 'default',
       name: 'EduTrack School System',
       subDomain: 'default',
@@ -26,8 +34,8 @@ export class TenantController {
       tenant: primaryTenant,
       branding: {
         schoolName: primaryTenant.name || 'EduTrack Application',
-        logoUrl: null,
-        themeColor: '#4f46e5',
+        logoUrl: (primaryTenant as any).logoUrl || null,
+        themeColor: (primaryTenant as any).themeColor || '#4f46e5',
       },
     };
   }
