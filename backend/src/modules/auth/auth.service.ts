@@ -100,134 +100,62 @@ export class AuthService {
 
   async sendOtp(phone: string, portal?: string) {
     const cleanedPhone = (phone || '').replace(/[\s\-()]/g, '');
-
-    // Step 1: Check if phone matches any user in the database
-    let existingUser = null;
-    if (typeof this.userRepo.findByPhone === 'function') {
-      existingUser = await this.userRepo.findByPhone(cleanedPhone, portal).catch(() => null);
+    if (!cleanedPhone || cleanedPhone.length < 10) {
+      throw new ConflictException('Please enter a valid 10-digit mobile number');
     }
 
-    let anyUser = null;
-    if (!existingUser && typeof (this.userRepo as any).findAnyUserByPhone === 'function') {
-      anyUser = await (this.userRepo as any).findAnyUserByPhone(cleanedPhone).catch(() => null);
-    }
-
-    const matchedUser = existingUser || anyUser;
-
-    // Step 2: Role & Wrong Portal Validation
-    if (matchedUser && portal) {
-      const userRole = (matchedUser.role || '').toUpperCase();
-      const isTeacherRole = ['TEACHER', 'STAFF', 'DRIVER'].includes(userRole);
-      const isParentRole = ['PARENT', 'STUDENT'].includes(userRole);
-      const isAdminRole = ['SCHOOL_ADMIN', 'CORRESPONDENT', 'SUPER_ADMIN', 'ADMIN'].includes(userRole);
-
-      if (portal === 'admin' && !isAdminRole) {
-        const correctPortal = isTeacherRole ? 'teacher' : 'parent';
-        const roleLabel = isTeacherRole ? 'Teacher' : 'Parent';
-        const portalLabel = isTeacherRole ? 'Teacher Portal' : 'Parent Portal';
-        return {
-          success: false,
-          notFound: true,
-          portalMismatch: true,
-          correctPortal,
-          message: `This phone number is registered as a ${roleLabel}. Please use the ${portalLabel} to continue.`,
-        };
-      }
-
-      if (portal === 'teacher' && !isTeacherRole) {
-        const correctPortal = isAdminRole ? 'admin' : 'parent';
-        const roleLabel = isAdminRole ? 'School Administrator' : 'Parent';
-        const portalLabel = isAdminRole ? 'School Admin Portal' : 'Parent Portal';
-        return {
-          success: false,
-          notFound: true,
-          portalMismatch: true,
-          correctPortal,
-          message: `This phone number is registered as a ${roleLabel}. Please use the ${portalLabel} to continue.`,
-        };
-      }
-
-      if ((portal === 'parent' || portal === 'student') && !isParentRole) {
-        const correctPortal = isAdminRole ? 'admin' : 'teacher';
-        const roleLabel = isAdminRole ? 'School Administrator' : 'Teacher';
-        const portalLabel = isAdminRole ? 'School Admin Portal' : 'Teacher Portal';
-        return {
-          success: false,
-          notFound: true,
-          portalMismatch: true,
-          correctPortal,
-          message: `This phone number is registered as a ${roleLabel}. Please use the ${portalLabel} to continue.`,
-        };
-      }
-    }
-
-    // Step 3: If no user found in database, reject authentication with clear message
-    if (!matchedUser) {
-      const portalLabel = portal === 'teacher' ? 'Teacher' : portal === 'parent' || portal === 'student' ? 'Parent/Student' : 'School Administrator';
-      return {
-        success: false,
-        notFound: true,
-        registered: false,
-        portalMismatch: false,
-        message: `${portalLabel} account not found. Please register to continue.`,
-      };
-    }
-
-    // Step 4: Locate tenant associated strictly with matchedUser
-    const tenant = await this.tenantRepo.findById(matchedUser.tenantId).catch(() => null);
-    if (!tenant) {
-      return {
-        success: false,
-        notFound: true,
-        registered: false,
-        message: 'School tenant association not found for this user account. Please contact support.',
-      };
-    }
-
-    const generatedOtp = process.env.ALLOW_TEST_OTP === 'true' || process.env.NODE_ENV !== 'production' ? '123456' : Math.floor(100000 + Math.random() * 900000).toString();
+    const generatedOtp = process.env.ALLOW_TEST_OTP === 'true' ? '123456' : Math.floor(100000 + Math.random() * 900000).toString();
     this.otpStore.set(cleanedPhone, {
       code: generatedOtp,
       expiresAt: Date.now() + 15 * 60 * 1000,
     });
 
     console.log(`\n==========================================`);
-    console.log(`[EduTrack Auth] OTP FOR USER (${cleanedPhone}): ${generatedOtp}`);
+    console.log(`[EduTrack Auth] REAL OTP GENERATED FOR (${cleanedPhone}): ${generatedOtp}`);
     console.log(`==========================================\n`);
+
+    // If Fast2SMS or HTTP SMS Provider API key is provided, send real SMS
+    const fast2smsKey = process.env.FAST2SMS_API_KEY;
+    if (fast2smsKey) {
+      try {
+        const https = require('https');
+        const postData = JSON.stringify({
+          route: 'otp',
+          variables_values: generatedOtp,
+          numbers: cleanedPhone.slice(-10),
+        });
+        const req = https.request({
+          hostname: 'www.fast2sms.com',
+          path: '/dev/bulkV2',
+          method: 'POST',
+          headers: {
+            'authorization': fast2smsKey,
+            'Content-Type': 'application/json',
+            'Content-Length': postData.length,
+          },
+        });
+        req.on('error', (e: any) => this.logger.error('Fast2SMS send error:', e));
+        req.write(postData);
+        req.end();
+      } catch (smsErr) {
+        this.logger.error('Failed to dispatch Fast2SMS:', smsErr);
+      }
+    }
 
     return {
       success: true,
       registered: true,
-      schoolName: tenant.name || 'EduTrack School',
-      logoUrl: tenant.logoUrl || null,
+      schoolName: 'EduTrack SaaS Platform',
       message: 'OTP sent successfully to mobile number',
       phone: cleanedPhone,
-      code: generatedOtp,
-      tenantId: tenant.id,
+      code: process.env.ALLOW_TEST_OTP === 'true' ? generatedOtp : undefined,
     };
   }
 
   async verifyOtp(phone: string, otp?: string, idToken?: string, portal?: string) {
     const cleanedPhone = (phone || '').replace(/[\s\-()]/g, '');
 
-    let existingUser = null;
-    if (typeof this.userRepo.findByPhone === 'function') {
-      existingUser = await this.userRepo.findByPhone(cleanedPhone, portal).catch(() => null);
-    }
-    if (!existingUser && typeof (this.userRepo as any).findAnyUserByPhone === 'function') {
-      existingUser = await (this.userRepo as any).findAnyUserByPhone(cleanedPhone).catch(() => null);
-    }
-
-    // Reject unknown/unregistered phone numbers — NEVER default to tenants[0]
-    if (!existingUser) {
-      throw new UnauthorizedException('Account not found for this mobile number. Please register to continue.');
-    }
-
-    const tenant = await this.tenantRepo.findById(existingUser.tenantId).catch(() => null);
-    if (!tenant) {
-      throw new UnauthorizedException('School tenant association not found for this user account.');
-    }
-
-    // Validate OTP against stored code or valid token
+    // Step 1: Validate OTP against stored code or valid token
     const storedOtp = this.otpStore.get(cleanedPhone);
     const inputCode = (otp || idToken || '').trim();
 
@@ -255,37 +183,48 @@ export class AuthService {
       throw new UnauthorizedException('Invalid or expired OTP code. Please try again.');
     }
 
-    // Clear used OTP from store
-    this.otpStore.delete(cleanedPhone);
+    // Step 2: AFTER OTP IS VERIFIED, check database for registered user
+    let existingUser = null;
+    if (typeof this.userRepo.findByPhone === 'function') {
+      existingUser = await this.userRepo.findByPhone(cleanedPhone, portal).catch(() => null);
+    }
+    if (!existingUser && typeof (this.userRepo as any).findAnyUserByPhone === 'function') {
+      existingUser = await (this.userRepo as any).findAnyUserByPhone(cleanedPhone).catch(() => null);
+    }
 
-    const role = existingUser.role;
-    const userId = existingUser.id;
+    // Unregistered User: OTP is valid, but no user account exists
+    if (!existingUser) {
+      return {
+        success: true,
+        registered: false,
+        notFound: true,
+        message: 'Account not found for this mobile number. Please register to continue.',
+      };
+    }
+
+    // Registered User: Fetch strict user-tenant mapping
+    const tenant = await this.tenantRepo.findById(existingUser.tenantId).catch(() => null);
+    if (!tenant) {
+      throw new UnauthorizedException('School tenant association not found for this user account.');
+    }
 
     const payload = {
-      sub: userId,
+      sub: existingUser.id,
       phone: cleanedPhone,
-      name: existingUser.name || null,
-      email: existingUser.email || null,
-      role,
+      email: existingUser.email,
+      role: existingUser.role,
       tenantId: tenant.id,
     };
-
-    const userName = existingUser.name || (role === 'TEACHER' ? 'Teacher' : role === 'PARENT' ? 'Parent User' : 'School Administrator');
 
     return {
       success: true,
       registered: true,
       access_token: this.jwtService.sign(payload),
       user: {
-        id: userId,
-        phone: cleanedPhone,
-        email: existingUser.email || `${portal || 'admin'}@edutrack.com`,
-        name: userName,
-        role,
+        ...existingUser,
         tenantId: tenant.id,
         tenant,
       },
-      token: this.jwtService.sign(payload),
     };
   }
 

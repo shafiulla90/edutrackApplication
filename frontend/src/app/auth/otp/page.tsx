@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { ArrowLeft, Loader2, AlertCircle, ShieldCheck } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Loader2, AlertCircle, ShieldCheck, ShieldAlert } from 'lucide-react';
 import { api } from '@/lib/api';
 import { auth } from '@/lib/firebase';
 import { getConfirmationResult, setConfirmationResult } from '@/lib/firebaseAuthStore';
@@ -21,6 +21,7 @@ function OtpContent() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
+  const [notFoundInfo, setNotFoundInfo] = useState<{ isNotFound: boolean; message: string } | null>(null);
 
   const recaptchaVerifierRef = useRef<RecaptchaVerifier | null>(null);
 
@@ -175,14 +176,11 @@ function OtpContent() {
           }, 500);
         }
       } else {
-        if (portal !== 'admin') {
-          setError('Account not found for the selected portal. Please contact your School Administrator.');
-          return;
-        }
-        setSuccessMsg('Verification successful! Opening registration wizard...');
-        setTimeout(() => {
-          router.push(`/register-school?phone=${encodeURIComponent(phone)}`);
-        }, 800);
+        setNotFoundInfo({
+          isNotFound: true,
+          message: data.message || 'Account not found for this mobile number. Please register to continue.'
+        });
+        return;
       }
     } catch (err: any) {
       console.error('Verify OTP error:', err);
@@ -253,6 +251,50 @@ function OtpContent() {
       setLoading(false);
     }
   };
+
+  if (notFoundInfo?.isNotFound) {
+    return (
+      <main className="min-h-screen bg-slate-950 text-slate-100 flex flex-col justify-center items-center px-4 relative overflow-hidden">
+        <div className="absolute top-[20%] left-[10%] w-[300px] h-[300px] rounded-full bg-brand-500/10 blur-[100px] pointer-events-none" />
+        <div className="absolute bottom-[20%] right-[10%] w-[300px] h-[300px] rounded-full bg-indigo-500/10 blur-[100px] pointer-events-none" />
+
+        <div className="w-full max-w-md z-10">
+          <div className="glass-card p-8 rounded-3xl border border-slate-900/50 bg-slate-900/40 backdrop-blur-xl text-center space-y-6">
+            <div className="w-14 h-14 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-400 flex items-center justify-center mx-auto">
+              <ShieldAlert className="w-7 h-7" />
+            </div>
+            <div>
+              <h2 className="text-xl font-bold text-white">Account Not Found</h2>
+              <p className="text-slate-300 text-sm mt-3 leading-relaxed font-light">
+                {notFoundInfo.message}
+              </p>
+            </div>
+            <div className="space-y-3">
+              <button
+                onClick={() => {
+                  router.push(`/register-school?phone=${encodeURIComponent(phone)}`);
+                }}
+                className="w-full py-3 px-4 bg-gradient-to-r from-brand-600 to-indigo-600 text-white rounded-xl font-semibold text-sm hover:from-brand-500 hover:to-indigo-500 shadow-lg shadow-brand-500/15 transition-all flex items-center justify-center gap-2 cursor-pointer"
+              >
+                Register New School
+                <ArrowRight className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => {
+                  setNotFoundInfo(null);
+                  router.push(`/auth/login?portal=${encodeURIComponent(portal)}`);
+                }}
+                className="w-full py-2.5 px-4 bg-slate-800/80 hover:bg-slate-800 text-slate-300 rounded-xl font-medium text-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+              >
+                <ArrowLeft className="w-4 h-4" />
+                Back to Login
+              </button>
+            </div>
+          </div>
+        </div>
+      </main>
+    );
+  }
 
   return (
     <main className="min-h-screen bg-slate-950 text-slate-100 flex flex-col justify-center items-center px-4 relative overflow-hidden">
