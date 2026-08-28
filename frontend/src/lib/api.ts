@@ -5,7 +5,7 @@ import axios from 'axios';
 const envApiUrl = process.env.NEXT_PUBLIC_API_URL;
 const BACKEND_URL = (envApiUrl && envApiUrl.startsWith('http') && !envApiUrl.includes('/backend') && !envApiUrl.includes('[SENSITIVE]'))
   ? envApiUrl
-  : 'https://api-edutrack.covenantsynergy.in';
+  : 'https://edutrack-backend-api.vercel.app';
 
 export function getActiveRole(): 'TEACHER' | 'SCHOOL_ADMIN' | 'PARENT' | 'DRIVER' {
   if (typeof window === 'undefined') return 'SCHOOL_ADMIN';

@@ -23,19 +23,13 @@ export class TenantController {
         targetTenant = await (this.tenantService as any).tenantRepo?.findById(user.tenantId).catch(() => null);
       }
     }
-    const tenants = await this.tenantService.findAll();
-    const primaryTenant = targetTenant || tenants[0] || {
-      id: 'default',
-      name: 'EduTrack School System',
-      subDomain: 'default',
-    };
     return {
       success: true,
-      tenant: primaryTenant,
+      tenant: targetTenant || null,
       branding: {
-        schoolName: primaryTenant.name || 'EduTrack Application',
-        logoUrl: (primaryTenant as any).logoUrl || null,
-        themeColor: (primaryTenant as any).themeColor || '#4f46e5',
+        schoolName: targetTenant ? targetTenant.name : 'EduTrack SaaS Platform',
+        logoUrl: targetTenant ? (targetTenant as any).logoUrl || null : null,
+        themeColor: targetTenant ? (targetTenant as any).themeColor || '#4f46e5' : '#4f46e5',
       },
     };
   }

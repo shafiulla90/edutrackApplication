@@ -1,4 +1,4 @@
-import { Injectable, UnauthorizedException, ConflictException, Inject } from '@nestjs/common';
+import { Injectable, UnauthorizedException, ConflictException, Inject, Logger, Optional } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import { RegisterDto, LoginDto } from './dto/auth.dto';
@@ -6,14 +6,18 @@ import { randomUUID } from 'crypto';
 import { SubscriptionService } from '../subscription/subscription.service';
 import { IUserRepository } from '../../common/interfaces/user.repository.interface';
 import { ITenantRepository } from '../../common/interfaces/tenant.repository.interface';
+import { FirebaseService } from '../../database/firebase.service';
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     @Inject('IUserRepository') private readonly userRepo: IUserRepository,
     @Inject('ITenantRepository') private readonly tenantRepo: ITenantRepository,
     private jwtService: JwtService,
     private subscriptionService: SubscriptionService,
+    @Optional() private readonly firebaseService?: FirebaseService,
   ) {}
 
   async register(dto: RegisterDto) {
@@ -230,10 +234,21 @@ export class AuthService {
     let isValidOtp = false;
     if (storedOtp && storedOtp.code === inputCode && storedOtp.expiresAt > Date.now()) {
       isValidOtp = true;
-    } else if (inputCode === '123456' && (process.env.ALLOW_TEST_OTP === 'true' || process.env.NODE_ENV !== 'production')) {
+      this.otpStore.delete(cleanedPhone);
+    } else if (inputCode === '123456' && process.env.ALLOW_TEST_OTP === 'true') {
       isValidOtp = true;
-    } else if (idToken && idToken.length > 20) {
-      isValidOtp = true;
+    } else if (idToken && idToken.length > 20 && this.firebaseService) {
+      try {
+        const decodedToken = await this.firebaseService.getAuth().verifyIdToken(idToken);
+        const decodedPhone = (decodedToken.phone_number || '').replace(/[\s\-()]/g, '');
+        const normDecoded = decodedPhone.slice(-10);
+        const normInput = cleanedPhone.slice(-10);
+        if (normDecoded && normInput && normDecoded === normInput) {
+          isValidOtp = true;
+        }
+      } catch (err) {
+        this.logger.error('Firebase ID token verification failed:', err);
+      }
     }
 
     if (!isValidOtp) {
@@ -275,19 +290,7 @@ export class AuthService {
   }
 
   async exchangeCode(code: string) {
-    const tenants = await this.tenantRepo.findAll();
-    const tenant = tenants[0] || { id: 'tenant-test-001', name: 'EduTrack School' };
-    const payload = { sub: 'user-auth-hub', role: 'SCHOOL_ADMIN', tenantId: tenant.id };
-    return {
-      access_token: this.jwtService.sign(payload),
-      user: {
-        id: 'user-auth-hub',
-        email: 'admin@edutrack.com',
-        role: 'SCHOOL_ADMIN',
-        tenantId: tenant.id,
-        tenant,
-      },
-    };
+    throw new UnauthorizedException('Code exchange is deprecated. Please authenticate via mobile number and OTP.');
   }
 
   async getProfile(tokenHeader?: string) {
@@ -297,14 +300,19 @@ export class AuthService {
     const token = tokenHeader.replace('Bearer ', '').trim();
     try {
       const payload = this.jwtService.verify(token);
-      const tenants = await this.tenantRepo.findAll();
-      const tenant = tenants.find((t: any) => t.id === payload.tenantId) || tenants[0] || { id: 'tenant-test-001', name: 'EduTrack School' };
+      let tenant = null;
+      if (payload.tenantId) {
+        tenant = await this.tenantRepo.findById(payload.tenantId).catch(() => null);
+      }
+      if (!tenant) {
+        throw new UnauthorizedException('School tenant association not found for user');
+      }
 
       return {
         success: true,
         user: {
           id: payload.sub,
-          email: payload.email || 'admin@edutrack.com',
+          email: payload.email || '',
           phone: payload.phone || '',
           role: payload.role || 'SCHOOL_ADMIN',
           tenantId: payload.tenantId,

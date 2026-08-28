@@ -230,20 +230,25 @@ if (isSchoolSubdomain) {
         const confirmationResult = await signInWithPhoneNumber(auth, formattedPhone, recaptchaVerifierRef.current);
         setConfirmationResult(confirmationResult);
       } catch (fbErr: any) {
-        console.warn('Firebase Phone Auth client SDK returned error (proceeding with backend OTP):', fbErr);
+        console.error('Firebase Phone Auth Error:', fbErr);
         if (recaptchaVerifierRef.current) {
           try { recaptchaVerifierRef.current.clear(); } catch (e) {}
           recaptchaVerifierRef.current = null;
         }
-        setConfirmationResult({
-          confirm: async (code: string) => {
-            return {
-              user: {
-                getIdToken: async () => code
-              }
-            } as any;
-          }
-        } as any);
+        let userFriendlyMsg = 'Failed to send SMS OTP to your mobile. Please try again.';
+        if (fbErr.code === 'auth/unauthorized-domain') {
+          userFriendlyMsg = 'Firebase SMS auth domain unauthorized. Please add edutrack-saas-frontend.vercel.app to Firebase Console Authorized Domains.';
+        } else if (fbErr.code === 'auth/invalid-phone-number') {
+          userFriendlyMsg = 'Invalid mobile phone number format.';
+        } else if (fbErr.code === 'auth/quota-exceeded') {
+          userFriendlyMsg = 'SMS OTP quota exceeded. Please try again later.';
+        } else if (fbErr.code === 'auth/too-many-requests') {
+          userFriendlyMsg = 'Too many OTP requests. Please wait a few minutes.';
+        } else if (fbErr.message) {
+          userFriendlyMsg = fbErr.message;
+        }
+        setError(userFriendlyMsg);
+        return;
       }
       setSavedPhone(cleanedPhone);
 

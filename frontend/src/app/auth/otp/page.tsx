@@ -87,7 +87,11 @@ function OtpContent() {
           const credential = await confirmationResult.confirm(codeStr);
           idToken = await credential.user.getIdToken();
         } catch (fbErr) {
-          console.warn('Firebase confirmation failed, verifying directly with backend:', fbErr);
+          console.error('Firebase OTP confirmation failed:', fbErr);
+          setError('Invalid or expired OTP code entered.');
+          setOtpCode(['', '', '', '', '', '']);
+          inputRefs.current[0]?.focus();
+          return;
         }
       }
 
