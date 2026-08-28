@@ -846,7 +846,7 @@ export class ParentPortalService {
       if (spSnap && spSnap.exists) studentProfile = spSnap.data();
     }
 
-    const totalAllocated = Number(studentProfile?.totalFees || studentProfile?.totalFeeAmount || studentProfile?.allocatedAmount || 15000);
+    const totalAllocated = Number(studentProfile?.netPayable || studentProfile?.netFeeTotal || studentProfile?.grossAmount || studentProfile?.totalFees || studentProfile?.totalFeeAmount || studentProfile?.allocatedAmount || 0);
     const discountGiven = Number(studentProfile?.discountAmount || studentProfile?.discountGiven || 0);
 
     // Sum paid amounts across valid invoices or take student profile totalPaidAmount

@@ -33,10 +33,10 @@ export class StudentService {
     let configuredExams: string[] = [];
     let feeItems: any[] = [];
 
-    let totalFees = Number(profile.totalFees || profile.totalFeeAmount || profile.allocatedAmount || 15000);
+    let totalFees = Number(profile.netPayable || profile.netFeeTotal || profile.grossAmount || profile.totalFees || profile.totalFeeAmount || profile.allocatedAmount || 0);
     let paidAmount = profile.totalPaidAmount !== undefined ? Number(profile.totalPaidAmount) : Number(profile.paidAmount || 0);
     let discountAmount = Number(profile.discountAmount || profile.discountGiven || 0);
-    let balanceDue = profile.outstandingAmount !== undefined ? Number(profile.outstandingAmount) : (profile.totalPendingBalance !== undefined ? Number(profile.totalPendingBalance) : (profile.balanceDue !== undefined ? Number(profile.balanceDue) : Math.max(0, totalFees - discountAmount - paidAmount)));
+    let balanceDue = profile.outstandingAmount !== undefined ? Number(profile.outstandingAmount) : (profile.totalPendingBalance !== undefined ? Number(profile.totalPendingBalance) : (profile.balanceDue !== undefined ? Number(profile.balanceDue) : (totalFees > 0 ? Math.max(0, totalFees - discountAmount - paidAmount) : 0)));
 
     if (db) {
       try {

@@ -254,9 +254,9 @@ export class PaymentGatewayService {
         id: invoiceId,
         invoiceNumber: `INV-${Date.now().toString().slice(-6)}`,
         studentId: studentId,
-        totalAmount: requestedAmount || 15000,
+        totalAmount: requestedAmount || 0,
         paidAmount: 0,
-        remainingBalance: requestedAmount || 15000,
+        remainingBalance: requestedAmount || 0,
         status: 'PENDING',
         createdAt: new Date().toISOString(),
       };

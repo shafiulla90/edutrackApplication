@@ -307,7 +307,7 @@ export default function FeesBillingPage() {
     }
 
     // 3. Ensure payment amount does not exceed the outstanding balance
-    const pendingBal = Number(selectedStudent.totalPendingBalance ?? selectedStudent.outstandingAmount ?? selectedStudent.totalDue ?? 15000);
+    const pendingBal = Number(selectedStudent.totalPendingBalance ?? selectedStudent.outstandingAmount ?? selectedStudent.totalDue ?? 0);
     if (billingTotal > pendingBal && pendingBal > 0) {
       alert(`Error: Payment amount (₹${fmt(billingTotal)}) cannot exceed the outstanding balance (₹${fmt(pendingBal)}).`);
       return;
@@ -399,7 +399,7 @@ export default function FeesBillingPage() {
                 transactionId: orderData.transactionId,
               });
 
-              const currentPending = Number(selectedStudent.totalPendingBalance ?? selectedStudent.outstandingAmount ?? 15000);
+              const currentPending = Number(selectedStudent.totalPendingBalance ?? selectedStudent.outstandingAmount ?? 0);
               const nextBalance = Math.max(0, currentPending - billingTotal);
               const studentName = selectedStudent.account?.name || selectedStudent.name || 'Student';
 
@@ -472,7 +472,7 @@ export default function FeesBillingPage() {
       });
 
       const createdInvoiceId = typeof res.data === 'string' ? res.data : (res.data?.id || `INV-${Date.now().toString().slice(-6)}`);
-      const currentPending = Number(selectedStudent.totalPendingBalance ?? selectedStudent.outstandingAmount ?? 15000);
+      const currentPending = Number(selectedStudent.totalPendingBalance ?? selectedStudent.outstandingAmount ?? 0);
       const nextBalance = Math.max(0, currentPending - billingTotal);
       const studentName = selectedStudent.account?.name || selectedStudent.name || 'Student';
       
@@ -848,7 +848,7 @@ export default function FeesBillingPage() {
               const rollNo = s.account?.rollNo || s.rollNo || 'N/A';
               const cls = s.account?.className || s.className || s.class || '';
               const sec = s.account?.sectionName || s.sectionName || s.section || '';
-              const pending = s.totalPendingBalance ?? s.outstandingAmount ?? s.totalDue ?? 15000;
+              const pending = s.totalPendingBalance ?? s.outstandingAmount ?? s.totalDue ?? 0;
 
               return (
                 <div
@@ -893,14 +893,14 @@ export default function FeesBillingPage() {
                 ))}
               </select>
               <span className="px-2.5 py-0.5 rounded-full bg-amber-50 text-amber-600 border border-amber-100 text-xs font-bold font-mono">
-                PENDING: ₹{Number(selectedStudent.totalPendingBalance ?? selectedStudent.outstandingAmount ?? 15000).toLocaleString()}
+                PENDING: ₹{Number(selectedStudent.totalPendingBalance ?? selectedStudent.outstandingAmount ?? 0).toLocaleString()}
               </span>
             </div>
           </div>
 
           {(() => {
             const previousYearDue = Number(selectedStudent.previousYearDue ?? selectedStudent.feeSummary?.overall?.totalPreviousYearDue ?? 0);
-            const currentYearDue = Number(selectedStudent.outstandingAmount ?? selectedStudent.totalPendingBalance ?? selectedStudent.feeSummary?.currentYear?.pendingAmount ?? 15000);
+            const currentYearDue = Number(selectedStudent.outstandingAmount ?? selectedStudent.totalPendingBalance ?? selectedStudent.feeSummary?.currentYear?.pendingAmount ?? 0);
             const totalDue = previousYearDue + currentYearDue;
 
             return (
@@ -977,7 +977,14 @@ export default function FeesBillingPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 text-xs text-slate-650 font-semibold">
-                    {feeItems.map((fee) => {
+                    {feeItems.length === 0 ? (
+                      <tr>
+                        <td colSpan={7} className="px-4 py-8 text-center text-slate-400 text-xs italic">
+                          No fee products assigned to this student.
+                        </td>
+                      </tr>
+                    ) : (
+                      feeItems.map((fee) => {
                       const isPaid = fee.balance <= 0;
                       return (
                         <tr key={fee.id} className={`${fee.isSelected ? 'bg-blue-50/10' : ''}`}>
@@ -1021,7 +1028,7 @@ export default function FeesBillingPage() {
                           </td>
                         </tr>
                       );
-                    })}
+                    }))}
                   </tbody>
                 </table>
               </div>

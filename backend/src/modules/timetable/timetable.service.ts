@@ -363,50 +363,59 @@ export class TimetableService {
     return { success: true, ...data };
   }
 
-  // TEACHERS FOR SUBJECTS
+  // TEACHERS FOR SUBJECTS (STRICT SKILL FILTERING BY TENANT)
   async getTeachersForSubject(tenantId: string, subjectIds: string[]) {
+    if (!tenantId || tenantId === 'undefined' || tenantId === 'null') {
+      throw new BadRequestException('Tenant ID is required');
+    }
     if (!subjectIds || subjectIds.length === 0) return {};
 
-    if (true) {
-      const teachers = await this.teacherRepo.findTeachersByTenant(tenantId);
-      const result: Record<string, any[]> = {};
-      for (const sid of subjectIds) {
-        result[sid] = teachers.map((t) => ({
-          Id: t.id || t.teacherId || t.userId,
-          Name: t.name || t.teacherName || t.User?.name || `${t.firstName || ''} ${t.lastName || ''}`.trim() || 'Teacher',
-          Teacher_Skill__c: 'Expert',
-        }));
-      }
-      return result;
+    const db = this.firebase?.getFirestore();
+    const teachers = await this.teacherRepo.findTeachersByTenant(tenantId);
+
+    // Fetch subject docs for subject name resolution
+    const subjectMap: Record<string, string> = {};
+    if (db) {
+      try {
+        const subSnap = await db.collection('tenants').doc(tenantId).collection('subjects').get();
+        subSnap.docs.forEach((doc) => {
+          const d = doc.data();
+          if (d.name) subjectMap[doc.id] = d.name;
+        });
+      } catch (e) {}
     }
 
-    const skills = await this.prisma.teacherSkill.findMany({
-      where: {
-        tenantId,
-        subjectId: { in: subjectIds },
-      },
-      include: {
-        StaffProfile: {
-          include: { User: true },
-        },
-      },
-      orderBy: {
-        StaffProfile: {
-          User: { name: 'asc' },
-        },
-      },
-    });
-
     const result: Record<string, any[]> = {};
-    for (const ts of skills) {
-      if (!result[ts.subjectId]) {
-        result[ts.subjectId] = [];
-      }
-      result[ts.subjectId].push({
-        Id: ts.StaffProfile.id,
-        Name: ts.StaffProfile.User.name,
-        Teacher_Skill__c: ts.skillLevel || 'Expert',
+    for (const sid of subjectIds) {
+      const subjectName = (subjectMap[sid] || sid).toLowerCase().trim();
+
+      const qualified = teachers.filter((t) => {
+        // Collect all potential skill/subject indicators
+        const rawSubs: any = t.subjectsTaught || t.subjects || t.qualification || t.skills || [];
+        let subStrings: string[] = [];
+
+        if (Array.isArray(rawSubs)) {
+          subStrings = rawSubs.map((s) => {
+            if (typeof s === 'string') return s.toLowerCase().trim();
+            if (s && typeof s === 'object') return (s.name || s.subjectName || s.subjectId || '').toLowerCase().trim();
+            return '';
+          }).filter(Boolean);
+        } else if (typeof rawSubs === 'string') {
+          subStrings = rawSubs.split(',').map((s) => s.toLowerCase().trim());
+        }
+
+        if (t.qualification && typeof t.qualification === 'string') {
+          subStrings.push(t.qualification.toLowerCase().trim());
+        }
+
+        return subStrings.some((s) => s.includes(subjectName) || subjectName.includes(s));
       });
+
+      result[sid] = qualified.map((t) => ({
+        Id: t.id || t.teacherId || t.userId,
+        Name: t.name || t.teacherName || t.User?.name || `${t.firstName || ''} ${t.lastName || ''}`.trim() || 'Teacher',
+        Teacher_Skill__c: 'Expert',
+      }));
     }
     return result;
   }
@@ -441,13 +450,17 @@ export class TimetableService {
     const cleanSubject = subjectName.toLowerCase().trim();
 
     const qualified = teachers.filter((t) => {
-      const subs: string[] = t.subjectsTaught || t.subjects || [];
-      return subs.some((s) => s.toLowerCase().trim().includes(cleanSubject) || cleanSubject.includes(s.toLowerCase().trim()));
+      const rawSubs: any = t.subjectsTaught || t.subjects || t.qualification || t.skills || [];
+      let subStrings: string[] = [];
+      if (Array.isArray(rawSubs)) {
+        subStrings = rawSubs.map((s) => (typeof s === 'string' ? s.toLowerCase().trim() : (s?.name || s?.subjectName || '').toLowerCase().trim())).filter(Boolean);
+      } else if (typeof rawSubs === 'string') {
+        subStrings = rawSubs.split(',').map((s) => s.toLowerCase().trim());
+      }
+      return subStrings.some((s) => s.includes(cleanSubject) || cleanSubject.includes(s));
     });
 
-    const finalTeachers = qualified.length > 0 ? qualified : teachers;
-
-    return finalTeachers.map((t) => ({
+    return qualified.map((t) => ({
       id: t.id || t.teacherId || t.userId,
       name: t.name || t.teacherName || t.User?.name || `${t.firstName || ''} ${t.lastName || ''}`.trim() || 'Teacher',
       teacherId: t.id || t.teacherId || t.userId,

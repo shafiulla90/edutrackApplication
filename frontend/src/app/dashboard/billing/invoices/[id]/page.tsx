@@ -180,7 +180,7 @@ export default function InvoicePrintPage() {
             <div>
               <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Total Fee Amount</span>
               <span className="text-sm font-bold font-mono text-slate-800">
-                ₹{(invoiceData.totalFeeAmount || 15000).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                ₹{(invoiceData.totalFeeAmount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
               </span>
             </div>
             <div>

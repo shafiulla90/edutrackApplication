@@ -100,7 +100,7 @@ export class BillingService {
       console.warn('Failed to fetch student profile for payment:', err);
     }
 
-    const totalInvoiceAmount = Number(studentProfile?.totalFee || studentProfile?.totalAmount || invoiceData.totalAmount || 15000);
+    const totalInvoiceAmount = Number(studentProfile?.netPayable || studentProfile?.netFeeTotal || studentProfile?.grossAmount || studentProfile?.totalFee || studentProfile?.totalAmount || invoiceData.totalAmount || 0);
 
     // 3. Check for existing invoices for this student in Firestore
     let existingInvoices: any[] = [];
@@ -303,7 +303,7 @@ export class BillingService {
       totalPaidAll = currentPayment;
     }
 
-    const totalFeeAmount = 15000;
+    const totalFeeAmount = Number(profile?.netPayable || profile?.netFeeTotal || profile?.grossAmount || profile?.totalFee || 0);
     const previouslyPaid = Math.max(0, totalPaidAll - currentPayment);
     const remainingBalance = Math.max(0, totalFeeAmount - totalPaidAll);
 
@@ -376,13 +376,20 @@ export class BillingService {
     }
 
     let priceMap: Record<string, number> = {};
+    let selectedSet = new Set<string>();
+    let hasPriceBook = false;
+
     if (classId && this.billingRepo.getPriceBook) {
       try {
         const pb = await this.billingRepo.getPriceBook(classId, academicYearId || '', tid);
-        if (Array.isArray(pb)) {
+        if (Array.isArray(pb) && pb.length > 0) {
+          hasPriceBook = true;
           pb.forEach((item: any) => {
-            if (item.productId && item.price !== undefined) {
-              priceMap[item.productId] = Number(item.price);
+            if (item.productId && item.selected !== false) {
+              selectedSet.add(item.productId);
+              if (item.price !== undefined) {
+                priceMap[item.productId] = Number(item.price);
+              }
             }
           });
         }
@@ -392,19 +399,18 @@ export class BillingService {
     }
 
     if (!products || products.length === 0) {
-      return [
-        { id: 'fp-tuition', productName: 'Tuition Fee', name: 'Tuition Fee', unitPrice: 25000, price: 25000, isMandatory: true },
-        { id: 'fp-admission', productName: 'Admission & Admin Fee', name: 'Admission & Admin Fee', unitPrice: 5000, price: 5000, isMandatory: true },
-        { id: 'fp-tech', productName: 'Technology & Smart Class Fee', name: 'Technology & Smart Class Fee', unitPrice: 3000, price: 3000, isMandatory: false },
-        { id: 'fp-activity', productName: 'Sports & Extracurricular Fee', name: 'Sports & Extracurricular Fee', unitPrice: 2000, price: 2000, isMandatory: false },
-        { id: 'fp-lab', productName: 'Science & Computer Lab Fee', name: 'Science & Computer Lab Fee', unitPrice: 4000, price: 4000, isMandatory: false },
-      ];
+      return [];
     }
 
-    return products.map((p) => {
+    // Filter products configured for this class if Price Book exists
+    const available = hasPriceBook
+      ? products.filter((p) => selectedSet.has(p.id))
+      : products;
+
+    return available.map((p) => {
       const price = priceMap[p.id] !== undefined
         ? priceMap[p.id]
-        : Number(p.unitPrice ?? p.price ?? 5000);
+        : Number(p.unitPrice ?? p.price ?? 0);
       return {
         ...p,
         id: p.id,
@@ -424,6 +430,39 @@ export class BillingService {
 
     const fullName = `${studentData?.firstName || ''} ${studentData?.lastName || ''}`.trim() || 'New Student';
     const rollNo = 'STU-' + Math.floor(1000 + Math.random() * 9000);
+    const classId = studentData?.classId || studentData?.selectedClass || null;
+    const academicYearId = studentData?.academicYearId || studentData?.academicYear || null;
+
+    // Fetch active products for student's class
+    let activeProducts: any[] = [];
+    if (classId) {
+      try {
+        activeProducts = await this.getActiveProducts(classId, academicYearId || '', tid);
+      } catch (e) {}
+    }
+
+    // Filter selected products
+    let selectedProducts = activeProducts;
+    if (Array.isArray(selectedPricebookEntryIds) && selectedPricebookEntryIds.length > 0) {
+      selectedProducts = activeProducts.filter((p) => selectedPricebookEntryIds.includes(p.id));
+    }
+
+    const grossAmount = selectedProducts.reduce((sum, p) => sum + Number(p.unitPrice ?? p.price ?? 0), 0);
+    const discountVal = Number(concessionAmount || 0);
+    const netPayable = Math.max(0, grossAmount - discountVal);
+
+    // Build fee allocation items
+    const feeAllocationItems = selectedProducts.map((p, idx) => ({
+      id: `fa-${p.id}-${Date.now()}-${idx}`,
+      productId: p.id,
+      productName: p.productName || p.name || 'Fee Product',
+      configuredAmount: Number(p.unitPrice ?? p.price ?? 0),
+      allocatedAmount: Number(p.unitPrice ?? p.price ?? 0),
+      discountAmount: 0,
+      paidAmount: 0,
+      balanceDue: Number(p.unitPrice ?? p.price ?? 0),
+      createdAt: new Date().toISOString(),
+    }));
 
     // 1. Create Student User Record
     if (this.userRepo) {
@@ -438,7 +477,7 @@ export class BillingService {
       }).catch(() => {});
     }
 
-    // 2. Create Student Profile Record
+    // 2. Create Student Profile Record with Fee Ledger Summary
     let studentProfile: any = null;
     if (this.studentRepo) {
       studentProfile = await this.studentRepo.createProfile({
@@ -449,9 +488,9 @@ export class BillingService {
         lastName: studentData?.lastName || null,
         name: fullName,
         rollNo,
-        classId: studentData?.classId || studentData?.selectedClass || null,
+        classId,
         sectionId: studentData?.sectionId || studentData?.selectedSection || null,
-        academicYearId: studentData?.academicYearId || studentData?.academicYear || null,
+        academicYearId,
         dob: studentData?.dob || null,
         gender: studentData?.gender || null,
         fatherName: studentData?.fatherName || studentData?.parentName || null,
@@ -463,17 +502,43 @@ export class BillingService {
         status: 'Active',
         financialStatus: 'Pending',
         profilePhotoUrl: studentData?.profilePhotoUrl || null,
+        grossAmount,
+        discountAmount: discountVal,
+        netPayable,
+        totalFeeAmount: netPayable,
+        totalFees: netPayable,
+        paidAmount: 0,
+        outstandingAmount: netPayable,
         createdAt: new Date().toISOString(),
       });
+    }
+
+    // 3. Save Fee Allocation Subcollection in Firestore
+    const db = (this.billingRepo as any)?.db;
+    if (db && feeAllocationItems.length > 0) {
+      try {
+        const batch = db.batch();
+        for (const item of feeAllocationItems) {
+          const itemRef = db.collection('tenants').doc(tid).collection('students').doc(studentProfileId).collection('feeAllocation').doc(item.id);
+          batch.set(itemRef, { ...item, tenantId: tid }, { merge: true });
+        }
+        await batch.commit();
+      } catch (e) {
+        console.error('Failed to save feeAllocation items:', e);
+      }
     }
 
     return {
       success: true,
       message: 'Admission registered successfully',
-      opportunityId: 'opp-' + Date.now(),
+      opportunityId: studentProfileId,
       studentId: studentProfileId,
       studentData,
       tenantId: tid,
+      grossAmount,
+      discountAmount: discountVal,
+      netPayable,
+      outstandingAmount: netPayable,
     };
   }
 
@@ -605,10 +670,9 @@ export class BillingService {
           }
         } catch (e) {}
 
-        let outstanding = 15000;
-        if (totalPaidFromPayments > 0) {
-          outstanding = Math.max(0, 15000 - totalPaidFromPayments);
-        } else {
+        const netPayable = Number(s.netPayable || s.netFeeTotal || (Number(s.grossAmount || 0) - Number(s.discountAmount || 0)) || 0);
+        let outstanding = Math.max(0, netPayable - totalPaidFromPayments);
+        if (totalPaidFromPayments === 0) {
           let invs: any[] = [];
           try {
             invs = await this.billingRepo.findInvoicesByStudent(s.id);
@@ -638,10 +702,14 @@ export class BillingService {
     const sectionName = s.classSection?.section?.name || s.sectionName || s.section || 'A';
     const studentId = s.id || randomUUID();
 
-    const currentYearDue = s.outstandingAmount !== undefined ? Number(s.outstandingAmount) : 15000;
+    const gross = Number(s.grossAmount || s.totalFee || s.totalFees || s.allocatedAmount || 0);
+    const discount = Number(s.discountAmount || s.concessionAmount || 0);
+    const netPayable = s.netPayable !== undefined ? Number(s.netPayable) : (gross > 0 ? Math.max(0, gross - discount) : 0);
+
+    const paidAmount = Number(s.totalPaidFromPayments ?? s.paidAmount ?? 0);
+    const currentYearDue = s.outstandingAmount !== undefined ? Number(s.outstandingAmount) : (netPayable > 0 ? Math.max(0, netPayable - paidAmount) : 0);
     const previousYearDue = Number(s.previousYearDue || 0);
     const grandTotalDue = currentYearDue + previousYearDue;
-    const paidAmount = Math.max(0, 15000 - currentYearDue);
 
     return {
       id: studentId,
@@ -661,6 +729,9 @@ export class BillingService {
       section: sectionName,
       sectionName,
       classSection: `${className} - ${sectionName}`,
+      grossAmount: gross,
+      discountAmount: discount,
+      netPayable,
       outstandingAmount: currentYearDue,
       currentYearDue,
       previousYearDue,
@@ -671,7 +742,7 @@ export class BillingService {
       status: 'Active',
       feeSummary: {
         currentYear: {
-          feeProductsAmount: 15000,
+          feeProductsAmount: netPayable > 0 ? netPayable : gross,
           paidAmount: paidAmount,
           pendingAmount: currentYearDue,
         },
@@ -700,8 +771,8 @@ export class BillingService {
           {
             id: studentId,
             name: 'Annual Tuition & Admission Ledger',
-            academicYearId: 'ay-2026',
-            amount: 15000,
+            academicYearId: s.academicYearId || 'ay-2026',
+            amount: netPayable > 0 ? netPayable : gross,
             stage: 'Issued',
           }
         ]
@@ -732,38 +803,34 @@ export class BillingService {
     }
 
     let totalPaidFromPayments = 0;
-    try {
-      const snap = await (this.billingRepo as any).db
-        .collection('tenants')
-        .doc(tid)
-        .collection('payments')
-        .where('studentId', '==', studentId)
-        .get();
-
-      if (!snap.empty) {
-        totalPaidFromPayments = snap.docs.reduce((sum: number, doc: any) => {
-          const d = doc.data();
-          if (d.status === 'SUCCESS' || !d.status) {
-            const amt = d.amountCents !== undefined ? d.amountCents / 100 : Number(d.amount || 0);
-            return sum + amt;
-          }
-          return sum;
-        }, 0);
-      }
-    } catch (err) {}
-
-    if (totalPaidFromPayments > 0) {
-      profile.outstandingAmount = Math.max(0, 15000 - totalPaidFromPayments);
-    } else {
-      let existingInvoices: any[] = [];
+    const db = (this.billingRepo as any)?.db;
+    if (db) {
       try {
-        existingInvoices = await this.billingRepo.findInvoicesByStudent(studentId);
-      } catch (err) {}
+        const snap = await db
+          .collection('tenants')
+          .doc(tid)
+          .collection('payments')
+          .where('studentId', '==', studentId)
+          .get();
 
-      if (existingInvoices.length > 0 && existingInvoices[0].remainingBalance !== undefined) {
-        profile.outstandingAmount = existingInvoices[0].remainingBalance;
-      }
+        if (!snap.empty) {
+          totalPaidFromPayments = snap.docs.reduce((sum: number, doc: any) => {
+            const d = doc.data();
+            if (d.status === 'SUCCESS' || !d.status) {
+              const amt = d.amountCents !== undefined ? d.amountCents / 100 : Number(d.amount || 0);
+              return sum + amt;
+            }
+            return sum;
+          }, 0);
+        }
+      } catch (err) {}
     }
+
+    const netPayable = Number(profile.netPayable || profile.netFeeTotal || (Number(profile.grossAmount || 0) - Number(profile.discountAmount || 0)) || 0);
+    const outstanding = Math.max(0, netPayable - totalPaidFromPayments);
+
+    profile.totalPaidFromPayments = totalPaidFromPayments;
+    profile.outstandingAmount = outstanding;
 
     const formatted = this.formatStudentForBilling(profile);
     return {
@@ -777,98 +844,103 @@ export class BillingService {
     const tid = (tenantId && tenantId !== 'undefined' && tenantId !== 'null') ? tenantId : '';
     if (!tid) return [];
     const studentId = oppId;
+    const db = (this.billingRepo as any)?.db;
 
-    let paidAmount = 0;
-    try {
-      const snap = await (this.billingRepo as any).db
-        .collection('tenants')
-        .doc(tid)
-        .collection('payments')
-        .where('studentId', '==', studentId)
-        .get();
+    let items: any[] = [];
 
-      if (!snap.empty) {
-        paidAmount = snap.docs.reduce((sum: number, doc: any) => {
-          const d = doc.data();
-          if (d.status === 'SUCCESS' || !d.status) {
-            const amt = d.amountCents !== undefined ? d.amountCents / 100 : Number(d.amount || 0);
-            return sum + amt;
-          }
-          return sum;
-        }, 0);
-      }
-    } catch (err) {}
-
-    if (paidAmount <= 0) {
+    // 1. Check student's actual feeAllocation subcollection
+    if (db) {
       try {
-        const existingInvoices = await this.billingRepo.findInvoicesByStudent(studentId);
-        if (existingInvoices.length > 0) {
-          paidAmount = Math.max(...existingInvoices.map((inv) => Number(inv.paidAmount || 0)));
+        const faSnap = await db.collection('tenants').doc(tid).collection('students').doc(studentId).collection('feeAllocation').get();
+        if (!faSnap.empty) {
+          items = faSnap.docs.map((doc: any) => {
+            const d = doc.data();
+            const total = Number(d.allocatedAmount ?? d.configuredAmount ?? d.totalAmount ?? 0);
+            return {
+              oliId: doc.id,
+              productName: d.productName || 'Fee Product',
+              productId: d.productId || doc.id,
+              totalAmount: total,
+              discountAmount: Number(d.discountAmount || 0),
+              paidAmount: 0,
+              balanceDue: total,
+              discountPercent: 0,
+            };
+          });
+        }
+      } catch (e) {}
+    }
+
+    // 2. If no student-specific feeAllocation subcollection, check Class Price Book
+    if (items.length === 0 && db) {
+      try {
+        const studentDoc = await db.collection('tenants').doc(tid).collection('students').doc(studentId).get();
+        if (studentDoc.exists) {
+          const s = studentDoc.data();
+          if (s.classId) {
+            const pbProducts = await this.getActiveProducts(s.classId, s.academicYearId, tid);
+            items = pbProducts.map((p) => {
+              const price = Number(p.unitPrice ?? p.price ?? 0);
+              return {
+                oliId: `oli-${p.id}`,
+                productName: p.productName || p.name || 'Fee Item',
+                productId: p.id,
+                totalAmount: price,
+                discountAmount: 0,
+                paidAmount: 0,
+                balanceDue: price,
+                discountPercent: 0,
+              };
+            });
+          }
+        }
+      } catch (e) {}
+    }
+
+    if (items.length === 0) {
+      return [];
+    }
+
+    // 3. Apply payments made for this student
+    let paidAmount = 0;
+    if (db) {
+      try {
+        const snap = await db
+          .collection('tenants')
+          .doc(tid)
+          .collection('payments')
+          .where('studentId', '==', studentId)
+          .get();
+
+        if (!snap.empty) {
+          paidAmount = snap.docs.reduce((sum: number, doc: any) => {
+            const d = doc.data();
+            if (d.status === 'SUCCESS' || !d.status) {
+              const amt = d.amountCents !== undefined ? d.amountCents / 100 : Number(d.amount || 0);
+              return sum + amt;
+            }
+            return sum;
+          }, 0);
         }
       } catch (err) {}
     }
 
-    const baseItems = [
-      {
-        oliId: `oli-${oppId}-tuition`,
-        productName: 'Tuition Fee',
-        productId: 'fp-tuition',
-        totalAmount: 5000,
-        discountAmount: 0,
-        paidAmount: 0,
-        balanceDue: 5000,
-        discountPercent: 0,
-      },
-      {
-        oliId: `oli-${oppId}-admission`,
-        productName: 'Admission & Admin Fee',
-        productId: 'fp-admission',
-        totalAmount: 2500,
-        discountAmount: 0,
-        paidAmount: 0,
-        balanceDue: 2500,
-        discountPercent: 0,
-      },
-      {
-        oliId: `oli-${oppId}-transport`,
-        productName: 'Transport / Van Fee',
-        productId: 'fp-transport',
-        totalAmount: 5000,
-        discountAmount: 0,
-        paidAmount: 0,
-        balanceDue: 5000,
-        discountPercent: 0,
-      },
-      {
-        oliId: `oli-${oppId}-activity`,
-        productName: 'Activity & Sports Fee',
-        productId: 'fp-activity',
-        totalAmount: 2500,
-        discountAmount: 0,
-        paidAmount: 0,
-        balanceDue: 2500,
-        discountPercent: 0,
-      },
-    ];
-
     if (paidAmount <= 0) {
-      return baseItems;
+      return items;
     }
 
     let remainingToDeduct = paidAmount;
-    const items = baseItems.map((item) => {
+    return items.map((item) => {
       const itemDeduct = Math.min(item.totalAmount, remainingToDeduct);
       remainingToDeduct -= itemDeduct;
       const newPaid = itemDeduct;
-      const newBalance = item.totalAmount - newPaid;
+      const newBalance = Math.max(0, item.totalAmount - newPaid);
       return {
         ...item,
         paidAmount: newPaid,
         balanceDue: newBalance,
       };
     });
-
-    return items;
   }
 
   async getFinancialCommandCenter(tenantId: string, params?: any) {
