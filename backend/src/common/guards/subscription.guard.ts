@@ -19,24 +19,25 @@ export class SubscriptionGuard implements CanActivate {
     }
 
     const request = context.switchToHttp().getRequest();
+    const path = (request.route?.path || request.path || '').toLowerCase();
+
+    // Registration, Auth, Payment, Public Branding, and Tenant creation routes must NEVER be blocked by subscription checks
+    if (
+      path.includes('/tenant/register') ||
+      path.includes('/tenant/public-branding') ||
+      path.includes('/tenant/setup-status') ||
+      path.includes('/subscription') ||
+      path.includes('/payment') ||
+      path.includes('/auth') ||
+      path.includes('/tenant')
+    ) {
+      return true;
+    }
+
     const user = request.user;
     
     // Ignore for Super Admin or non-authenticated requests
     if (!user || user.role === 'SUPER_ADMIN') {
-      return true;
-    }
-
-    // Allow access to subscription, payment, auth, registration, and tenant status routes even if expired
-    const path = (request.route?.path || request.path || '').toLowerCase();
-    if (
-      path.includes('/subscription') ||
-      path.includes('/payment') ||
-      path.includes('/auth') ||
-      path.includes('/tenant/register') ||
-      path.includes('/tenant/setup-status') ||
-      path.includes('/tenant/public-branding') ||
-      path.includes('/tenant')
-    ) {
       return true;
     }
 

@@ -132,13 +132,18 @@ const inFlightRequests = new Map<string, Promise<any>>();
 api.interceptors.request.use(
   (config) => {
     if (typeof window !== 'undefined') {
-      const token = getStoredToken();
-      if (token) {
-        config.headers.Authorization = `Bearer ${token}`;
-      }
-      const tenantId = getTenantFromHostname();
-      if (tenantId) {
-        config.headers['X-Tenant-ID'] = tenantId;
+      const url = config.url || '';
+      const isPublicRegistration = url.includes('/tenant/register') || url.includes('/tenant/public-branding') || url.includes('/auth/');
+      
+      if (!isPublicRegistration) {
+        const token = getStoredToken();
+        if (token) {
+          config.headers.Authorization = `Bearer ${token}`;
+        }
+        const tenantId = getTenantFromHostname();
+        if (tenantId) {
+          config.headers['X-Tenant-ID'] = tenantId;
+        }
       }
     }
     return config;

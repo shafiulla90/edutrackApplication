@@ -1,8 +1,10 @@
-import { Controller, Get, Post, Put, Body, Request, Param, Query } from '@nestjs/common';
+import { Controller, Get, Post, Put, Body, Request, Param, Query, SetMetadata } from '@nestjs/common';
 import { TenantService } from './tenant.service';
 import { JwtService } from '@nestjs/jwt';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { getTenantIdFromReq } from '../../common/utils/tenant.util';
+
+const Public = () => SetMetadata('isPublic', true);
 
 @ApiTags('Tenants')
 @Controller('tenant')
@@ -12,6 +14,7 @@ export class TenantController {
     private readonly jwtService: JwtService,
   ) {}
 
+  @Public()
   @Get('public-branding')
   @ApiOperation({ summary: 'Get public branding for default/current tenant' })
   async getPublicBranding(@Query('phone') phone?: string) {
@@ -34,6 +37,7 @@ export class TenantController {
     };
   }
 
+  @Public()
   @Post('register')
   @ApiOperation({ summary: 'Register a new school tenant and admin' })
   async registerSchool(@Body() body: any) {

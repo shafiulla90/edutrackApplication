@@ -83,9 +83,8 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
              error.response.data?.code === 'SUBSCRIPTION_EXPIRED_READ_ONLY'
            )))
         ) {
-          // Don't show lock popup when user is already on the subscription page
           const currentPath = typeof window !== 'undefined' ? window.location.pathname : '';
-          if (!currentPath.includes('/settings/subscription')) {
+          if (!currentPath.includes('/settings/subscription') && !currentPath.includes('/register-school') && !currentPath.includes('/auth')) {
             console.warn('Axios Interceptor: Subscription expired write-block detected.');
             setShowLockPopup(true);
           }
