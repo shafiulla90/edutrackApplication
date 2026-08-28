@@ -349,55 +349,7 @@ export class ComplaintBoxService {
   }
 
   async seedInitialBehaviorCasesIfEmpty(tid: string) {
-    if (!this.db) return;
-    const casesRef = this.db.collection('tenants').doc(tid).collection('behaviorCases');
-    const snap = await casesRef.get();
-
-    if (snap.empty) {
-      const s1 = await this.resolveStudentObject('2f07f05a-e5b7-445c-b08e-a5b7d469907c', tid);
-      const s2 = await this.resolveStudentObject('4f59593b-c4d6-4f09-967d-8fbd4df9926e', tid);
-
-      const initial: any[] = [
-        {
-          id: 'case-seed-001',
-          tenantId: tid,
-          studentId: '2f07f05a-e5b7-445c-b08e-a5b7d469907c',
-          studentName: s1?.user?.name || 'Mohamd huzaifa',
-          className: s1?.classSection?.class?.name || 'Class-1',
-          sectionName: s1?.classSection?.section?.name || 'Section-A',
-          student: s1,
-          behaviorType: 'Complaint',
-          category: 'Discipline',
-          academicYear: '2025-2026',
-          status: 'PENDING',
-          priority: 'High',
-          description: 'Repeated classroom disruption during mathematics period.',
-          createdAt: new Date(Date.now() - 86400000).toISOString(),
-          updatedAt: new Date(Date.now() - 86400000).toISOString(),
-        },
-        {
-          id: 'case-seed-002',
-          tenantId: tid,
-          studentId: '4f59593b-c4d6-4f09-967d-8fbd4df9926e',
-          studentName: s2?.user?.name || 'QA Final Student',
-          className: s2?.classSection?.class?.name || 'Class-2',
-          sectionName: s2?.classSection?.section?.name || 'Section-A',
-          student: s2,
-          behaviorType: 'Praise',
-          category: 'Academic Achievement',
-          academicYear: '2025-2026',
-          status: 'RESOLVED',
-          priority: 'Medium',
-          description: 'Outstanding performance and helpfulness in Science Lab project.',
-          createdAt: new Date(Date.now() - 172800000).toISOString(),
-          updatedAt: new Date(Date.now() - 172800000).toISOString(),
-        }
-      ];
-
-      for (const item of initial) {
-        await casesRef.doc(item.id).set(item);
-      }
-    }
+    return;
   }
 
   async getPendingCases(academicYear?: string, tenantId?: string) {

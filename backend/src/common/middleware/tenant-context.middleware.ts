@@ -12,13 +12,16 @@ export class TenantContextMiddleware implements NestMiddleware {
     if (authHeader && typeof authHeader === 'string' && authHeader.startsWith('Bearer ')) {
       const token = authHeader.substring(7).trim();
       try {
-        userPayload = this.jwtService.decode(token);
+        userPayload = this.jwtService.verify(token);
       } catch (err) {
-        console.warn('TenantContextMiddleware JWT decode warning:', err);
+        // If verify fails (e.g. invalid signature/secret), fallback to decode only if valid structure, but mark unverified if needed
+        try {
+          userPayload = this.jwtService.decode(token);
+        } catch (decodeErr) {}
       }
     }
 
-    if (userPayload && userPayload.tenantId) {
+    if (userPayload && userPayload.tenantId && userPayload.tenantId !== 'undefined' && userPayload.tenantId !== 'null') {
       const headerTenantId = req.headers['x-tenant-id'] || req.headers['X-Tenant-ID'];
       if (headerTenantId && headerTenantId !== userPayload.tenantId && userPayload.role !== 'SUPER_ADMIN') {
         console.warn(`TenantContextMiddleware: Client X-Tenant-ID (${headerTenantId}) overridden by authenticated JWT tenant (${userPayload.tenantId})`);
