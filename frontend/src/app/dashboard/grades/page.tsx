@@ -304,9 +304,13 @@ export default function GradesMarksPage() {
           onChange={(e) => setSelectedClassName(e.target.value)}
           className="border border-slate-200 rounded-xl p-2.5 text-[13px] text-slate-755 font-bold bg-white shadow-xs outline-none cursor-pointer"
         >
-          {uniqueClasses.map(cName => (
-            <option key={cName} value={cName}>{cName}</option>
-          ))}
+          {uniqueClasses.length === 0 ? (
+            <option value="">No classes available for this school. Please create a class first.</option>
+          ) : (
+            uniqueClasses.map(cName => (
+              <option key={cName} value={cName}>{cName}</option>
+            ))
+          )}
         </select>
 
         {/* Section select */}

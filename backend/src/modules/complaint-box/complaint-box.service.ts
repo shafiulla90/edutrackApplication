@@ -314,7 +314,17 @@ export class ComplaintBoxService {
   }
 
   async getAcademicYears(tenantId?: string) {
-    return [{ id: 'ay-2026', name: '2025-2026', isActive: true }];
+    const tid = (tenantId && tenantId !== 'undefined' && tenantId !== 'null') ? tenantId : '';
+    if (!tid || !this.db) return [{ id: 'ay-2026-2027', name: '2026-2027', isActive: true }];
+    try {
+      const snap = await this.db.collection('tenants').doc(tid).collection('academicYears').get();
+      if (!snap.empty) {
+        return snap.docs.map((doc: any) => ({ id: doc.id, ...doc.data() }));
+      }
+      return [{ id: 'ay-2026-2027', name: '2026-2027', isActive: true }];
+    } catch (e) {
+      return [{ id: 'ay-2026-2027', name: '2026-2027', isActive: true }];
+    }
   }
 
   async submitStudentBehavior(dto: any, tenantId?: string) {

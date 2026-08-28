@@ -8,6 +8,13 @@ import { getTenantIdFromReq } from '../../common/utils/tenant.util';
 export class TeacherPortalController {
   constructor(private readonly examsService: ExamsService) {}
 
+  @Get('classes')
+  @ApiOperation({ summary: 'Get class sections for teacher portal' })
+  async getClasses(@Request() req?: any) {
+    const tenantId = getTenantIdFromReq(req);
+    return this.examsService.getClassSections(tenantId);
+  }
+
   @Get('marks/entry')
   @ApiOperation({ summary: 'Get marks entry roster' })
   async getMarksEntry(

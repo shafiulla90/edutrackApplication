@@ -15,11 +15,22 @@ export class ExamsController {
     return this.examsService.getClassSections(tenantId);
   }
 
+  @Get('academic-years')
+  @ApiOperation({ summary: 'Get active academic years for exams' })
+  async getAcademicYears(@Request() req?: any) {
+    const tenantId = getTenantIdFromReq(req);
+    return this.examsService.getAcademicYears(tenantId);
+  }
+
   @Get('subjects')
   @ApiOperation({ summary: 'Get exam subjects' })
-  async getSubjects(@Request() req?: any) {
+  async getSubjects(
+    @Query('classId') classId?: string,
+    @Query('academicYearId') academicYearId?: string,
+    @Request() req?: any,
+  ) {
     const tenantId = getTenantIdFromReq(req);
-    return this.examsService.getSubjects(tenantId);
+    return this.examsService.getSubjects(tenantId, classId, academicYearId);
   }
 
   @Get('report-card/:studentId')

@@ -426,11 +426,15 @@ export default function ExamsAndMarksPage() {
               onChange={(e) => setSelectedClassName(e.target.value)}
               className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-slate-800 font-bold outline-none cursor-pointer"
             >
-              {uniqueClasses.map((cName) => (
-                <option key={cName} value={cName}>
-                  {cName}
-                </option>
-              ))}
+              {uniqueClasses.length === 0 ? (
+                <option value="">No classes available for this school. Please create a class first.</option>
+              ) : (
+                uniqueClasses.map((cName) => (
+                  <option key={cName} value={cName}>
+                    {cName}
+                  </option>
+                ))
+              )}
             </select>
           </div>
           <div>

@@ -13,12 +13,56 @@ export class ExamsService {
     return this.firebase.getFirestore();
   }
 
-  async getSubjects(tenantId: string) {
+  async getAcademicYears(tenantId: string) {
+    if (!tenantId) throw new Error('tenantId is required');
+    const tid = tenantId;
+    try {
+      const snap = await this.db.collection('tenants').doc(tid).collection('academicYears').get();
+      if (snap.empty) {
+        const ref = this.db.collection('tenants').doc(tid).collection('academicYears').doc('ay-2026-2027');
+        const initialAY = {
+          id: 'ay-2026-2027',
+          name: '2026-2027',
+          isActive: true,
+          tenantId: tid,
+          createdAt: new Date().toISOString(),
+        };
+        await ref.set(initialAY, { merge: true });
+        return [initialAY];
+      }
+      return snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    } catch (e) {
+      console.error('Failed to load academic years for exams:', e);
+      return [];
+    }
+  }
+
+  async getSubjects(tenantId: string, classId?: string, academicYearId?: string) {
     if (!tenantId) throw new Error('tenantId is required');
     const tid = tenantId;
     try {
       const snap = await this.db.collection('tenants').doc(tid).collection('subjects').get();
-      return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      let subjects = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      subjects = subjects.filter((s: any) => s.isActive !== false);
+
+      if (classId && subjects.length > 0) {
+        try {
+          const csSnap = await this.db.collection('tenants').doc(tid).collection('classSections').where('classId', '==', classId).get().catch(() => null);
+          if (csSnap && !csSnap.empty) {
+            const assignedSubjectIds = new Set<string>();
+            csSnap.docs.forEach(doc => {
+              const d = doc.data();
+              if (Array.isArray(d.subjects)) d.subjects.forEach(sId => assignedSubjectIds.add(sId));
+              if (Array.isArray(d.assignments)) d.assignments.forEach(a => { if (a.subjectId) assignedSubjectIds.add(a.subjectId); });
+            });
+            if (assignedSubjectIds.size > 0) {
+              const filtered = subjects.filter(s => assignedSubjectIds.has(s.id));
+              if (filtered.length > 0) return filtered;
+            }
+          }
+        } catch (e) {}
+      }
+      return subjects;
     } catch (e) {
       console.error('Failed to load subjects:', e);
       return [];
@@ -339,6 +383,13 @@ export class ExamsService {
     if (!tid) return null;
     const { subjectId, examName, classSectionId, subjectType, marksSheet, marks } = body;
 
+    let activeAyId = 'ay-2026-2027';
+    try {
+      const aYears = await this.getAcademicYears(tid);
+      const active = aYears.find((y: any) => y.isActive);
+      if (active) activeAyId = active.id;
+    } catch (e) {}
+
     let subjectName = 'Telugu';
     if (subjectId && this.db) {
       try {
@@ -362,7 +413,7 @@ export class ExamsService {
         const payload = {
           id: docId,
           tenantId: tid,
-          academicYearId: 'ay-2026',
+          academicYearId: activeAyId,
           studentId,
           subjectId,
           subjectName,
@@ -388,7 +439,7 @@ export class ExamsService {
         const payload = {
           id: docId,
           tenantId: tid,
-          academicYearId: 'ay-2026',
+          academicYearId: activeAyId,
           studentId,
           subjectId,
           subjectName,
@@ -468,16 +519,29 @@ export class ExamsService {
 
   async getExamTypes(tenantId?: string) {
     const tid = (tenantId && tenantId !== 'undefined' && tenantId !== 'null') ? tenantId : '';
-    if (!tid) return null;
-    if (this.examRepo.findExamTypesByTenant) {
-      const types = await this.examRepo.findExamTypesByTenant(tid);
-      if (types && types.length > 0) return types;
+    if (!tid) return [];
+    try {
+      const snap = await this.db.collection('tenants').doc(tid).collection('examTypes').get();
+      if (!snap.empty) {
+        return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      }
+
+      const defaults = ['Unit Test', 'Mid Term', 'Final Exam'];
+      const seeded: any[] = [];
+      const batch = this.db.batch();
+      const colRef = this.db.collection('tenants').doc(tid).collection('examTypes');
+      for (const name of defaults) {
+        const docRef = colRef.doc();
+        const item = { id: docRef.id, name, tenantId: tid, createdAt: new Date().toISOString() };
+        batch.set(docRef, item);
+        seeded.push(item);
+      }
+      await batch.commit();
+      return seeded;
+    } catch (e) {
+      console.error('Failed to load exam types:', e);
+      return [];
     }
-    return [
-      { id: 'et-1', name: 'Unit Test' },
-      { id: 'et-2', name: 'Mid Term' },
-      { id: 'et-3', name: 'Final Exam' },
-    ];
   }
 
   async createExamType(name: string, tenantId?: string) {
@@ -527,35 +591,79 @@ export class ExamsService {
 
   async getClassSections(tenantId: string) {
     if (!tenantId) throw new Error('tenantId is required');
+    const tid = tenantId;
     try {
-      const snap = await this.db.collection('tenants').doc(tenantId).collection('classSections').get();
-      const classesSnap = await this.db.collection('tenants').doc(tenantId).collection('classes').get();
-      const classMap = new Map<string, string>();
-      classesSnap.docs.forEach(doc => classMap.set(doc.id, doc.data()?.name || 'Class'));
+      const classesSnap = await this.db.collection('tenants').doc(tid).collection('classes').get();
+      if (classesSnap.empty) {
+        return [];
+      }
 
-      const sectionsSnap = await this.db.collection('tenants').doc(tenantId).collection('sections').get();
-      const sectionMap = new Map<string, string>();
-      sectionsSnap.docs.forEach(doc => sectionMap.set(doc.id, doc.data()?.name || 'Section'));
-
-      return snap.docs.map(doc => {
+      const classMap = new Map<string, any>();
+      classesSnap.docs.forEach(doc => {
         const d = doc.data();
-        const cName = classMap.get(d.classId) || d.className || d.class || (d.name ? d.name.split('-')[0].trim() : 'Class');
-        const sName = sectionMap.get(d.sectionId) || d.sectionName || d.section || (d.name && d.name.includes('-') ? d.name.split('-').slice(1).join('-').trim() : 'A');
-        let label = d.name;
-        if (!label || label === 'Class Section') {
-          if (cName && sName) label = `${cName} - ${sName}`;
-          else if (cName) label = cName;
-          else label = `Section ${doc.id.substring(0, 4)}`;
-        }
-        return {
-          value: doc.id,
-          label,
-          className: cName,
-          sectionName: sName,
-          classId: d.classId || '',
-          sectionId: d.sectionId || '',
-        };
+        classMap.set(doc.id, { id: doc.id, name: d.name || d.className || 'Class', academicYearId: d.academicYearId });
       });
+
+      const sectionsSnap = await this.db.collection('tenants').doc(tid).collection('sections').get().catch(() => null);
+      const sectionMap = new Map<string, string>();
+      if (sectionsSnap && !sectionsSnap.empty) {
+        sectionsSnap.docs.forEach(doc => sectionMap.set(doc.id, doc.data()?.name || 'Section'));
+      }
+
+      const snap = await this.db.collection('tenants').doc(tid).collection('classSections').get().catch(() => null);
+      if (snap && !snap.empty) {
+        return snap.docs.map(doc => {
+          const d = doc.data();
+          const cls = classMap.get(d.classId);
+          const cName = cls?.name || d.className || d.class || (d.name ? d.name.split('-')[0].trim() : 'Class');
+          const sName = sectionMap.get(d.sectionId) || d.sectionName || d.section || (d.name && d.name.includes('-') ? d.name.split('-').slice(1).join('-').trim() : 'A');
+          let label = d.name;
+          if (!label || label === 'Class Section') {
+            if (cName && sName) label = `${cName} - ${sName}`;
+            else if (cName) label = cName;
+            else label = `Section ${doc.id.substring(0, 4)}`;
+          }
+          return {
+            value: doc.id,
+            label,
+            className: cName,
+            sectionName: sName,
+            classId: d.classId || '',
+            sectionId: d.sectionId || '',
+            academicYearId: cls?.academicYearId || d.academicYearId || '',
+          };
+        });
+      }
+
+      // Fallback: if classSections collection is empty but tenant has real classes:
+      const options: any[] = [];
+      const sectionsList = Array.from(sectionMap.entries());
+      for (const [cId, cls] of classMap.entries()) {
+        if (sectionsList.length > 0) {
+          for (const [sId, sName] of sectionsList) {
+            options.push({
+              value: `${cId}_${sId}`,
+              label: `${cls.name} - ${sName}`,
+              className: cls.name,
+              sectionName: sName,
+              classId: cId,
+              sectionId: sId,
+              academicYearId: cls.academicYearId || '',
+            });
+          }
+        } else {
+          options.push({
+            value: cId,
+            label: cls.name,
+            className: cls.name,
+            sectionName: 'Section-A',
+            classId: cId,
+            sectionId: '',
+            academicYearId: cls.academicYearId || '',
+          });
+        }
+      }
+      return options;
     } catch (e) {
       console.error('Failed to load classes for exams:', e);
       return [];
