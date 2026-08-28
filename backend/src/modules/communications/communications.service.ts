@@ -158,7 +158,15 @@ export class CommunicationsService {
         const leaveSnap = await this.db.collection('tenants').doc(tid).collection('leaveRequests').get();
         for (const doc of leaveSnap.docs) {
           const d = doc.data();
+          if (doc.id.startsWith('leave-seed-') || doc.id.includes('seed') || d.id?.startsWith('leave-seed-') || d.id?.includes('seed')) {
+            continue;
+          }
+
           const applicantId = d.applicantId || d.userId || d.teacherId || d.staffId || '';
+          const applicantName = d.staffName || d.teacherName || d.applicantName || d.teacher?.user?.name || d.student?.user?.name || 'Staff Member';
+          if (['Sarah Jenkins', 'John Smith', 'Mohamd huzaifa', 'QA Final Student', 'Student 1'].includes(applicantName)) {
+            continue;
+          }
           
           let shouldInclude = false;
           if (isAdmin) {
@@ -169,7 +177,6 @@ export class CommunicationsService {
 
           if (shouldInclude) {
             const notifId = 'notif-leave-' + doc.id;
-            const applicantName = d.staffName || d.teacherName || d.applicantName || 'Staff Member';
             const leaveType = d.leaveType || d.type || 'Leave Application';
             const fromDate = (d.fromDate || d.startDate || new Date().toISOString()).split('T')[0];
             const toDate = (d.toDate || d.endDate || new Date().toISOString()).split('T')[0];
@@ -197,6 +204,10 @@ export class CommunicationsService {
         const compSnap = await this.db.collection('tenants').doc(tid).collection('parentComplaints').get();
         for (const doc of compSnap.docs) {
           const d = doc.data();
+          if (doc.id.startsWith('pc-00') || doc.id.includes('seed') || d.id?.includes('seed')) {
+            continue;
+          }
+
           let shouldInclude = false;
           if (isAdmin) {
             shouldInclude = d.status === 'OPEN' || d.status === 'IN_PROGRESS';
@@ -237,6 +248,10 @@ export class CommunicationsService {
         const behaviorSnap = await this.db.collection('tenants').doc(tid).collection('behaviorCases').get();
         for (const doc of behaviorSnap.docs) {
           const d = doc.data();
+          if (doc.id.startsWith('case-seed-') || doc.id.includes('seed') || d.id?.includes('seed')) {
+            continue;
+          }
+
           let shouldInclude = false;
           if (isAdmin) {
             shouldInclude = d.status === 'PENDING' || d.status === 'New';
