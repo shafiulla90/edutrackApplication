@@ -5,7 +5,7 @@ import axios from 'axios';
 // In local dev: use NEXT_PUBLIC_API_URL env var or fall back to localhost:3001.
 const envApiUrl = process.env.NEXT_PUBLIC_API_URL;
 const BACKEND_URL = (typeof window !== 'undefined' && (window.location.hostname.includes('vercel.app') || window.location.hostname.includes('covenantsynergy.in')))
-  ? 'https://edutrack-backend-api.vercel.app'
+  ? '/api'
   : (envApiUrl && envApiUrl.startsWith('http') ? envApiUrl : 'http://localhost:3001');
 
 export function getActiveRole(): 'TEACHER' | 'SCHOOL_ADMIN' | 'PARENT' | 'DRIVER' {
