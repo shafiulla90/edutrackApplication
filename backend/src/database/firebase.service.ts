@@ -41,7 +41,11 @@ export class FirebaseService implements OnModuleInit, OnModuleDestroy {
       try {
         this.logger.log(`Initializing Firebase Admin SDK using FIREBASE_SERVICE_ACCOUNT_JSON env var`);
         const serviceAccount = JSON.parse(serviceAccountJson);
-        credential = cert(serviceAccount);
+        if (serviceAccount && serviceAccount.private_key) {
+          credential = cert(serviceAccount);
+        } else {
+          this.logger.warn('FIREBASE_SERVICE_ACCOUNT_JSON provided but lacks private_key');
+        }
       } catch (err) {
         this.logger.error('Failed to parse FIREBASE_SERVICE_ACCOUNT_JSON', err);
       }
