@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { api } from '@/lib/api';
-import { useTenant } from '../providers/TenantContext';
+import { useTenant } from '@/app/providers/TenantContext';
 import { dispatchSchoolSetupUpdated } from '@/lib/events';
 import { resizeAndCompressImage } from '@/lib/image';
 import { useToast } from '@/components/Toast';
