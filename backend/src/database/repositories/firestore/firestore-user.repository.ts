@@ -106,6 +106,27 @@ export class FirestoreUserRepository implements IUserRepository {
     const cleanNoCountry = cleaned.replace(/^\+91/, '');
     const formattedWithCountry = `+91${cleanNoCountry}`;
 
+    // 1. If logging in via School Admin Portal, check tenants table first by adminPhone
+    if (portal === 'admin') {
+      const [snap1, snap2] = await Promise.all([
+        this.db.collection('tenants').where('adminPhone', '==', cleanNoCountry).limit(1).get().catch(() => null),
+        this.db.collection('tenants').where('phone', '==', cleanNoCountry).limit(1).get().catch(() => null),
+      ]);
+      const tenantDoc = (snap1 && !snap1.empty) ? snap1.docs[0] : ((snap2 && !snap2.empty) ? snap2.docs[0] : null);
+      if (tenantDoc) {
+        const tenant = tenantDoc.data();
+        return {
+          id: `admin-${tenantDoc.id}`,
+          role: 'SCHOOL_ADMIN',
+          tenantId: tenantDoc.id,
+          tenant,
+          phone: cleanNoCountry,
+          email: tenant.email || '',
+          name: tenant.adminName || tenant.name || 'School Administrator',
+        };
+      }
+    }
+
     // Target roles according to requested portal
     let targetRoles: string[] = [];
     if (portal === 'teacher') {
@@ -140,8 +161,6 @@ export class FirestoreUserRepository implements IUserRepository {
     if (targetRoles.length > 0) {
       const match = candidates.find(u => targetRoles.includes(u.role));
       if (match) return match;
-    } else if (candidates.length > 0) {
-      return candidates[0];
     }
 
     // Fallback search in staffProfiles for teachers
@@ -174,16 +193,28 @@ export class FirestoreUserRepository implements IUserRepository {
       }
     }
 
-    // Fallback search in tenants for admin
+    // Fallback search in tenants for admin if not checked earlier
     if (portal === 'admin' || targetRoles.includes('SCHOOL_ADMIN')) {
       const tenantSnap = await this.db.collection('tenants').where('adminPhone', '==', cleanNoCountry).limit(1).get().catch(() => null);
       if (tenantSnap && !tenantSnap.empty) {
         const tenant = tenantSnap.docs[0].data();
-        return { id: `admin-${tenantSnap.docs[0].id}`, role: 'SCHOOL_ADMIN', tenantId: tenantSnap.docs[0].id, tenant };
+        return {
+          id: `admin-${tenantSnap.docs[0].id}`,
+          role: 'SCHOOL_ADMIN',
+          tenantId: tenantSnap.docs[0].id,
+          tenant,
+          phone: cleanNoCountry,
+          email: tenant.email || '',
+          name: tenant.adminName || tenant.name || 'School Administrator',
+        };
       }
     }
 
-    // Return any candidate if available, else null
+    // If portal was specified but no role match was found for that portal, return null to prompt registration/error
+    if (portal) {
+      return null;
+    }
+
     return candidates.length > 0 ? candidates[0] : null;
   }
 
