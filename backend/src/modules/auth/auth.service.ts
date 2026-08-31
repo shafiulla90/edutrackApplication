@@ -114,6 +114,33 @@ export class AuthService {
       throw new ConflictException('Please enter a valid 10-digit mobile number');
     }
 
+    // Check if account exists for requested portal
+    let existingUser = null;
+    if (typeof this.userRepo.findByPhone === 'function') {
+      existingUser = await this.userRepo.findByPhone(cleanedPhone, portal).catch(() => null);
+    }
+
+    if (!existingUser) {
+      if (portal === 'admin') {
+        return {
+          success: true,
+          registered: false,
+          notFound: true,
+          portalMismatch: false,
+          message: 'No school tenant found for this mobile number. Register your school in under 1 minute!',
+        };
+      } else {
+        const portalLabel = portal === 'teacher' ? 'Teacher Portal' : (portal === 'parent' || portal === 'student') ? 'Parent Portal' : 'School Administrator';
+        return {
+          success: true,
+          registered: false,
+          notFound: true,
+          portalMismatch: false,
+          message: `Account not found for this mobile number on ${portalLabel}. Please check your phone number or contact your School Administrator.`,
+        };
+      }
+    }
+
     const generatedOtp = process.env.ALLOW_TEST_OTP === 'true' ? '123456' : Math.floor(100000 + Math.random() * 900000).toString();
     this.otpStore.set(cleanedPhone, {
       code: generatedOtp,
@@ -155,7 +182,7 @@ export class AuthService {
     return {
       success: true,
       registered: true,
-      schoolName: 'EduTrack SaaS Platform',
+      schoolName: existingUser.tenant?.name || 'EduTrack SaaS Platform',
       message: 'OTP sent successfully to mobile number',
       phone: cleanedPhone,
       code: process.env.ALLOW_TEST_OTP === 'true' ? generatedOtp : undefined,
@@ -196,13 +223,10 @@ export class AuthService {
       throw new UnauthorizedException('Invalid or expired OTP code. Please try again.');
     }
 
-    // Step 2: AFTER OTP IS VERIFIED, check database for registered user
+    // Step 2: AFTER OTP IS VERIFIED, check database for registered user for this portal
     let existingUser = null;
     if (typeof this.userRepo.findByPhone === 'function') {
       existingUser = await this.userRepo.findByPhone(cleanedPhone, portal).catch(() => null);
-    }
-    if (!existingUser && typeof (this.userRepo as any).findAnyUserByPhone === 'function') {
-      existingUser = await (this.userRepo as any).findAnyUserByPhone(cleanedPhone).catch(() => null);
     }
 
     // Unregistered User: OTP is valid, but no user account exists
@@ -211,7 +235,8 @@ export class AuthService {
         success: true,
         registered: false,
         notFound: true,
-        message: 'Account not found for this mobile number. Please register to continue.',
+        portalMismatch: false,
+        message: 'No school tenant association found for this mobile number. Please register your school to continue.',
       };
     }
 
