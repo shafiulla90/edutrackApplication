@@ -346,7 +346,10 @@ export default function SchoolStaffPage() {
       dispatchSchoolSetupUpdated();
       loadStaff();
     } catch (err: any) {
-      showToast(err.response?.data?.message || 'Failed to create staff member', 'error');
+      const msg = Array.isArray(err.response?.data?.message)
+        ? err.response.data.message.join(', ')
+        : (err.response?.data?.message || err.message || 'Failed to create staff member');
+      showToast(msg, 'error');
     }
   };
 

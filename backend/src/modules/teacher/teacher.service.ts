@@ -14,8 +14,8 @@ export class TeacherService {
   ) {}
 
   async create(tenantId: string, data: any) {
-    if (!data.name || !data.email) {
-      throw new BadRequestException('Name and Email are required.');
+    if (!data.name) {
+      throw new BadRequestException('Staff member name is required.');
     }
 
     if (!tenantId || tenantId === 'undefined' || tenantId === 'null') {
@@ -24,9 +24,15 @@ export class TeacherService {
     const tid = tenantId;
     const role = (data.staffType === 'Non-Teaching' || data.role === 'STAFF') ? 'STAFF' : 'TEACHER';
 
-    const existingUser = await this.userRepo.findByEmail(data.email);
-    if (existingUser) {
-      throw new BadRequestException(`A staff member with email "${data.email}" already exists. Please enter a unique email address.`);
+    const emailToUse = (data.email && typeof data.email === 'string' && data.email.trim())
+      ? data.email.trim()
+      : `staff-${randomUUID().slice(0, 8)}@school.local`;
+
+    if (data.email && typeof data.email === 'string' && data.email.trim()) {
+      const existingUser = await this.userRepo.findByEmail(data.email.trim());
+      if (existingUser && existingUser.tenantId === tid) {
+        throw new BadRequestException(`A staff member with email "${data.email}" already exists in this school. Please enter a unique email address.`);
+      }
     }
 
     const userId = randomUUID();
@@ -37,7 +43,7 @@ export class TeacherService {
 
     await this.userRepo.create({
       id: userId,
-      email: data.email,
+      email: emailToUse,
       passwordHash,
       name: data.name,
       role,
