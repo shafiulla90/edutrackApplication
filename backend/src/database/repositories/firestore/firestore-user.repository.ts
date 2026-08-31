@@ -107,23 +107,30 @@ export class FirestoreUserRepository implements IUserRepository {
     const formattedWithCountry = `+91${cleanNoCountry}`;
 
     // 1. If logging in via School Admin Portal, check tenants table first by adminPhone
-    if (portal === 'admin') {
-      const [snap1, snap2] = await Promise.all([
-        this.db.collection('tenants').where('adminPhone', '==', cleanNoCountry).limit(1).get().catch(() => null),
-        this.db.collection('tenants').where('phone', '==', cleanNoCountry).limit(1).get().catch(() => null),
-      ]);
-      const tenantDoc = (snap1 && !snap1.empty) ? snap1.docs[0] : ((snap2 && !snap2.empty) ? snap2.docs[0] : null);
-      if (tenantDoc) {
-        const tenant = tenantDoc.data();
-        return {
-          id: `admin-${tenantDoc.id}`,
-          role: 'SCHOOL_ADMIN',
-          tenantId: tenantDoc.id,
-          tenant,
-          phone: cleanNoCountry,
-          email: tenant.email || '',
-          name: tenant.adminName || tenant.name || 'School Administrator',
-        };
+    // 1. If logging in via School Admin Portal, check tenants table first across all phone variations
+    if (portal === 'admin' || !portal) {
+      const phoneVars = Array.from(new Set([cleanNoCountry, cleaned, formattedWithCountry].filter(Boolean)));
+      const tenantQueries: Promise<any>[] = [];
+      phoneVars.forEach(p => {
+        tenantQueries.push(this.db.collection('tenants').where('adminPhone', '==', p).limit(1).get().catch(() => null));
+        tenantQueries.push(this.db.collection('tenants').where('phone', '==', p).limit(1).get().catch(() => null));
+        tenantQueries.push(this.db.collection('tenants').where('mobileNumber', '==', p).limit(1).get().catch(() => null));
+      });
+      const tenantSnaps = await Promise.all(tenantQueries);
+      for (const snap of tenantSnaps) {
+        if (snap && !snap.empty) {
+          const tenantDoc = snap.docs[0];
+          const tenant = tenantDoc.data();
+          return {
+            id: `admin-${tenantDoc.id}`,
+            role: 'SCHOOL_ADMIN',
+            tenantId: tenantDoc.id,
+            tenant,
+            phone: cleanNoCountry,
+            email: tenant.email || '',
+            name: tenant.adminName || tenant.name || 'School Administrator',
+          };
+        }
       }
     }
 
