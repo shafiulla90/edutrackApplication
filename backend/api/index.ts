@@ -49,6 +49,17 @@ function normalizeUrl(url: string): string {
 }
 
 export default async function handler(req: any, res: any) {
+  // Set CORS headers on all responses (including preflight OPTIONS)
+  const origin = req.headers?.origin || '*';
+  res.setHeader('Access-Control-Allow-Origin', origin);
+  res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, PUT, PATCH, POST, DELETE, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Accept, Authorization, X-Tenant-ID, X-Requested-With');
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
+
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
+
   try {
     await bootstrap();
     if (req.url) {
