@@ -1,9 +1,13 @@
-import { Injectable, Inject } from '@nestjs/common';
+import { Injectable, Inject, Optional } from '@nestjs/common';
 import { ITenantRepository } from '../../common/interfaces/tenant.repository.interface';
+import { FirebaseService } from '../../database/firebase.service';
 
 @Injectable()
 export class SchoolSetupService {
-  constructor(@Inject('ITenantRepository') private readonly tenantRepo: ITenantRepository) {}
+  constructor(
+    @Inject('ITenantRepository') private readonly tenantRepo: ITenantRepository,
+    @Optional() private readonly firebaseService?: FirebaseService,
+  ) {}
 
   async getSchoolSetup(tenantId: string) {
     if (!tenantId) throw new Error('tenantId is required');
@@ -49,6 +53,28 @@ export class SchoolSetupService {
     updatePayload.updatedAt = new Date().toISOString();
 
     const updated = await this.tenantRepo.update(tenantId, updatePayload);
+
+    // Synchronize admin user's name in users collection if adminName is changed
+    if (data.adminName && this.firebaseService) {
+      try {
+        const db = this.firebaseService.getFirestore();
+        if (db) {
+          const userSnap = await db.collection('users')
+            .where('tenantId', '==', tenantId)
+            .where('role', '==', 'SCHOOL_ADMIN')
+            .get();
+          if (!userSnap.empty) {
+            const batch = db.batch();
+            userSnap.docs.forEach(doc => {
+              batch.update(doc.ref, { name: data.adminName, updatedAt: new Date().toISOString() });
+            });
+            await batch.commit();
+          }
+        }
+      } catch (err) {
+        console.warn('[updateSchoolSetup] User name sync notice:', err);
+      }
+    }
 
     return {
       success: true,

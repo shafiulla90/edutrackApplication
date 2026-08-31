@@ -44,6 +44,7 @@ function SettingsPageContent() {
 
   // 1. School Profile Metadata
   const [schoolName, setSchoolName] = useState('');
+  const [adminName, setAdminName] = useState('');
   const [schoolSubtitle, setSchoolSubtitle] = useState('');
   const [schoolEmail, setSchoolEmail] = useState('');
   const [schoolPhone, setSchoolPhone] = useState('');
@@ -203,6 +204,7 @@ function SettingsPageContent() {
         setSetupData(data);
         if (data.setup) {
           setSchoolName(data.setup.schoolName || '');
+          setAdminName(data.currentUser?.name || data.setup.adminName || '');
           setSchoolSubtitle(data.setup.schoolType || '');
           setSchoolEmail(data.setup.email || '');
           setSchoolPhone(data.setup.mobileNumber || '');
@@ -257,6 +259,7 @@ function SettingsPageContent() {
       if (activeTab === 'profile') {
         const payload = {
           schoolName,
+          adminName,
           schoolType: schoolSubtitle,
           email: schoolEmail,
           address: schoolAddress,
@@ -517,6 +520,18 @@ function SettingsPageContent() {
                     required
                     value={schoolName}
                     onChange={(e) => setSchoolName(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 h-[44px] text-[13px] text-slate-800 focus:outline-none focus:border-[#2E5BFF]"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[12px] text-slate-500 font-semibold mb-1">School Administrator Name *</label>
+                  <input
+                    type="text"
+                    required
+                    value={adminName}
+                    onChange={(e) => setAdminName(e.target.value)}
+                    placeholder="e.g. Shaik Shafiulla"
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 h-[44px] text-[13px] text-slate-800 focus:outline-none focus:border-[#2E5BFF]"
                   />
                 </div>
