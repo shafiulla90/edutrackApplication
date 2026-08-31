@@ -35,6 +35,9 @@ interface InvoicePDFData {
   studentName: string;
   fatherName: string;
   motherName: string;
+  parentPhone?: string | null;
+  fatherPhone?: string | null;
+  motherPhone?: string | null;
   className: string;
   sectionName: string;
   studentDob: string;
@@ -97,6 +100,7 @@ export default function FeesBillingPage() {
   const [successModalOpen, setSuccessModalOpen] = useState(false);
   const [successInvoiceId, setSuccessInvoiceId] = useState<string | null>(null);
   const [lastPaidStudentName, setLastPaidStudentName] = useState('');
+  const [lastPaidParentPhone, setLastPaidParentPhone] = useState<string | null>(null);
   const [lastPaidAmount, setLastPaidAmount] = useState(0);
 
   // Payment Confirmation states
@@ -475,8 +479,10 @@ export default function FeesBillingPage() {
       const currentPending = Number(selectedStudent.totalPendingBalance ?? selectedStudent.outstandingAmount ?? 0);
       const nextBalance = Math.max(0, currentPending - billingTotal);
       const studentName = selectedStudent.account?.name || selectedStudent.name || 'Student';
+      const pPhone = selectedStudent?.parentPhone || selectedStudent?.fatherPhone || selectedStudent?.motherPhone || selectedStudent?.account?.parentPhone || selectedStudent?.account?.fatherPhone || selectedStudent?.account?.motherPhone || selectedStudent?.account?.phone || selectedStudent?.phone || null;
       
       setLastPaidStudentName(studentName);
+      setLastPaidParentPhone(pPhone);
       setLastPaidAmount(billingTotal);
       setSuccessInvoiceId(String(createdInvoiceId));
       setSuccessRemainingBalance(nextBalance);
@@ -712,45 +718,54 @@ export default function FeesBillingPage() {
   const handleWhatsAppShare = async (invoiceId: string) => {
     if (!invoiceId) return;
 
-    const rawPhone = 
-      selectedStudent?.account?.parentPhone ||
-      selectedStudent?.account?.fatherPhone ||
-      selectedStudent?.account?.motherPhone ||
-      selectedStudent?.parentPhone ||
-      selectedStudent?.fatherPhone ||
-      selectedStudent?.motherPhone ||
-      selectedStudent?.account?.phone ||
-      selectedStudent?.phone;
-
-    const normalizedPhone = normalizePhoneNumber(rawPhone);
-
-    if (!normalizedPhone) {
-      alert('No valid parent WhatsApp number is available for this student.');
-      return;
-    }
-
-    const studentName = lastPaidStudentName || selectedStudent?.account?.name || selectedStudent?.name || 'Student';
-    const messageText = `Dear Parent, your fee payment receipt for ${studentName} has been generated successfully.\n\nReceipt Number: ${successInvoiceId || invoiceId}\nAmount Paid: ₹${fmt(lastPaidAmount)}\n\nPlease find the payment receipt attached.\n\nThank you.`;
-
     try {
       setIsLoading(true);
       const { file, pdfBlob, pdfData } = await generateInvoicePDFFile(invoiceId);
 
+      const rawPhone = 
+        pdfData?.parentPhone ||
+        pdfData?.fatherPhone ||
+        pdfData?.motherPhone ||
+        lastPaidParentPhone ||
+        selectedStudent?.account?.parentPhone ||
+        selectedStudent?.account?.fatherPhone ||
+        selectedStudent?.account?.motherPhone ||
+        selectedStudent?.parentPhone ||
+        selectedStudent?.fatherPhone ||
+        selectedStudent?.motherPhone ||
+        selectedStudent?.account?.phone ||
+        selectedStudent?.phone;
+
+      const normalizedPhone = normalizePhoneNumber(rawPhone);
+      const studentName = pdfData?.studentName || lastPaidStudentName || selectedStudent?.account?.name || selectedStudent?.name || 'Student';
+
+      if (!normalizedPhone) {
+        alert(`No parent WhatsApp mobile number was found in the database for ${studentName}. Please update the student profile with a parent contact number.`);
+        setIsLoading(false);
+        return;
+      }
+
+      const messageText = `Dear Parent, your fee payment receipt for ${studentName} has been generated successfully.\n\nReceipt Number: ${pdfData?.invoiceNo || successInvoiceId || invoiceId}\nAmount Paid: ₹${fmt(pdfData?.totalAmount || lastPaidAmount)}\n\nThank you for choosing ${pdfData?.schoolName || 'our school'}.`;
+
       if (typeof navigator !== 'undefined' && navigator.canShare && navigator.canShare({ files: [file] })) {
         try {
           await navigator.share({
-            title: `Fee Receipt - ${pdfData.invoiceNo}`,
+            title: `Fee Receipt - ${pdfData.invoiceNo || invoiceId}`,
             text: messageText,
             files: [file]
           });
+          setIsLoading(false);
           return;
         } catch (shareErr: any) {
-          if (shareErr.name === 'AbortError') return;
+          if (shareErr.name === 'AbortError') {
+            setIsLoading(false);
+            return;
+          }
           console.warn('Web share failed, proceeding to WhatsApp web fallback:', shareErr);
         }
       }
 
-      // Desktop / fallback download
+      // Desktop / Web Fallback: Download PDF + open WhatsApp chat
       const fileName = `fee_receipt_${pdfData.invoiceNo || invoiceId}.pdf`;
       const url = URL.createObjectURL(pdfBlob);
       const a = document.createElement('a');

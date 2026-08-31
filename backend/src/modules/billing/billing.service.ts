@@ -266,11 +266,24 @@ export class BillingService {
       } catch (err) {}
     }
 
-    const schoolName = 'A.P. GREENWOOD HIGH SCHOOL';
-    const schoolSubtitle = 'Excellence in Education & Character Building';
+    let tenant: any = null;
+    try {
+      const db = (this.billingRepo as any)?.db;
+      if (db) {
+        const tDoc = await db.collection('tenants').doc(tid).get();
+        if (tDoc && tDoc.exists) tenant = tDoc.data();
+      }
+    } catch (e) {}
+
+    const schoolName = tenant?.name || 'A.P. GREENWOOD HIGH SCHOOL';
+    const schoolSubtitle = tenant?.tagline || 'Excellence in Education & Character Building';
     const studentName = profile?.User?.name || profile?.name || 'Student Record';
     const fatherName = profile?.fatherName || 'N/A';
     const motherName = profile?.motherName || 'N/A';
+    const parentPhone = profile?.parentPhone || profile?.fatherPhone || profile?.motherPhone || profile?.User?.phone || profile?.phone || profile?.mobileNumber || payment?.parentPhone || invoice?.parentPhone || null;
+    const fatherPhone = profile?.fatherPhone || null;
+    const motherPhone = profile?.motherPhone || null;
+
     const className = profile?.className || profile?.class || 'Class 1';
     const sectionName = profile?.sectionName || profile?.section || 'A';
     const rollNo = profile?.rollNo || 'STU-1001';
@@ -341,9 +354,9 @@ export class BillingService {
     return {
       schoolName,
       schoolSubtitle,
-      schoolLogo: '',
-      schoolAddress: 'Vikas Nagar, Delhi, India',
-      schoolPhone: '+91 9876543210',
+      schoolLogo: tenant?.logoUrl || '',
+      schoolAddress: tenant?.address || 'Vikas Nagar, Delhi, India',
+      schoolPhone: tenant?.phone || tenant?.adminPhone || '+91 9876543210',
       invoiceNo,
       invoiceDate: payment?.paymentDate ? new Date(payment.paymentDate).toLocaleDateString('en-IN') : new Date().toLocaleDateString('en-IN'),
       academicYear: '2026-2027',
@@ -351,6 +364,9 @@ export class BillingService {
       studentName,
       fatherName,
       motherName,
+      parentPhone,
+      fatherPhone,
+      motherPhone,
       className,
       sectionName,
       studentDob: profile?.dob || '15 May 2012',

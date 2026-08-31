@@ -11,8 +11,8 @@ import { SubscriptionModule } from '../subscription/subscription.module';
     PassportModule,
     SubscriptionModule,
     JwtModule.register({
-      secret: process.env.JWT_SECRET || 'edutrack_secret_2026_!@#',
-      signOptions: { expiresIn: process.env.JWT_EXPIRATION || '7d' },
+      secret: process.env.JWT_SECRET || 'fallback_secret_key',
+      signOptions: { expiresIn: process.env.JWT_EXPIRATION || '24h' },
     }),
   ],
   controllers: [AuthController],

@@ -10,7 +10,7 @@ import { FirebaseModule } from '../../database/firebase.module';
     DatabaseProviderModule, 
     FirebaseModule,
     JwtModule.register({
-      secret: process.env.JWT_SECRET || 'edutrack_secret_2026_!@#',
+      secret: process.env.JWT_SECRET || 'supersecretkey',
       signOptions: { expiresIn: '7d' },
     }),
   ],
