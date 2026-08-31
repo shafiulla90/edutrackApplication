@@ -1,0 +1,58 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function getUserTenantId() {
+      return request.auth.token.tenantId;
+    }
+
+    function isSameTenant(tenantId) {
+      return isAuthenticated() && getUserTenantId() == tenantId;
+    }
+
+    function isOwnerUser(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    // Tenants Root Collection & Subcollections
+    match /tenants/{tenantId} {
+      allow read, update: if isSameTenant(tenantId);
+      allow create: if isAuthenticated();
+
+      match /{allSubcollections=**} {
+        allow read, write: if isSameTenant(tenantId);
+      }
+    }
+
+    // Student Profiles Collection
+    match /studentProfiles/{studentId} {
+      allow read: if isAuthenticated() && (resource.data.tenantId == getUserTenantId() || request.auth.token.role == 'SUPER_ADMIN');
+      allow create: if isAuthenticated() && request.resource.data.tenantId == getUserTenantId();
+      allow update, delete: if isAuthenticated() && resource.data.tenantId == getUserTenantId();
+    }
+
+    // Staff Profiles Collection
+    match /staffProfiles/{staffId} {
+      allow read: if isAuthenticated() && (resource.data.tenantId == getUserTenantId() || request.auth.token.role == 'SUPER_ADMIN');
+      allow create: if isAuthenticated() && request.resource.data.tenantId == getUserTenantId();
+      allow update, delete: if isAuthenticated() && resource.data.tenantId == getUserTenantId();
+    }
+
+    // Users Collection
+    match /users/{userId} {
+      allow read: if isAuthenticated() && (resource.data.tenantId == getUserTenantId() || isOwnerUser(userId) || request.auth.token.role == 'SUPER_ADMIN');
+      allow create, update: if isAuthenticated();
+    }
+
+    // Global Collections with Tenant Scoping
+    match /{collectionName}/{docId} {
+      allow read: if isAuthenticated() && (resource.data.tenantId == getUserTenantId() || request.auth.token.role == 'SUPER_ADMIN');
+      allow create: if isAuthenticated() && request.resource.data.tenantId == getUserTenantId();
+      allow update, delete: if isAuthenticated() && resource.data.tenantId == getUserTenantId();
+    }
+  }
+}
