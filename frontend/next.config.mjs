@@ -9,6 +9,15 @@ const nextConfig = {
     domains: ['localhost', 'edutrack-saas-media.s3.amazonaws.com'],
   },
 
+  async rewrites() {
+    return [
+      {
+        source: '/api/:path*',
+        destination: 'https://edutrack-backend-api.vercel.app/:path*',
+      },
+    ];
+  },
+
   env: {
     BACKEND_INTERNAL_URL:
       process.env.BACKEND_INTERNAL_URL ||
