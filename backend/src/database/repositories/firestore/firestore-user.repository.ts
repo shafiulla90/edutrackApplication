@@ -109,7 +109,8 @@ export class FirestoreUserRepository implements IUserRepository {
     // 1. If logging in via School Admin Portal, check tenants table first by adminPhone
     // 1. If logging in via School Admin Portal, check tenants table first across all phone variations
     if (portal === 'admin' || !portal) {
-      const phoneVars = Array.from(new Set([cleanNoCountry, cleaned, formattedWithCountry].filter(Boolean)));
+      const numClean = Number(cleanNoCountry);
+      const phoneVars: any[] = Array.from(new Set([cleanNoCountry, cleaned, formattedWithCountry, isNaN(numClean) ? null : numClean].filter(Boolean)));
       const tenantQueries: Promise<any>[] = [];
       phoneVars.forEach(p => {
         tenantQueries.push(this.db.collection('tenants').where('adminPhone', '==', p).limit(1).get().catch(() => null));
@@ -145,13 +146,14 @@ export class FirestoreUserRepository implements IUserRepository {
     }
 
     // Query all users matching phone number variations
+    const numClean = Number(cleanNoCountry);
     const candidatesMap = new Map<string, any>();
-    const queries = [
-      this.db.collection('users').where('phone', '==', cleaned).get(),
-      this.db.collection('users').where('phone', '==', cleanNoCountry).get(),
-      this.db.collection('users').where('phone', '==', formattedWithCountry).get(),
-      this.db.collection('users').where('mobileNumber', '==', cleanNoCountry).get(),
-    ];
+    const userPhoneVars: any[] = Array.from(new Set([cleanNoCountry, cleaned, formattedWithCountry, isNaN(numClean) ? null : numClean].filter(Boolean)));
+    const queries: Promise<any>[] = [];
+    userPhoneVars.forEach(p => {
+      queries.push(this.db.collection('users').where('phone', '==', p).get());
+      queries.push(this.db.collection('users').where('mobileNumber', '==', p).get());
+    });
 
     const results = await Promise.all(queries.map(q => q.catch(() => null)));
     results.forEach(snap => {
