@@ -78,6 +78,38 @@ if (isSchoolSubdomain) {
     };
   }, []);
 
+  // Auto-restore session across browser/tab closure if user didn't explicitly click Logout
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const targetRole = portal === 'teacher' ? 'TEACHER' : (portal === 'parent' || portal === 'student') ? 'PARENT' : 'SCHOOL_ADMIN';
+    const tokenKey = targetRole === 'PARENT' ? 'parent_token' : targetRole === 'TEACHER' ? 'teacher_token' : 'admin_token';
+    const storedToken = localStorage.getItem(tokenKey) || localStorage.getItem('token');
+
+    if (storedToken) {
+      setLoading(true);
+      api.get('/auth/profile', {
+        headers: { Authorization: `Bearer ${storedToken}` }
+      }).then(async () => {
+        sessionStorage.setItem('active_role', targetRole);
+        localStorage.setItem('active_role', targetRole);
+        try {
+          await refresh().catch(() => null);
+        } catch (e) {}
+
+        if (targetRole === 'PARENT') {
+          router.push('/parent');
+        } else {
+          router.push('/dashboard');
+        }
+      }).catch(() => {
+        // Stale or revoked token — remove token key to allow fresh login
+        localStorage.removeItem(tokenKey);
+        setLoading(false);
+      });
+    }
+  }, [portal, router]);
+
   const portalTitle = 
     portal === 'teacher' ? 'Teacher Portal' :
     portal === 'parent' ? 'Parent Portal' :

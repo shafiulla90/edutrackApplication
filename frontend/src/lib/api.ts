@@ -10,7 +10,7 @@ const BACKEND_URL = (envApiUrl && envApiUrl.startsWith('http') && !envApiUrl.inc
 export function getActiveRole(): 'TEACHER' | 'SCHOOL_ADMIN' | 'PARENT' | 'DRIVER' {
   if (typeof window === 'undefined') return 'SCHOOL_ADMIN';
   
-  let role = sessionStorage.getItem('active_role') as 'TEACHER' | 'SCHOOL_ADMIN' | 'PARENT' | 'DRIVER' | null;
+  let role = (sessionStorage.getItem('active_role') || localStorage.getItem('active_role')) as 'TEACHER' | 'SCHOOL_ADMIN' | 'PARENT' | 'DRIVER' | null;
   
   if (typeof window !== 'undefined' && window.location.search) {
     const params = new URLSearchParams(window.location.search);
@@ -28,8 +28,10 @@ export function getActiveRole(): 'TEACHER' | 'SCHOOL_ADMIN' | 'PARENT' | 'DRIVER
     } else {
       role = 'SCHOOL_ADMIN';
     }
-    sessionStorage.setItem('active_role', role);
   }
+
+  localStorage.setItem('active_role', role);
+  sessionStorage.setItem('active_role', role);
   return role;
 }
 
@@ -70,6 +72,7 @@ export function clearStoredAuth() {
   localStorage.removeItem('parent_userPhone');
   localStorage.removeItem('token');
   localStorage.removeItem('tenantId');
+  localStorage.removeItem('active_role');
   sessionStorage.removeItem('active_role');
   sessionStorage.removeItem('dismissed_admin_expiry_warning');
 }
