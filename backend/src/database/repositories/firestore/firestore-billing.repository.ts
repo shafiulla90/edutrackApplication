@@ -67,6 +67,7 @@ export class FirestoreBillingRepository implements IBillingRepository {
     if (snap.empty) return null;
     const doc = snap.docs[0];
     const data = doc.data();
+    if (tenantId && data.tenantId && data.tenantId !== tenantId) return null;
     const itemsSnap = await doc.ref.collection('items').get();
 
     return {
@@ -86,18 +87,35 @@ export class FirestoreBillingRepository implements IBillingRepository {
     };
   }
 
-  async findInvoicesByStudent(studentId: string): Promise<any[]> {
+  async findInvoicesByStudent(studentId: string, tenantId?: string): Promise<any[]> {
+    if (tenantId) {
+      const tenantSnap = await this.db.collection('tenants').doc(tenantId).collection('invoices').where('studentId', '==', studentId).get();
+      if (!tenantSnap.empty) {
+        return tenantSnap.docs.map((doc) => {
+          const data = doc.data();
+          return {
+            id: doc.id,
+            ...data,
+            totalAmount: data.totalAmountCents !== undefined ? fromCents(data.totalAmountCents) : Number(data.totalAmount || 0),
+            paidAmount: data.paidAmountCents !== undefined ? fromCents(data.paidAmountCents) : Number(data.paidAmount || 0),
+            remainingBalance: data.remainingBalanceCents !== undefined ? fromCents(data.remainingBalanceCents) : Number(data.remainingBalance || 0),
+          };
+        });
+      }
+    }
     const snap = await this.db.collectionGroup('invoices').where('studentId', '==', studentId).get();
-    return snap.docs.map((doc) => {
-      const data = doc.data();
-      return {
-        id: doc.id,
-        ...data,
-        totalAmount: data.totalAmountCents !== undefined ? fromCents(data.totalAmountCents) : Number(data.totalAmount || 0),
-        paidAmount: data.paidAmountCents !== undefined ? fromCents(data.paidAmountCents) : Number(data.paidAmount || 0),
-        remainingBalance: data.remainingBalanceCents !== undefined ? fromCents(data.remainingBalanceCents) : Number(data.remainingBalance || 0),
-      };
-    });
+    return snap.docs
+      .filter(doc => !tenantId || doc.data().tenantId === tenantId)
+      .map((doc) => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          ...data,
+          totalAmount: data.totalAmountCents !== undefined ? fromCents(data.totalAmountCents) : Number(data.totalAmount || 0),
+          paidAmount: data.paidAmountCents !== undefined ? fromCents(data.paidAmountCents) : Number(data.paidAmount || 0),
+          remainingBalance: data.remainingBalanceCents !== undefined ? fromCents(data.remainingBalanceCents) : Number(data.remainingBalance || 0),
+        };
+      });
   }
 
   async createInvoice(invoiceData: any, items: any[]): Promise<any> {

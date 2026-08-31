@@ -36,8 +36,6 @@ interface Student {
   profilePhotoUrl?: string | null;
 }
 
-let cacheFilterOptions: { academicYears: any[]; classes: any[]; sections: any[] } | null = null;
-
 export default function StudentsDirectory() {
   const { showToast } = useToast();
   const [search, setSearch] = useState('');
@@ -118,26 +116,15 @@ export default function StudentsDirectory() {
   const [appliedDiscountPercent, setAppliedDiscountPercent] = useState<number>(0);
 
   const loadFilterOptions = async () => {
-    if (cacheFilterOptions) {
-      setAcademicYears(cacheFilterOptions.academicYears);
-      setClasses(cacheFilterOptions.classes);
-      setSections(cacheFilterOptions.sections);
-      return;
-    }
     try {
       const [ayRes, classRes, secRes] = await Promise.all([
         api.get('/academics/academic-years'),
         api.get('/academics/classes'),
         api.get('/academics/sections')
       ]);
-      cacheFilterOptions = {
-        academicYears: ayRes.data,
-        classes: classRes.data,
-        sections: secRes.data
-      };
-      setAcademicYears(ayRes.data);
-      setClasses(classRes.data);
-      setSections(secRes.data);
+      setAcademicYears(ayRes.data || []);
+      setClasses(classRes.data || []);
+      setSections(secRes.data || []);
     } catch (err) {
       console.error('Failed to load filter options:', err);
     }

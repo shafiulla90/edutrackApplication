@@ -41,14 +41,26 @@ export default function MarksMgmtPage() {
   useEffect(() => {
     async function loadData() {
       try {
-        const [clsRes, subRes, examRes] = await Promise.all([
-          api.get('/teacher-portal/classes'),
-          api.get('/exams/subjects'),
-          api.get('/exams/exam-types'),
+        let classesData: any[] = [];
+        try {
+          const clsRes = await api.get('/teacher-portal/classes');
+          classesData = Array.isArray(clsRes.data) && clsRes.data.length > 0 ? clsRes.data : [];
+        } catch {}
+        if (classesData.length === 0) {
+          try {
+            const acadClsRes = await api.get('/academics/classes');
+            classesData = Array.isArray(acadClsRes.data) ? acadClsRes.data : [];
+          } catch {}
+        }
+
+        const [subRes, examRes] = await Promise.all([
+          api.get('/exams/subjects').catch(() => ({ data: [] })),
+          api.get('/exams/exam-types').catch(() => ({ data: [] })),
         ]);
-        setClasses(clsRes.data);
-        setSubjects(subRes.data);
-        setExamTypes(examRes.data);
+
+        setClasses(classesData);
+        setSubjects(Array.isArray(subRes.data) ? subRes.data : []);
+        setExamTypes(Array.isArray(examRes.data) ? examRes.data : []);
       } catch (err) {
         console.error('Failed to load initial data:', err);
       } finally {

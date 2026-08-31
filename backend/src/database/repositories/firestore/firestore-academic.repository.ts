@@ -23,29 +23,23 @@ export class FirestoreAcademicRepository implements IAcademicRepository {
   }
 
   async findAcademicYears(tenantId: string): Promise<any[]> {
+    if (!tenantId) throw new Error('tenantId is required');
     const snap = await this.db.collection('tenants').doc(tenantId).collection('academicYears').get();
     if (snap.empty) {
-      const ref = this.db.collection('tenants').doc(tenantId).collection('academicYears').doc('ay-2026-2027');
-      const initialAY = {
-        id: 'ay-2026-2027',
-        name: '2026-2027',
-        isActive: true,
-        tenantId,
-        createdAt: new Date().toISOString()
-      };
-      await ref.set(initialAY, { merge: true });
-      return [initialAY];
+      return [];
     }
     return snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
   }
 
   async findActiveAcademicYear(tenantId: string): Promise<any | null> {
+    if (!tenantId) throw new Error('tenantId is required');
     const snap = await this.db.collection('tenants').doc(tenantId).collection('academicYears').where('isActive', '==', true).limit(1).get();
     if (snap.empty) return null;
     return { id: snap.docs[0].id, ...snap.docs[0].data() };
   }
 
   async findClasses(tenantId: string, academicYearId?: string): Promise<any[]> {
+    if (!tenantId) throw new Error('tenantId is required');
     let query: FirebaseFirestore.Query = this.db.collection('tenants').doc(tenantId).collection('classes');
     if (academicYearId) query = query.where('academicYearId', '==', academicYearId);
     const snap = await query.get();
@@ -57,10 +51,16 @@ export class FirestoreAcademicRepository implements IAcademicRepository {
     return results;
   }
 
-  async findClassById(id: string): Promise<any | null> {
+  async findClassById(id: string, tenantId?: string): Promise<any | null> {
+    if (tenantId) {
+      const doc = await this.db.collection('tenants').doc(tenantId).collection('classes').doc(id).get();
+      if (doc.exists) return { id: doc.id, ...doc.data() };
+    }
     const snap = await this.db.collectionGroup('classes').where('id', '==', id).limit(1).get();
     if (snap.empty) return null;
-    return { id: snap.docs[0].id, ...snap.docs[0].data() };
+    const data = snap.docs[0].data();
+    if (tenantId && data.tenantId && data.tenantId !== tenantId) return null;
+    return { id: snap.docs[0].id, ...data };
   }
 
   async createClass(data: any): Promise<any> {

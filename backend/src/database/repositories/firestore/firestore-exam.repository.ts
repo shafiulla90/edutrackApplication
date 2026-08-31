@@ -11,16 +11,32 @@ export class FirestoreExamRepository implements IExamRepository {
     return this.firebase.getFirestore();
   }
 
-  async findExamsByClassSection(classSectionId: string): Promise<any[]> {
+  async findExamsByClassSection(classSectionId: string, tenantId?: string): Promise<any[]> {
+    if (tenantId) {
+      const tenantSnap = await this.db.collection('tenants').doc(tenantId).collection('exams').where('classSectionId', '==', classSectionId).get();
+      if (!tenantSnap.empty) return tenantSnap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+    }
     const snap = await this.db.collectionGroup('exams').where('classSectionId', '==', classSectionId).get();
-    return snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+    return snap.docs.filter(doc => !tenantId || doc.data().tenantId === tenantId).map((doc) => ({ id: doc.id, ...doc.data() }));
   }
 
-  async findExamById(id: string): Promise<any | null> {
+  async findExamById(id: string, tenantId?: string): Promise<any | null> {
+    if (tenantId) {
+      const doc = await this.db.collection('tenants').doc(tenantId).collection('exams').doc(id).get();
+      if (doc.exists) {
+        const examData = { id: doc.id, ...doc.data() };
+        const marksSnap = await doc.ref.collection('examMarks').get();
+        return {
+          ...examData,
+          ExamMark: marksSnap.docs.map((d) => ({ id: d.id, ...d.data() })),
+        };
+      }
+    }
     const snap = await this.db.collectionGroup('exams').where('id', '==', id).limit(1).get();
     if (snap.empty) return null;
     const doc = snap.docs[0];
     const examData = { id: doc.id, ...doc.data() };
+    if (tenantId && (examData as any).tenantId && (examData as any).tenantId !== tenantId) return null;
     const marksSnap = await doc.ref.collection('examMarks').get();
     return {
       ...examData,
@@ -28,14 +44,22 @@ export class FirestoreExamRepository implements IExamRepository {
     };
   }
 
-  async findMarksByExam(examId: string): Promise<any[]> {
+  async findMarksByExam(examId: string, tenantId?: string): Promise<any[]> {
+    if (tenantId) {
+      const tenantSnap = await this.db.collection('tenants').doc(tenantId).collection('examMarks').where('examId', '==', examId).get();
+      if (!tenantSnap.empty) return tenantSnap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+    }
     const snap = await this.db.collectionGroup('examMarks').where('examId', '==', examId).get();
-    return snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+    return snap.docs.filter(doc => !tenantId || doc.data().tenantId === tenantId).map((doc) => ({ id: doc.id, ...doc.data() }));
   }
 
-  async findMarksByStudent(studentId: string): Promise<any[]> {
+  async findMarksByStudent(studentId: string, tenantId?: string): Promise<any[]> {
+    if (tenantId) {
+      const tenantSnap = await this.db.collection('tenants').doc(tenantId).collection('examMarks').where('studentId', '==', studentId).get();
+      if (!tenantSnap.empty) return tenantSnap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+    }
     const snap = await this.db.collectionGroup('examMarks').where('studentId', '==', studentId).get();
-    return snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+    return snap.docs.filter(doc => !tenantId || doc.data().tenantId === tenantId).map((doc) => ({ id: doc.id, ...doc.data() }));
   }
 
   async upsertExamMark(data: any): Promise<any> {

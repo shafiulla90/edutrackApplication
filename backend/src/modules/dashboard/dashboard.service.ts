@@ -170,8 +170,8 @@ export class DashboardService {
       };
     });
 
-    let attendanceRate = 100;
-    let academicAverage = 85.6;
+    let attendanceRate = 0;
+    let academicAverage = 0;
 
     if (this.firebase) {
       const db = this.firebase.getFirestore();
@@ -204,6 +204,14 @@ export class DashboardService {
       } catch (e) {}
     }
 
+    const hasFinancialData = totalRevenue > 0 || totalExpenses > 0;
+    const chartData = hasFinancialData ? [
+      { month: 'Jan', feeCollection: totalRevenue * 0.15, salaryExpense: totalExpenses * 0.2, netRevenue: totalRevenue * 0.15 - totalExpenses * 0.2 },
+      { month: 'Feb', feeCollection: totalRevenue * 0.20, salaryExpense: totalExpenses * 0.2, netRevenue: totalRevenue * 0.20 - totalExpenses * 0.2 },
+      { month: 'Mar', feeCollection: totalRevenue * 0.25, salaryExpense: totalExpenses * 0.2, netRevenue: totalRevenue * 0.25 - totalExpenses * 0.2 },
+      { month: 'Apr', feeCollection: totalRevenue * 0.40, salaryExpense: totalExpenses * 0.4, netRevenue: totalRevenue * 0.40 - totalExpenses * 0.4 },
+    ] : [];
+
     return {
       success: true,
       stats: {
@@ -220,20 +228,15 @@ export class DashboardService {
         approvedToday: 0,
         rejectedToday: 0,
         trends: {
-          students: { value: '+0%', isUp: true },
-          revenue: { value: '+0%', isUp: true },
+          students: { value: '0%', isUp: true },
+          revenue: { value: '0%', isUp: true },
           attendance: { value: '0%', isUp: true },
           academic: { value: '0%', isUp: true },
         },
       },
       recentAdmissions,
       recentPayments,
-      chartData: [
-        { month: 'Jan', feeCollection: totalRevenue * 0.15, salaryExpense: totalExpenses * 0.2, netRevenue: totalRevenue * 0.15 - totalExpenses * 0.2 },
-        { month: 'Feb', feeCollection: totalRevenue * 0.20, salaryExpense: totalExpenses * 0.2, netRevenue: totalRevenue * 0.20 - totalExpenses * 0.2 },
-        { month: 'Mar', feeCollection: totalRevenue * 0.25, salaryExpense: totalExpenses * 0.2, netRevenue: totalRevenue * 0.25 - totalExpenses * 0.2 },
-        { month: 'Apr', feeCollection: totalRevenue * 0.40, salaryExpense: totalExpenses * 0.4, netRevenue: totalRevenue * 0.40 - totalExpenses * 0.4 },
-      ],
+      chartData,
     };
   }
 

@@ -74,8 +74,9 @@ export function clearStoredAuth() {
   localStorage.removeItem('token');
   localStorage.removeItem('tenantId');
   localStorage.removeItem('active_role');
-  sessionStorage.removeItem('active_role');
-  sessionStorage.removeItem('dismissed_admin_expiry_warning');
+  try {
+    sessionStorage.clear();
+  } catch {}
 }
 
 export function getTenantFromHostname(): string {
