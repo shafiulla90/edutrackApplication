@@ -117,7 +117,11 @@ export class AuthService {
     // Check if account exists for requested portal
     let existingUser = null;
     if (typeof this.userRepo.findByPhone === 'function') {
-      existingUser = await this.userRepo.findByPhone(cleanedPhone, portal).catch(() => null);
+      try {
+        existingUser = await this.userRepo.findByPhone(cleanedPhone, portal);
+      } catch (err) {
+        console.error(`[AuthService] Error in findByPhone for phone ${cleanedPhone} portal ${portal}:`, err);
+      }
     }
 
     if (!existingUser) {

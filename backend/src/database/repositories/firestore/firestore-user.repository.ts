@@ -110,7 +110,7 @@ export class FirestoreUserRepository implements IUserRepository {
     // 1. If logging in via School Admin Portal, check tenants table first across all phone variations
     if (portal === 'admin' || !portal) {
       const numClean = Number(cleanNoCountry);
-      const phoneVars: any[] = Array.from(new Set([cleanNoCountry, cleaned, formattedWithCountry, isNaN(numClean) ? null : numClean].filter(Boolean)));
+      const phoneVars: any[] = Array.from(new Set([cleanNoCountry, cleaned, formattedWithCountry, isNaN(numClean) ? null : String(numClean)].filter(Boolean)));
       const tenantQueries: Promise<any>[] = [];
       phoneVars.forEach(p => {
         tenantQueries.push(this.db.collection('tenants').where('adminPhone', '==', p).limit(1).get().catch(() => null));
@@ -126,6 +126,30 @@ export class FirestoreUserRepository implements IUserRepository {
             id: `admin-${tenantDoc.id}`,
             role: 'SCHOOL_ADMIN',
             tenantId: tenantDoc.id,
+            tenant,
+            phone: cleanNoCountry,
+            email: tenant.email || '',
+            name: tenant.adminName || tenant.name || 'School Administrator',
+          };
+        }
+      }
+
+      // In-memory fallback scan for tenants
+      const allTenantsSnap = await this.db.collection('tenants').get().catch(() => null);
+      if (allTenantsSnap && !allTenantsSnap.empty) {
+        const found = allTenantsSnap.docs.find(d => {
+          const data = d.data();
+          const p1 = (data.adminPhone || '').replace(/[\s\-()]/g, '');
+          const p2 = (data.phone || '').replace(/[\s\-()]/g, '');
+          const p3 = (data.mobileNumber || '').replace(/[\s\-()]/g, '');
+          return phoneVars.some(pv => String(pv) === p1 || String(pv) === p2 || String(pv) === p3 || p1.endsWith(cleanNoCountry) || p2.endsWith(cleanNoCountry) || p3.endsWith(cleanNoCountry));
+        });
+        if (found) {
+          const tenant = found.data();
+          return {
+            id: `admin-${found.id}`,
+            role: 'SCHOOL_ADMIN',
+            tenantId: found.id,
             tenant,
             phone: cleanNoCountry,
             email: tenant.email || '',
