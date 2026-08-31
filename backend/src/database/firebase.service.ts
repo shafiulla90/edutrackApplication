@@ -96,19 +96,15 @@ export class FirebaseService implements OnModuleInit, OnModuleDestroy {
 
     if (!credential) {
       try {
-        const bundledSa = require('../../firebase-service-account.json');
-        if (bundledSa && bundledSa.private_key) {
-          this.logger.log(`Initializing Firebase Admin SDK using bundled firebase-service-account.json`);
-          credential = cert(bundledSa);
-        }
+        const DEFAULT_SA = {
+          projectId: 'edutrack-52e6c',
+          clientEmail: 'firebase-adminsdk-fbsvc@edutrack-52e6c.iam.gserviceaccount.com',
+          privateKey: "-----BEGIN PRIVATE KEY-----\nMIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQCvdwWa1t8LAuLS\nl8IQcE5A/4vGvFsgpGSOD/E+iadHQASUYSgaiacWS9MAykswvwBbgtzbJjjAx/E3\nQ/Tr9ZGUa+kfyTtu/lTur8CBICJ959Yq9fXTHjn7NmkREN4Ump4pqbQqWAREgJxr\nk5KgCy/TlBWBgT0uKm6n8GiCFYgNE/HlHV26XQBeUIdBluNPCglmEeTccJUhnmzC\nEOlwzxXYCE/EJi5IhGQKKW9bXQTbnsWwmvJCNmzTBJxlhe2VCdFwo0jIMtVJx7IW\nwj0EXBGRFzl9MXs2Li1Ky9xqn8DCk3DoSJOhsXI7KG/KdU8Jix6acxsB13jwPgQ3\n390RBWa3AgMBAAECggEAQw8zBi1uyw+MTr4PPicd0TuZWRftn/kUMTMomSUU2GdA\nGNFU+Wd4g03xU5D80aF96nuGGv9tm0gPCXcgaPnObLIdQ7etzkrHfP2QjgkRBZuQ\nP5UHIWug70CpQQt4RNme7v9byv8eimu43GhnFmGQIsWqvnb9QeKXrfl0h5rhB1Xg\nrlvYDVuJ6dgctGuyLIs8y+QI599Vu7xVPH8jmFUsFAGoKOKqm2xL8d63XTY2IQpv\ni7G+qiTTusJyU2VigFTyxiYoYdVUQeVycKgo1jkI86gy8Ds50MZ025HA726BtD2i\nV+XIJb0bSaQUAWSH9HMNY+hrafEY91qi2JTAFuvJmQKBgQDjHPct3w9dyKNltnOc\nzRffzl+g7QHZd0Wvfg6vHOHi3JarF1jMZ7g2RsOYo8XAUdapzK+udK6yD0zHl/8l\n/ItbhNDNv+MoI/F4tIoZxKQx/9t9IcwZs9suZ9S2elPGoUZudj4jVsks/fFzI/rO\nXR3HjIMKjQVoKtnO4oJ7BY9ViwKBgQDFyFaG7Or4mVCLqRSiF/ZhUz/dv7LzW5Wn\nzcK3Bt09hJwML4HoMuG1z3jWN5HWRhgHjLO7Ti81aG840Jh+S4wdUPKEb4itP2mI\na4D8hLhXeHJHK9uDIqzhiD/s3Sixi24T+plyiS4RZEPBnDi6c6vHzOJn8UtWCF9P\nfxcT2++RBQKBgD1ry/1/4ev/IxGS8llprhc8/OfMsT9a3mHDubzqFrz/40+KFN3S\n/yLOqH9Ta1vDxkZNsQWBUO2e7ajdFofzcMzjcoTybECi199JFEA7yhwrkfSZe1VI\nKvK16fUfyCBj5WRiXhO4mNeuJep5xI6i6DbbbWUhFmFBlX46DAexTT5ZAoGBAJA/\nmwvxAzao6tvRR2EpROKayvu58pQW+cFXCmpesUFK1Fz20TI+2eu2E5V5Ff5HRQNM\nlVFIppm3P1cam/2Qr/I5tYbtqathkmCSt5J0YdY53G8YB5NO2PPsYWMpsaI75N7h\naMTmVBkPHXO5so4aCvE/9uiETcPDe3AJaxVq1QDZAoGBAKZDGVfTadpAsKaFCG5o\nB+r2nkvtppQONrgtAXsBZe4ZQEJ+9AtVy060BgxcDHHM+qRTk4ewoID6umPVxpAZ\nzkn8wYoXIeDcCGh/lsTcITVvGu/XJmyJej9ivGB3IQGTz/CyHl4hdloWWauftp40\nAV4he2uP1LlTVHUUd/yxzNWK\n-----END PRIVATE KEY-----\n",
+        };
+        this.logger.log(`Initializing Firebase Admin SDK using embedded fallback service account`);
+        credential = cert(DEFAULT_SA);
       } catch (e) {
-        try {
-          const bundledSaRoot = require('../../../backend/firebase-service-account.json');
-          if (bundledSaRoot && bundledSaRoot.private_key) {
-            this.logger.log(`Initializing Firebase Admin SDK using root bundled service account`);
-            credential = cert(bundledSaRoot);
-          }
-        } catch (e2) {}
+        this.logger.error('Failed to initialize embedded service account fallback', e);
       }
     }
 
