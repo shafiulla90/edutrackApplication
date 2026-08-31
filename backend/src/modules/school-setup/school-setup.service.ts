@@ -31,7 +31,7 @@ export class SchoolSetupService {
     };
   }
 
-  async updateSchoolSetup(data: any, tenantId: string) {
+  async updateSchoolSetup(data: any, tenantId: string, userId?: string) {
     if (!tenantId) throw new Error('tenantId is required');
 
     const updatePayload: any = {};
@@ -59,14 +59,22 @@ export class SchoolSetupService {
       try {
         const db = this.firebaseService.getFirestore();
         if (db) {
+          // 1. Direct update by userId if provided
+          if (userId) {
+            await db.collection('users').doc(userId).set({ name: data.adminName, updatedAt: new Date().toISOString() }, { merge: true }).catch(() => null);
+          }
+
+          // 2. Update all admin users for this tenant
           const userSnap = await db.collection('users')
             .where('tenantId', '==', tenantId)
-            .where('role', '==', 'SCHOOL_ADMIN')
             .get();
           if (!userSnap.empty) {
             const batch = db.batch();
             userSnap.docs.forEach(doc => {
-              batch.update(doc.ref, { name: data.adminName, updatedAt: new Date().toISOString() });
+              const uData = doc.data();
+              if (uData.role === 'SCHOOL_ADMIN' || uData.role === 'ADMIN' || doc.id === userId) {
+                batch.set(doc.ref, { name: data.adminName, updatedAt: new Date().toISOString() }, { merge: true });
+              }
             });
             await batch.commit();
           }

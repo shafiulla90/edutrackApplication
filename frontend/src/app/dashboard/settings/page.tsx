@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { api } from '@/lib/api';
+import { useTenant } from '../providers/TenantContext';
 import { dispatchSchoolSetupUpdated } from '@/lib/events';
 import { resizeAndCompressImage } from '@/lib/image';
 import { useToast } from '@/components/Toast';
@@ -32,6 +33,7 @@ interface AcademicTerm {
 
 function SettingsPageContent() {
   const { showToast } = useToast();
+  const { refresh } = useTenant();
   const searchParams = useSearchParams();
   const tabParam = searchParams.get('tab');
   const [activeTab, setActiveTab] = useState<'profile' | 'banking' | 'upi' | 'razorpay' | 'terms'>('profile');
@@ -288,6 +290,7 @@ function SettingsPageContent() {
 
       // Dispatch event to refresh branding instantly
       dispatchSchoolSetupUpdated();
+      await refresh();
     } catch (err: any) {
       console.error('Error saving settings profile:', err);
       showToast('Failed to save configuration settings: ' + (err.response?.data?.message || err.message), 'error');

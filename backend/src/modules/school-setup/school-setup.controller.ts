@@ -19,6 +19,7 @@ export class SchoolSetupController {
   @ApiOperation({ summary: 'Update school setup configuration' })
   async updateSetup(@Body() body: any, @Request() req: any) {
     const tenantId = getTenantIdFromReq(req);
-    return this.schoolSetupService.updateSchoolSetup(body, tenantId);
+    const userId = req.user?.sub || req.user?.id || req.user?.userId;
+    return this.schoolSetupService.updateSchoolSetup(body, tenantId, userId);
   }
 }
