@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-const TARGET_BACKEND_URL = process.env.BACKEND_URL || 'https://edutrack-backend-api.vercel.app';
+const TARGET_BACKEND_URL = process.env.BACKEND_URL || 'https://edutrack-backend-api-git-master-shafiulla90s-projects.vercel.app';
 
 export async function GET(request: NextRequest, { params }: { params: { path: string[] } }) {
   return proxyRequest(request, params.path, 'GET');
