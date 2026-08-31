@@ -47,37 +47,55 @@ export class FirebaseService implements OnModuleInit, OnModuleDestroy {
       }
     }
 
-    const localSaPath = path.join(process.cwd(), 'firebase-service-account.json');
-    if (!credential && fs.existsSync(localSaPath)) {
-      try {
-        this.logger.log(`Initializing Firebase Admin SDK using local firebase-service-account.json file`);
-        const serviceAccount = JSON.parse(fs.readFileSync(localSaPath, 'utf8'));
-        credential = cert(serviceAccount);
-      } catch (err) {
-        this.logger.error('Failed to parse local firebase-service-account.json', err);
+    const candidatePaths = [
+      path.join(process.cwd(), 'firebase-service-account.json'),
+      path.join(process.cwd(), 'backend', 'firebase-service-account.json'),
+      path.join(__dirname, '..', '..', '..', 'firebase-service-account.json'),
+      path.join(__dirname, '..', '..', '..', 'backend', 'firebase-service-account.json')
+    ];
+
+    for (const saPath of candidatePaths) {
+      if (!credential && fs.existsSync(saPath)) {
+        try {
+          this.logger.log(`Initializing Firebase Admin SDK using file: ${saPath}`);
+          const serviceAccount = JSON.parse(fs.readFileSync(saPath, 'utf8'));
+          if (serviceAccount.private_key) {
+            credential = cert(serviceAccount);
+            break;
+          }
+        } catch (err) {
+          this.logger.error(`Failed to parse ${saPath}`, err);
+        }
       }
     }
 
     if (!credential && credentialsPath && fs.existsSync(credentialsPath)) {
-      this.logger.log(`Initializing Firebase Admin SDK using credential file: ${credentialsPath}`);
-      const serviceAccount = JSON.parse(fs.readFileSync(credentialsPath, 'utf8'));
-      credential = cert(serviceAccount);
-    } else if (!credential && clientEmail && privateKey) {
+      try {
+        this.logger.log(`Initializing Firebase Admin SDK using credential file: ${credentialsPath}`);
+        const serviceAccount = JSON.parse(fs.readFileSync(credentialsPath, 'utf8'));
+        if (serviceAccount.private_key) {
+          credential = cert(serviceAccount);
+        }
+      } catch (err) {
+        this.logger.error(`Failed to parse credentialsPath ${credentialsPath}`, err);
+      }
+    }
+
+    if (!credential && clientEmail && privateKey) {
       this.logger.log(`Initializing Firebase Admin SDK using environment variable credentials`);
       credential = cert({
         projectId,
         clientEmail,
         privateKey,
       });
-    } else if (!credential) {
-      this.logger.log(`Initializing Firebase Admin SDK with project ID: ${projectId}`);
-      credential = cert({ projectId });
     }
 
-    this.firebaseApp = initializeApp({
-      credential,
-      projectId,
-    });
+    if (credential) {
+      this.firebaseApp = initializeApp({ credential, projectId });
+    } else {
+      this.logger.log(`Initializing Firebase Admin SDK with project ID default credentials: ${projectId}`);
+      this.firebaseApp = initializeApp({ projectId });
+    }
 
     this.firestoreDb = getFirestore(this.firebaseApp);
     this.logger.log(`Firebase Admin SDK initialized successfully for project: ${projectId}`);
