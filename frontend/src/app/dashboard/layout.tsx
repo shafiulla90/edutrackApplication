@@ -96,10 +96,12 @@ export default function DashboardLayout({
   };
 
   useEffect(() => {
-    fetchUnreadAnnouncements();
-    const interval = setInterval(fetchUnreadAnnouncements, 15000);
-    return () => clearInterval(interval);
-  }, [currentUser?.id]);
+  // Only fetch announcements when on the announcements page to avoid unnecessary network calls during navigation
+  if (!pathname.includes('/dashboard/announcements')) return;
+  fetchUnreadAnnouncements();
+  const interval = setInterval(fetchUnreadAnnouncements, 15000);
+  return () => clearInterval(interval);
+}, [currentUser?.id, pathname]);
 
   useEffect(() => {
     window.addEventListener('announcementRead', fetchUnreadAnnouncements);
