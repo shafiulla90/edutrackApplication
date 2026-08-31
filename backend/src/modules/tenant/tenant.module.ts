@@ -8,7 +8,7 @@ import { DatabaseProviderModule } from '../../database/database-provider.module'
   imports: [
     DatabaseProviderModule,
     JwtModule.register({
-      secret: process.env.JWT_SECRET || 'supersecretkey',
+      secret: process.env.JWT_SECRET || 'edutrack_secret_2026_!@#',
       signOptions: { expiresIn: '7d' },
     }),
   ],
