@@ -67,12 +67,16 @@ export class AuthService {
     const isPasswordValid = await bcrypt.compare(dto.password, user.passwordHash);
     if (!isPasswordValid) throw new UnauthorizedException('Invalid credentials');
 
-    let tenant = user.tenantId ? await this.tenantRepo.findById(user.tenantId).catch(() => null) : null;
+    if (!user.tenantId) {
+      throw new UnauthorizedException('School tenant association not found for this user account.');
+    }
+
+    let tenant = await this.tenantRepo.findById(user.tenantId).catch(() => null);
     if (!tenant && user.tenant) {
       tenant = user.tenant;
     }
     if (!tenant) {
-      tenant = { id: user.tenantId || 'default-tenant', name: 'EduTrack SaaS Platform' };
+      tenant = { id: user.tenantId, name: user.name || 'School Portal' };
     }
 
     const payload = { 
@@ -211,37 +215,48 @@ export class AuthService {
       };
     }
 
-    // Registered User: Fetch strict user-tenant mapping with robust fallbacks
-    let tenant = existingUser.tenantId ? await this.tenantRepo.findById(existingUser.tenantId).catch(() => null) : null;
+    // Registered User: Fetch strict user-tenant mapping
+    let tenantId = existingUser.tenantId;
+
+    let tenant = tenantId ? await this.tenantRepo.findById(tenantId).catch(() => null) : null;
 
     if (!tenant && existingUser.tenant) {
       tenant = existingUser.tenant;
+      tenantId = tenant.id;
     }
 
     if (!tenant && (existingUser.role === 'SUPER_ADMIN' || existingUser.role === 'PLATFORM_ADMIN')) {
-      tenant = { id: existingUser.tenantId || 'platform', name: 'Platform Admin' };
+      tenantId = tenantId || 'platform';
+      tenant = { id: tenantId, name: 'Platform Admin' };
     }
 
+    // Try finding tenant specifically matching the user's admin phone
     if (!tenant && typeof (this.tenantRepo as any).findAll === 'function') {
       try {
         const allTenants = await this.tenantRepo.findAll();
-        tenant = allTenants.find((t: any) => 
+        const matchedTenant = allTenants.find((t: any) => 
           (t.adminPhone && t.adminPhone.slice(-10) === cleanedPhone.slice(-10)) ||
           (t.phone && t.phone.slice(-10) === cleanedPhone.slice(-10))
-        ) || allTenants[0] || null;
+        );
+        if (matchedTenant) {
+          tenant = matchedTenant;
+          tenantId = matchedTenant.id;
+        }
       } catch (err) {
-        this.logger.warn('Fallback tenant lookup failed:', err);
+        this.logger.warn('Tenant lookup by phone failed:', err);
       }
     }
 
-    if (!tenant) {
+    if (!tenant && tenantId) {
       tenant = {
-        id: existingUser.tenantId || 'default-tenant',
-        name: 'EduTrack SaaS Platform',
+        id: tenantId,
+        name: existingUser.schoolName || 'School Portal',
       };
     }
 
-    const tenantId = tenant.id || existingUser.tenantId || 'default-tenant';
+    if (!tenant || !tenantId) {
+      throw new UnauthorizedException('School tenant association not found for this user account.');
+    }
 
     const payload = {
       sub: existingUser.id,
@@ -281,8 +296,11 @@ export class AuthService {
       if (!tenant && (payload.role === 'SUPER_ADMIN' || payload.role === 'PLATFORM_ADMIN')) {
         tenant = { id: payload.tenantId || 'platform', name: 'Platform Admin' };
       }
+      if (!tenant && payload.tenantId) {
+        tenant = { id: payload.tenantId, name: 'School Portal' };
+      }
       if (!tenant) {
-        tenant = { id: payload.tenantId || 'default-tenant', name: 'EduTrack SaaS Platform' };
+        throw new UnauthorizedException('School tenant association not found for user');
       }
 
       return {
@@ -292,7 +310,7 @@ export class AuthService {
           email: payload.email || '',
           phone: payload.phone || '',
           role: payload.role || 'SCHOOL_ADMIN',
-          tenantId: payload.tenantId || tenant.id,
+          tenantId: payload.tenantId,
           tenant,
         },
       };
