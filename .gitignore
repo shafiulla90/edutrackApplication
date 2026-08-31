@@ -12,6 +12,8 @@ node_modules/
 dist/
 .next/
 out/
+.vercel/
+.vercelignore
 *.zip*
 *.7z*
 *.tar*
