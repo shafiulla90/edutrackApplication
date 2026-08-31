@@ -1,7 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-// Backend URL - reads from env var on Vercel, falls back to live production backend
-const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || process.env.BACKEND_INTERNAL_URL || 'https://edutrack-backend-api.vercel.app';
+function getTargetBackendUrl(): string {
+  const envUrl = process.env.BACKEND_INTERNAL_URL || process.env.NEXT_PUBLIC_API_URL;
+  if (envUrl && envUrl.startsWith('https://') && !envUrl.includes('localhost')) {
+    return envUrl.replace(/\/+$/, '');
+  }
+  return 'https://edutrack-backend-api.vercel.app';
+}
 
 export async function GET(request: NextRequest, { params }: { params: { path: string[] } }) {
   return proxyRequest(request, params.path, 'GET');
@@ -26,7 +31,8 @@ export async function DELETE(request: NextRequest, { params }: { params: { path:
 async function proxyRequest(request: NextRequest, pathSegments: string[], method: string) {
   const path = pathSegments.join('/');
   const searchParams = request.nextUrl.searchParams.toString();
-  const targetUrl = `${BACKEND_URL}/${path}${searchParams ? `?${searchParams}` : ''}`;
+  const backendBase = getTargetBackendUrl();
+  const targetUrl = `${backendBase}/${path}${searchParams ? `?${searchParams}` : ''}`;
 
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
@@ -42,6 +48,7 @@ async function proxyRequest(request: NextRequest, pathSegments: string[], method
   const fetchOptions: RequestInit = {
     method,
     headers,
+    cache: 'no-store',
   };
 
   // Forward body for non-GET requests
