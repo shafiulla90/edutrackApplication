@@ -314,9 +314,9 @@ function RegisterSchoolContent() {
                       <p className="text-[11px] leading-relaxed mb-4">1 Month Free Trial. Full access to evaluate platform capabilities.</p>
                     </div>
                     <ul className="text-[10px] space-y-1.5 border-t border-slate-900/50 pt-3">
-                      <li>• 1,000 Students Limit</li>
-                      <li>• 100 Teachers Limit</li>
-                      <li>• Standard Support</li>
+                      <li>• Unlimited Students</li>
+                      <li>• Unlimited Teachers</li>
+                      <li>• Full Access to All Modules</li>
                     </ul>
                   </div>
 
