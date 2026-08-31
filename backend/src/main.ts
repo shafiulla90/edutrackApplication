@@ -29,15 +29,10 @@ async function bootstrap() {
 
   // Enable CORS for frontend Vercel & local development
   app.enableCors({
-    origin: (origin, callback) => {
-      // Allow requests with no origin (mobile apps, curl, server-to-server) or matching localhost/vercel
-      if (!origin || origin.includes('localhost') || origin.includes('vercel.app') || (process.env.FRONTEND_URL && origin.includes(process.env.FRONTEND_URL))) {
-        callback(null, true);
-      } else {
-        callback(null, true); // Permissive CORS for deployed client
-      }
-    },
+    origin: true,
+    methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE', 'OPTIONS'],
     credentials: true,
+    allowedHeaders: ['Content-Type', 'Accept', 'Authorization', 'X-Tenant-ID', 'X-Requested-With'],
   });
 
   // Increase JSON and URL-encoded body limits for file uploads

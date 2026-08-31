@@ -4,22 +4,9 @@ import axios from 'axios';
 // which forwards server-side to the backend — eliminating CORS issues entirely.
 // In local dev: use NEXT_PUBLIC_API_URL env var or fall back to localhost:3001.
 const envApiUrl = process.env.NEXT_PUBLIC_API_URL;
-
-function resolveBaseURL(): string {
-  // Server-side (SSR/build): call backend directly
-  if (typeof window === 'undefined') {
-    return envApiUrl || 'https://edutrack-backend-api.vercel.app';
-  }
-  // Browser on Vercel: use the internal /api proxy to avoid CORS
-  const isVercel = window.location.hostname.includes('vercel.app') || window.location.hostname.includes('covenantsynergy.in');
-  if (isVercel) {
-    return '/api';
-  }
-  // Local dev: use env var or localhost
-  return (envApiUrl && envApiUrl.startsWith('http')) ? envApiUrl : 'http://localhost:3001';
-}
-
-const BACKEND_URL = resolveBaseURL();
+const BACKEND_URL = (typeof window !== 'undefined' && (window.location.hostname.includes('vercel.app') || window.location.hostname.includes('covenantsynergy.in')))
+  ? 'https://edutrack-backend-api.vercel.app'
+  : (envApiUrl && envApiUrl.startsWith('http') ? envApiUrl : 'http://localhost:3001');
 
 export function getActiveRole(): 'TEACHER' | 'SCHOOL_ADMIN' | 'PARENT' | 'DRIVER' {
   if (typeof window === 'undefined') return 'SCHOOL_ADMIN';
