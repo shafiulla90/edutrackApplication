@@ -94,6 +94,24 @@ export class FirebaseService implements OnModuleInit, OnModuleDestroy {
       });
     }
 
+    if (!credential) {
+      try {
+        const bundledSa = require('../../firebase-service-account.json');
+        if (bundledSa && bundledSa.private_key) {
+          this.logger.log(`Initializing Firebase Admin SDK using bundled firebase-service-account.json`);
+          credential = cert(bundledSa);
+        }
+      } catch (e) {
+        try {
+          const bundledSaRoot = require('../../../backend/firebase-service-account.json');
+          if (bundledSaRoot && bundledSaRoot.private_key) {
+            this.logger.log(`Initializing Firebase Admin SDK using root bundled service account`);
+            credential = cert(bundledSaRoot);
+          }
+        } catch (e2) {}
+      }
+    }
+
     if (credential) {
       this.firebaseApp = initializeApp({ credential, projectId });
     } else {

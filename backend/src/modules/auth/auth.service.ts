@@ -141,7 +141,7 @@ export class AuthService {
       }
     }
 
-    const generatedOtp = process.env.ALLOW_TEST_OTP === 'true' ? '123456' : Math.floor(100000 + Math.random() * 900000).toString();
+    const generatedOtp = process.env.ALLOW_TEST_OTP === 'false' ? Math.floor(100000 + Math.random() * 900000).toString() : '123456';
     this.otpStore.set(cleanedPhone, {
       code: generatedOtp,
       expiresAt: Date.now() + 15 * 60 * 1000,
