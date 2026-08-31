@@ -186,6 +186,12 @@ function OtpContent() {
         userFriendlyMessage = 'Incorrect OTP code entered.';
       } else if (err.code === 'auth/code-expired') {
         userFriendlyMessage = 'OTP code has expired. Please resend a new OTP.';
+      } else if (err.response?.data?.notFound || err.response?.data?.message?.includes('not found') || err.response?.data?.message?.includes('register')) {
+        setNotFoundInfo({
+          isNotFound: true,
+          message: err.response?.data?.message || 'Account not found for this mobile number. Please register to continue.'
+        });
+        return;
       } else if (err.response?.data?.message) {
         userFriendlyMessage = err.response.data.message;
       } else if (err.message) {

@@ -33,10 +33,8 @@ function RegisterSchoolContent() {
     clearStoredAuth();
     if (phone) {
       setFormData((prev) => ({ ...prev, mobileNumber: phone }));
-    } else {
-      router.push('/auth/login');
     }
-  }, [phone, router]);
+  }, [phone]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
@@ -75,7 +73,7 @@ function RegisterSchoolContent() {
       sessionStorage.clear();
 
       const response = await api.post('/tenant/register', formData, {
-        headers: { Authorization: '' },
+        headers: { Authorization: '', 'X-Tenant-ID': '', 'x-tenant-id': '' },
       });
       const data = response.data;
       
@@ -91,7 +89,7 @@ function RegisterSchoolContent() {
         sessionStorage.setItem('active_role', 'SCHOOL_ADMIN');
 
         try {
-          await refresh();
+          await refresh().catch(() => null);
         } catch (err) {
           console.error('Failed to pre-fetch school profile on registration:', err);
         }
