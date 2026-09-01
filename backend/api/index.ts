@@ -3,30 +3,26 @@ import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 const express = require('express');
 import { ExpressAdapter } from '@nestjs/platform-express';
-
-let appModuleRef: any;
-try {
-  appModuleRef = require('../dist/src/app.module').AppModule;
-} catch (e1) {
-  try {
-    appModuleRef = require('../src/app.module').AppModule;
-  } catch (e2) {
-    appModuleRef = require('./src/app.module').AppModule;
-  }
-}
+import { AppModule } from '../src/app.module';
 
 const server = express();
 let cachedApp: any;
 
 async function bootstrap() {
   if (!cachedApp) {
-    const app = await NestFactory.create(appModuleRef, new ExpressAdapter(server), {
+    const app = await NestFactory.create(AppModule, new ExpressAdapter(server), {
       logger: ['error', 'warn', 'log'],
     });
+
+    // Allow ALL origins dynamically - required for Vercel serverless + browser CORS
     app.enableCors({
-      origin: true,
+      origin: (origin: any, callback: any) => callback(null, true),
+      methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE', 'OPTIONS'],
+      allowedHeaders: ['Content-Type', 'Accept', 'Authorization', 'X-Tenant-ID', 'X-Requested-With'],
       credentials: true,
+      optionsSuccessStatus: 204,
     });
+
     app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
     await app.init();
     cachedApp = app;
@@ -61,15 +57,18 @@ function normalizeUrl(url: string): string {
 }
 
 export default async function handler(req: any, res: any) {
-  // Set CORS headers on all responses (including preflight OPTIONS)
+  // Always set CORS headers on EVERY response — before any processing
   const origin = req.headers?.origin || '*';
   res.setHeader('Access-Control-Allow-Origin', origin);
   res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, PUT, PATCH, POST, DELETE, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Accept, Authorization, X-Tenant-ID, X-Requested-With');
   res.setHeader('Access-Control-Allow-Credentials', 'true');
+  res.setHeader('Access-Control-Max-Age', '86400');
 
+  // Handle OPTIONS preflight immediately - never let it reach NestJS
   if (req.method === 'OPTIONS') {
-    return res.status(200).end();
+    res.statusCode = 204;
+    return res.end();
   }
 
   try {
@@ -80,11 +79,13 @@ export default async function handler(req: any, res: any) {
     server(req, res);
   } catch (error: any) {
     console.error('CRITICAL SERVERLESS BOOTSTRAP ERROR:', error);
-    res.status(500).json({
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.statusCode = 500;
+    res.setHeader('Content-Type', 'application/json');
+    res.end(JSON.stringify({
       error: 'Serverless Bootstrap Failed',
       message: error?.message || String(error),
-      stack: error?.stack || null,
-    });
+    }));
   }
 }
 
