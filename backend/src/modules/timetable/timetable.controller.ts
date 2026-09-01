@@ -14,12 +14,14 @@ import {
   PeriodTimingDto,
 } from './dto/timetable.dto';
 
+import { getTenantIdFromReq } from '../../common/utils/tenant.util';
+
 @Controller('timetable')
 export class TimetableController {
   constructor(private readonly timetableService: TimetableService) {}
 
   private getTenantId(req: any): string {
-    return req?.user?.tenantId || 'tenant-test-001';
+    return getTenantIdFromReq(req);
   }
 
   @Get('academic-years')
