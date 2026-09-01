@@ -10,8 +10,6 @@ export default function MarksMgmtPage() {
   const [subjects, setSubjects] = useState<any[]>([]);
   const [examTypes, setExamTypes] = useState<any[]>([]);
 
-  const [hasLoadedRoster, setHasLoadedRoster] = useState(false);
-
   // Selection states
   const [selectedClass, setSelectedClass] = useState('');
   const [selectedSubject, setSelectedSubject] = useState('');
@@ -41,26 +39,18 @@ export default function MarksMgmtPage() {
   useEffect(() => {
     async function loadData() {
       try {
-        let classesData: any[] = [];
-        try {
-          const clsRes = await api.get('/teacher-portal/classes');
-          classesData = Array.isArray(clsRes.data) && clsRes.data.length > 0 ? clsRes.data : [];
-        } catch {}
-        if (classesData.length === 0) {
-          try {
-            const acadClsRes = await api.get('/academics/classes');
-            classesData = Array.isArray(acadClsRes.data) ? acadClsRes.data : [];
-          } catch {}
-        }
-
-        const [subRes, examRes] = await Promise.all([
-          api.get('/exams/subjects').catch(() => ({ data: [] })),
-          api.get('/exams/exam-types').catch(() => ({ data: [] })),
+        const [clsRes, subRes, examRes, compRes] = await Promise.all([
+          api.get('/teacher-portal/classes'),
+          api.get('/exams/subjects'),
+          api.get('/exams/exam-types'),
+          api.get('/exam-config/components'),
         ]);
-
-        setClasses(classesData);
-        setSubjects(Array.isArray(subRes.data) ? subRes.data : []);
-        setExamTypes(Array.isArray(examRes.data) ? examRes.data : []);
+        setClasses(clsRes.data);
+        setSubjects(subRes.data);
+        setExamTypes(examRes.data);
+        setComponents(compRes.data);
+        if (compRes.data.length > 0) setSelectedSubjectType(compRes.data[0].name);
+        else setSelectedSubjectType('Theory');
       } catch (err) {
         console.error('Failed to load initial data:', err);
       } finally {
@@ -75,17 +65,17 @@ export default function MarksMgmtPage() {
     setLoadingStudents(true);
     setMessage({ type: '', text: '' });
     try {
-      const res = await api.get(`/teacher-portal/marks/entry?subjectId=${selectedSubject}&examName=${encodeURIComponent(selectedExam)}&classSectionId=${selectedClass}`);
-      const rosterData = res.data.roster || res.data;
-      setStudents(rosterData);
-      setHasLoadedRoster(true);
+      // Find classSectionId from selectedClass
+      const cls = classes.find(c => c.classSectionId === selectedClass);
+      const res = await api.get(`/teacher-portal/marks/entry?subjectId=${selectedSubject}&examName=${encodeURIComponent(selectedExam)}&classSectionId=${selectedClass}&subjectType=${encodeURIComponent(selectedSubjectType)}`);
+      setStudents(res.data.roster || res.data);
       if (res.data.config) setExamConfig(res.data.config);
 
       const initialSheet: { [id: string]: { score: string; remarks: string } } = {};
+      const rosterData = res.data.roster || res.data;
       rosterData.forEach((s: any) => {
-        const scoreVal = s.marksObtained !== null && s.marksObtained !== undefined ? s.marksObtained : s.score;
         initialSheet[s.studentId] = {
-          score: scoreVal !== null && scoreVal !== undefined && scoreVal !== '' ? String(scoreVal) : '',
+          score: s.marksObtained !== null ? String(s.marksObtained) : '',
           remarks: s.remarks || '',
         };
       });
@@ -99,16 +89,6 @@ export default function MarksMgmtPage() {
       setLoadingStudents(false);
     }
   };
-
-  useEffect(() => {
-    if (selectedClass && selectedSubject && selectedExam) {
-      handleLoadRoster();
-    } else {
-      setStudents([]);
-      setMarksSheet({});
-      setHasLoadedRoster(false);
-    }
-  }, [selectedClass, selectedSubject, selectedExam]);
 
   // Trigger auto-save
   const triggerAutoSave = (updatedSheet: typeof marksSheet) => {
@@ -141,6 +121,7 @@ export default function MarksMgmtPage() {
           examName: selectedExam,
           classSectionId: selectedClass,
           subjectId: selectedSubject,
+          subjectType: selectedSubjectType,
         });
         setAutosaveStatus('All changes saved');
       } catch (err) {
@@ -204,6 +185,7 @@ export default function MarksMgmtPage() {
         examName: selectedExam,
         classSectionId: selectedClass,
         subjectId: selectedSubject,
+        subjectType: selectedSubjectType,
       });
       setAutosaveStatus('All changes saved');
       setMessage({ type: 'success', text: 'All marks saved successfully!' });
@@ -281,21 +263,13 @@ export default function MarksMgmtPage() {
               className="block w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 focus:outline-none focus:ring-1 focus:ring-[#2E5BFF] text-sm"
             >
               <option value="">Select...</option>
-              {classes.length === 0 ? (
-                <option value="">No class sections available for this school</option>
-              ) : (
-                classes.map((c, idx) => {
-                  const id = c.value || c.classSectionId || c.id || `cs-${idx}`;
-                  const clsName = typeof c.className === 'object' ? (c.className?.name || 'Class') : String(c.className || c.name || 'Class');
-                  const secName = typeof c.sectionName === 'object' ? (c.sectionName?.name || '') : String(c.sectionName || '');
-                  const label = c.label || (secName ? `${clsName} - ${secName}` : clsName);
-                  return <option key={String(id)} value={String(id)}>{label}</option>;
-                })
-              )}
+              {Array.from(new Map(classes.map(c => [c.classSectionId, c.className])).entries()).map(([id, name]) => (
+                <option key={id} value={id}>{name}</option>
+              ))}
             </select>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-3 gap-4">
             <div>
               <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Subject</label>
               <select
@@ -308,29 +282,13 @@ export default function MarksMgmtPage() {
                 className="block w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 focus:outline-none focus:ring-1 focus:ring-[#2E5BFF] text-sm disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <option value="">Select...</option>
-                {subjects.length > 0 ? (
-                  subjects.map((s, idx) => {
-                    const subId = s.id || s.subjectId || `sub-${idx}`;
-                    const subName = typeof s.name === 'object' ? (s.name?.name || 'Subject') : String(s.name || s.subjectName || 'Subject');
-                    return (
-                      <option key={String(subId)} value={String(subId)}>
-                        {subName}
-                      </option>
-                    );
-                  })
-                ) : (
-                  classes
-                    .filter(c => (c.classSectionId || c.id) === selectedClass)
-                    .map((c, idx) => {
-                      const subName = typeof c.subjectName === 'object' ? (c.subjectName?.name || 'Subject') : String(c.subjectName || c.name || 'Subject');
-                      const subId = c.subjectId || c.id || `sub-${idx}`;
-                      return (
-                        <option key={String(subId)} value={String(subId)}>
-                          {subName}
-                        </option>
-                      );
-                    })
-                )}
+                {classes
+                  .filter(c => c.classSectionId === selectedClass)
+                  .map(c => (
+                    <option key={c.subjectId} value={c.subjectId}>
+                      {c.subjectName}
+                    </option>
+                  ))}
               </select>
             </div>
             <div>
@@ -344,10 +302,20 @@ export default function MarksMgmtPage() {
                 className="block w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 focus:outline-none focus:ring-1 focus:ring-[#2E5BFF] text-sm"
               >
                 <option value="">Select...</option>
-                {examTypes.map((t: any, idx: number) => {
-                  const examName = typeof t === 'object' ? (t?.name || t?.title || String(t)) : String(t);
-                  return <option key={idx} value={examName}>{examName}</option>;
-                })}
+                {examTypes.map(t => <option key={t} value={t}>{t}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Component</label>
+              <select
+                value={selectedSubjectType}
+                onChange={(e) => {
+                  setSelectedSubjectType(e.target.value);
+                  setStudents([]);
+                }}
+                className="block w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 focus:outline-none focus:ring-1 focus:ring-[#2E5BFF] text-sm"
+              >
+                {components.length > 0 ? components.map(c => <option key={c.id} value={c.name}>{c.name}</option>) : <option value="Theory">Theory</option>}
               </select>
             </div>
           </div>
@@ -441,25 +409,11 @@ export default function MarksMgmtPage() {
       )}
 
       {students.length === 0 && (
-        <div className="bg-white py-10 text-center text-slate-400 text-xs font-semibold rounded-3xl border border-slate-200 shadow-sm px-6">
+        <div className="bg-white py-12 text-center text-slate-400 text-xs font-semibold rounded-3xl border border-slate-200 shadow-sm px-6">
           {!selectedClass || !selectedSubject || !selectedExam ? (
-            <p className="text-slate-500 font-bold">Please select a Class Section, Subject, and Exam Type to continue.</p>
-          ) : hasLoadedRoster ? (
-            <div className="space-y-2">
-              <p className="text-slate-700 font-extrabold text-sm">No active students found for the selected Class &amp; Section.</p>
-              <p className="text-slate-400 text-xs font-medium">Try selecting another class or verify student enrollment in the school roster.</p>
-            </div>
+            <p className="text-slate-500">Please select a Class Section and Subject to continue.</p>
           ) : (
-            <div className="space-y-3">
-              <p className="text-slate-600 font-bold">Filters selected. Click below to load student roster.</p>
-              <button
-                type="button"
-                onClick={handleLoadRoster}
-                className="px-5 py-2.5 bg-[#2E5BFF] hover:bg-blue-600 text-white font-bold rounded-xl text-xs shadow-md shadow-blue-500/10 cursor-pointer inline-block"
-              >
-                🔍 Load Student Roster
-              </button>
-            </div>
+            <p className="text-slate-500">Click &ldquo;Load Students&rdquo; to fetch the student listing.</p>
           )}
         </div>
       )}

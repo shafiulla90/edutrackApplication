@@ -3,7 +3,7 @@
 import React, { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { School, User, Mail, MapPin, Calendar, Loader2, AlertCircle } from 'lucide-react';
-import { api, clearStoredAuth } from '@/lib/api';
+import { api } from '@/lib/api';
 import { useTenant } from '../providers/TenantContext';
 
 function RegisterSchoolContent() {
@@ -29,12 +29,12 @@ function RegisterSchoolContent() {
 
   // Keep phone prefilled if it changes in URL query
   useEffect(() => {
-    // Purge any old tokens from previous sessions when landing on school registration
-    clearStoredAuth();
     if (phone) {
       setFormData((prev) => ({ ...prev, mobileNumber: phone }));
+    } else {
+      router.push('/auth/login');
     }
-  }, [phone]);
+  }, [phone, router]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
@@ -65,37 +65,27 @@ function RegisterSchoolContent() {
 
     setLoading(true);
     try {
-      // Clear any stale local tokens before registering a new institution
-      localStorage.removeItem('admin_token');
-      localStorage.removeItem('token');
-      localStorage.removeItem('admin_tenantId');
-      localStorage.removeItem('tenantId');
-      sessionStorage.clear();
-
-      const response = await api.post('/tenant/register', formData, {
-        headers: { Authorization: '', 'X-Tenant-ID': '', 'x-tenant-id': '' },
-      });
+      const response = await api.post('/tenant/register', formData);
       const data = response.data;
       
       if (data.success && data.access_token) {
-        // Store new JWT token and Tenant ID in local storage
+        // Store JWT token and new Tenant ID in local storage under admin namespace
         localStorage.setItem('admin_token', data.access_token);
-        localStorage.setItem('token', data.access_token);
         localStorage.setItem('admin_tenantId', data.user.tenantId);
-        localStorage.setItem('tenantId', data.user.tenantId);
         if (data.user.phone) {
           localStorage.setItem('admin_userPhone', data.user.phone);
         }
         sessionStorage.setItem('active_role', 'SCHOOL_ADMIN');
 
+        // Fetch tenant details immediately to verify branding is ready
         try {
-          await refresh().catch(() => null);
+          await refresh();
         } catch (err) {
           console.error('Failed to pre-fetch school profile on registration:', err);
         }
 
-        // Direct navigation to open dashboard cleanly without errors
-        window.location.href = '/dashboard';
+        // Redirect directly to the ERP dashboard
+        router.push('/dashboard');
       } else {
         setError('Registration succeeded but login session was not returned.');
       }
@@ -311,12 +301,12 @@ function RegisterSchoolContent() {
                         )}
                       </div>
                       <p className="text-2xl font-black text-white mb-2">Free</p>
-                      <p className="text-[11px] leading-relaxed mb-4">1 Month Free Trial. Full access to evaluate platform capabilities.</p>
+                      <p className="text-[11px] leading-relaxed mb-4">6 Months Trial. Full access to evaluate platform capabilities.</p>
                     </div>
                     <ul className="text-[10px] space-y-1.5 border-t border-slate-900/50 pt-3">
-                      <li>• Unlimited Students</li>
-                      <li>• Unlimited Teachers</li>
-                      <li>• Full Access to All Modules</li>
+                      <li>• 1,000 Students Limit</li>
+                      <li>• 100 Teachers Limit</li>
+                      <li>• Standard Support</li>
                     </ul>
                   </div>
 

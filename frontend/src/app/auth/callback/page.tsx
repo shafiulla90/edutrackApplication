@@ -83,7 +83,6 @@ function CallbackContent() {
             localStorage.setItem('admin_userPhone', user.phone);
           }
           sessionStorage.setItem('active_role', 'SCHOOL_ADMIN');
-          sessionStorage.removeItem('dismissed_admin_expiry_warning');
 
           try {
             await refresh();

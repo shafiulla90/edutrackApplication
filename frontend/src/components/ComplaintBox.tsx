@@ -1455,9 +1455,7 @@ export default function ComplaintBox({ isEmbedded = false }: ComplaintBoxProps) 
                 <span className="text-[9px] font-bold uppercase tracking-widest bg-white/20 px-2.5 py-0.5 rounded-full">
                   {isEditing ? 'Editing Behavior Incident' : `${selectedCase.behaviorType} Incident Details`}
                 </span>
-                <h3 className="text-lg font-black leading-tight">
-                  {selectedCase.student?.user?.name || (selectedCase.student as any)?.name || (selectedCase as any).studentName || historyStudent?.user?.name || 'Student'}
-                </h3>
+                <h3 className="text-lg font-black leading-tight">{selectedCase.student?.user?.name || 'Unknown Student'}</h3>
               </div>
               <button
                 onClick={() => { setSelectedCase(null); setIsEditing(false); }}
@@ -1584,20 +1582,12 @@ export default function ComplaintBox({ isEmbedded = false }: ComplaintBoxProps) 
                 <div className="grid grid-cols-2 gap-4 text-xs">
                   <div>
                     <span className="text-slate-400 font-bold block text-[10px] uppercase tracking-wider font-sans">Student Name</span>
-                    <span className="text-slate-800 font-bold block mt-0.5">
-                      {selectedCase.student?.user?.name || (selectedCase.student as any)?.name || (selectedCase as any).studentName || historyStudent?.user?.name || 'N/A'}
-                    </span>
+                    <span className="text-slate-800 font-bold block mt-0.5">{selectedCase.student?.user?.name || 'N/A'}</span>
                   </div>
                   <div>
                     <span className="text-slate-400 font-bold block text-[10px] uppercase tracking-wider font-sans">Class & Section</span>
                     <span className="text-slate-800 font-semibold block mt-0.5">
-                      {selectedCase.student?.classSection
-                        ? `${selectedCase.student.classSection.class.name} ${selectedCase.student.classSection.section?.name || ''}`
-                        : (selectedCase as any).className
-                          ? `${(selectedCase as any).className} ${(selectedCase as any).sectionName || ''}`
-                          : historyStudent?.classSection
-                            ? `${historyStudent.classSection.class.name} ${historyStudent.classSection.section?.name || ''}`
-                            : 'Class-1 Section-A'}
+                      {selectedCase.student?.classSection?.class.name} {selectedCase.student?.classSection?.section.name}
                     </span>
                   </div>
                   <div>

@@ -46,7 +46,7 @@ export default function FeesPage() {
 
   // Pay modal
   const [activeInvoice, setActiveInvoice] = useState<any>(null);
-  const [paymentMethod, setPaymentMethod] = useState<'RAZORPAY' | 'UPI' | 'GPAY' | 'PHONEPE' | 'BANK'>('RAZORPAY');
+  const [paymentMethod, setPaymentMethod] = useState<'UPI' | 'GPAY' | 'PHONEPE' | 'BANK'>('GPAY');
   const [payLoading, setPayLoading] = useState(false);
   const [message, setMessage] = useState('');
 
@@ -142,22 +142,15 @@ export default function FeesPage() {
   };
 
   // ── Derived values ────────────────────────────────────────────────────────
-  const invoices = Array.isArray(feesData) ? feesData : (feesData?.invoices || []);
-  const paymentDetails = feesData?.paymentDetails || {
-    bankName: 'State Bank of India',
-    bankAccountNo: 'SB-98765432101',
-    bankIFSC: 'SBIN0001234',
-    googlePayId: '9642402639@okbizaxis',
-    phonePeId: '9642402639@ybl',
-    upiQrId: '9642402639@paytm',
-  };
+  const invoices = feesData?.invoices || [];
+  const paymentDetails = feesData?.paymentDetails;
 
   const unpaidInvoices = invoices.filter((inv: any) => inv.remainingBalance > 0);
   const paidInvoices = invoices.filter((inv: any) => inv.remainingBalance === 0);
 
   const activeUnpaidInv = unpaidInvoices[0];
   const allItems: any[] = activeUnpaidInv?.items || [];
-  const selectableItems = allItems.filter((i: any) => i.isSelectable !== false);
+  const selectableItems = allItems.filter((i: any) => i.isSelectable);
 
   const hasValidationErrors = Array.from(itemErrors.values()).some(e => !!e);
 
@@ -183,20 +176,6 @@ export default function FeesPage() {
     paymentDetails.upiQrId
   );
 
-  const loadRazorpayScript = (): Promise<boolean> => {
-    return new Promise((resolve) => {
-      if ((window as any).Razorpay) {
-        resolve(true);
-        return;
-      }
-      const script = document.createElement('script');
-      script.src = 'https://checkout.razorpay.com/v1/checkout.js';
-      script.onload = () => resolve(true);
-      script.onerror = () => resolve(false);
-      document.body.appendChild(script);
-    });
-  };
-
   // ── Payment submit ────────────────────────────────────────────────────────
   const handlePaymentSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -219,93 +198,6 @@ export default function FeesPage() {
 
     setPayLoading(true);
     setMessage('');
-
-    // Handle Razorpay Online Payment
-    if (paymentMethod === 'RAZORPAY') {
-      try {
-        const loaded = await loadRazorpayScript();
-        if (!loaded) {
-          setMessage('Razorpay SDK failed to load. Please check your internet connection.');
-          setPayLoading(false);
-          return;
-        }
-
-        // 1. Create Razorpay order on server
-        const orderRes = await api.post('/payments/razorpay/create-order', {
-          studentId: selectedChild.id,
-          invoiceId: activeInvoice.id,
-          itemAmounts,
-          requestedAmount: selectedTotal,
-        });
-
-        const orderData = orderRes.data;
-        if (!orderData || !orderData.orderId) {
-          throw new Error('Failed to generate Razorpay order from server.');
-        }
-
-        // 2. Open Razorpay Checkout modal
-        const options = {
-          key: orderData.keyId,
-          amount: orderData.amountInPaise,
-          currency: orderData.currency || 'INR',
-          name: orderData.schoolName || 'EduTrack SaaS School',
-          description: `Fee Payment - ${orderData.invoiceNumber || activeInvoice.id}`,
-          order_id: orderData.orderId,
-          handler: async function (response: any) {
-            setPayLoading(true);
-            try {
-              // 3. Cryptographic Signature Verification on Server
-              const verifyRes = await api.post('/payments/razorpay/verify', {
-                razorpayOrderId: response.razorpay_order_id,
-                razorpayPaymentId: response.razorpay_payment_id,
-                razorpaySignature: response.razorpay_signature,
-                invoiceId: activeInvoice.id,
-                studentId: selectedChild.id,
-                transactionId: orderData.transactionId,
-              });
-
-              setMessage(verifyRes.data?.message || 'Razorpay Payment Verified & Captured!');
-              dispatchSchoolSetupUpdated();
-              await fetchFees(selectedChild.id);
-
-              setTimeout(() => {
-                setActiveInvoice(null);
-                setMessage('');
-              }, 2000);
-            } catch (vErr: any) {
-              console.error('Razorpay signature verification failed:', vErr);
-              setMessage(vErr.response?.data?.message || 'Payment signature verification failed.');
-            } finally {
-              setPayLoading(false);
-            }
-          },
-          prefill: {
-            name: selectedChild.name || 'Student',
-            email: (selectedChild as any)?.email || '',
-            contact: (selectedChild as any)?.phone || '',
-          },
-          theme: {
-            color: '#2E5BFF',
-          },
-          modal: {
-            ondismiss: function () {
-              setPayLoading(false);
-              setMessage('Razorpay checkout window closed.');
-            },
-          },
-        };
-
-        const rzp = new (window as any).Razorpay(options);
-        rzp.open();
-      } catch (err: any) {
-        console.error('Razorpay Order Creation Failed:', err);
-        setMessage(err.response?.data?.message || err.message || 'Razorpay order creation failed.');
-        setPayLoading(false);
-      }
-      return;
-    }
-
-    // Existing Manual / Direct Payment Flow
     try {
       const res = await api.post(
         `/parent-portal/children/${selectedChild.id}/invoices/${activeInvoice.id}/pay`,
@@ -868,11 +760,10 @@ export default function FeesPage() {
               <label className="text-xs font-bold text-slate-700">Select Payment Method</label>
               <div className="grid grid-cols-2 gap-2">
                 {[
-                  { id: 'RAZORPAY', label: 'Razorpay Gateway (Cards/UPI/NetBanking)', icon: '⚡' },
-                  { id: 'GPAY', label: 'Google Pay UPI', icon: '💳' },
+                  { id: 'GPAY', label: 'Google Pay', icon: '💳' },
                   { id: 'PHONEPE', label: 'PhonePe UPI', icon: '📱' },
-                  { id: 'UPI', label: 'Manual UPI QR', icon: '📷' },
-                  { id: 'BANK', label: 'Direct Bank Transfer', icon: '🏦' },
+                  { id: 'UPI', label: 'Any UPI App', icon: '⚡' },
+                  { id: 'BANK', label: 'Net Banking', icon: '🏦' },
                 ].map(m => (
                   <button
                     key={m.id}
@@ -880,7 +771,7 @@ export default function FeesPage() {
                     onClick={() => setPaymentMethod(m.id as any)}
                     className={`p-3 rounded-2xl border text-xs font-bold flex items-center gap-2 transition-all cursor-pointer ${
                       paymentMethod === m.id
-                        ? 'border-[#2E5BFF] bg-blue-50/60 text-[#2E5BFF] shadow-xs'
+                        ? 'border-[#2E5BFF] bg-blue-50/60 text-[#2E5BFF]'
                         : 'border-slate-200 hover:border-slate-300 text-slate-600'
                     }`}
                   >

@@ -18,45 +18,104 @@ export class TimetableService {
 
   // ACADEMIC YEARS
   async getAcademicYears(tenantId: string) {
-    return this.academicRepo.findAcademicYears(tenantId);
+    if (process.env.DB_PROVIDER === 'firebase') {
+      return this.academicRepo.findAcademicYears(tenantId);
+    }
+    return this.prisma.academicYear.findMany({
+      where: { tenantId, isActive: true },
+      orderBy: { startDate: 'desc' },
+    });
   }
 
   // CLASSES
   async getClasses(tenantId: string) {
-    return this.academicRepo.findClasses(tenantId);
+    if (process.env.DB_PROVIDER === 'firebase') {
+      return this.academicRepo.findClasses(tenantId);
+    }
+    return this.prisma.class.findMany({
+      where: { tenantId, isActive: true },
+      orderBy: { name: 'asc' },
+    });
   }
 
   async createClass(tenantId: string, name: string) {
     if (!name) throw new BadRequestException('Class Name is required.');
-    return this.academicRepo.createClass({
-      name: name.trim(),
-      tenantId,
-      isActive: true,
-      createdAt: new Date().toISOString(),
+
+    if (process.env.DB_PROVIDER === 'firebase') {
+      return this.academicRepo.createClass({
+        name: name.trim(),
+        tenantId,
+        isActive: true,
+        createdAt: new Date().toISOString(),
+      });
+    }
+
+    const activeYear = await this.prisma.academicYear.findFirst({
+      where: { tenantId, isActive: true },
+    });
+
+    return this.prisma.class.create({
+      data: {
+        id: randomUUID(),
+        name: name.trim(),
+        tenantId,
+        academicYearId: activeYear?.id || null,
+        isActive: true,
+      },
     });
   }
 
   async deleteClass(tenantId: string, classId: string) {
-    return this.academicRepo.deleteClass(classId);
+    if (process.env.DB_PROVIDER === 'firebase') {
+      return this.academicRepo.deleteClass(classId);
+    }
+    const linked = await this.prisma.classSection.findFirst({
+      where: { classId },
+    });
+    if (linked) {
+      throw new BadRequestException('Cannot delete this class because it is linked to one or more class sections.');
+    }
+
+    return this.prisma.class.delete({
+      where: { id: classId },
+    });
   }
 
   // SECTIONS
   async getSections(tenantId: string) {
-    return this.academicRepo.findSections(tenantId);
+    if (process.env.DB_PROVIDER === 'firebase') {
+      return this.academicRepo.findSections(tenantId);
+    }
+    return this.prisma.section.findMany({
+      where: { tenantId, isActive: true },
+      orderBy: { name: 'asc' },
+    });
   }
 
   async createSection(tenantId: string, name: string) {
     if (!name) throw new BadRequestException('Section Name is required.');
-    return this.academicRepo.createSection({
-      name: name.trim(),
-      tenantId,
-      isActive: true,
-      createdAt: new Date().toISOString(),
+
+    if (process.env.DB_PROVIDER === 'firebase') {
+      return this.academicRepo.createSection({
+        name: name.trim(),
+        tenantId,
+        isActive: true,
+        createdAt: new Date().toISOString(),
+      });
+    }
+
+    return this.prisma.section.create({
+      data: {
+        id: randomUUID(),
+        name: name.trim(),
+        tenantId,
+        isActive: true,
+      },
     });
   }
 
   async deleteSection(tenantId: string, sectionId: string) {
-    if (true) {
+    if (process.env.DB_PROVIDER === 'firebase') {
       return this.academicRepo.deleteSection ? (this.academicRepo as any).deleteSection(sectionId, tenantId) : { id: sectionId };
     }
     const linked = await this.prisma.classSection.findFirst({
@@ -73,12 +132,12 @@ export class TimetableService {
 
   // PERIOD TIMINGS
   async getPeriodTimings(tenantId: string) {
-    if (true) {
+    if (process.env.DB_PROVIDER === 'firebase') {
       try {
         const db = this.firebase?.getFirestore();
         if (!db) return [];
         const snap = await db.collection('tenants').doc(tenantId).collection('periodTimings').orderBy('periodNumber', 'asc').get();
-        const list = snap.docs.map((doc) => {
+        return snap.docs.map((doc) => {
           const pt: any = { id: doc.id, ...doc.data() };
           return {
             id: pt.id,
@@ -90,26 +149,23 @@ export class TimetableService {
             timeLabel: `${pt.startTime}${pt.endTime ? ' – ' + pt.endTime : ''}`,
           };
         });
-
-        if (list.length > 0) return list;
-
-        // Default 8 Period timings fallback
-        return [
-          { id: 'pt-1', num: 1, periodNumber: 1, label: 'Period 1', startTime: '09:00 AM', endTime: '09:45 AM', timeLabel: '09:00 AM – 09:45 AM' },
-          { id: 'pt-2', num: 2, periodNumber: 2, label: 'Period 2', startTime: '09:45 AM', endTime: '10:30 AM', timeLabel: '09:45 AM – 10:30 AM' },
-          { id: 'pt-3', num: 3, periodNumber: 3, label: 'Period 3', startTime: '10:30 AM', endTime: '11:15 AM', timeLabel: '10:30 AM – 11:15 AM' },
-          { id: 'pt-4', num: 4, periodNumber: 4, label: 'Period 4', startTime: '11:15 AM', endTime: '12:00 PM', timeLabel: '11:15 AM – 12:00 PM' },
-          { id: 'pt-5', num: 5, periodNumber: 5, label: 'Period 5', startTime: '12:45 PM', endTime: '01:30 PM', timeLabel: '12:45 PM – 01:30 PM' },
-          { id: 'pt-6', num: 6, periodNumber: 6, label: 'Period 6', startTime: '01:30 PM', endTime: '02:15 PM', timeLabel: '01:30 PM – 02:15 PM' },
-          { id: 'pt-7', num: 7, periodNumber: 7, label: 'Period 7', startTime: '02:15 PM', endTime: '03:00 PM', timeLabel: '02:15 PM – 03:00 PM' },
-          { id: 'pt-8', num: 8, periodNumber: 8, label: 'Period 8', startTime: '03:00 PM', endTime: '03:45 PM', timeLabel: '03:00 PM – 03:45 PM' },
-        ];
       } catch (err) {
         console.error('Firebase getPeriodTimings error:', err);
         return [];
       }
     }
-    return [];
+    const list = await this.prisma.periodTiming.findMany({
+      where: { tenantId, isActive: true },
+      orderBy: { periodNumber: 'asc' },
+    });
+    return list.map(pt => ({
+      id: pt.id,
+      num: pt.periodNumber,
+      label: `Period ${pt.periodNumber}`,
+      startTime: pt.startTime,
+      endTime: pt.endTime,
+      timeLabel: `${pt.startTime}${pt.endTime ? ' – ' + pt.endTime : ''}`,
+    }));
   }
 
   async savePeriodTimings(tenantId: string, timings: any[]) {
@@ -214,7 +270,7 @@ export class TimetableService {
 
   // SUBJECTS
   async getSubjects(tenantId: string) {
-    if (true) {
+    if (process.env.DB_PROVIDER === 'firebase') {
       return this.academicRepo.findSubjects(tenantId);
     }
     return this.prisma.subject.findMany({
@@ -226,7 +282,7 @@ export class TimetableService {
   async createSubject(tenantId: string, data: { name: string; code?: string; description?: string }) {
     if (!data.name) throw new BadRequestException('Subject Name is required.');
 
-    if (true) {
+    if (process.env.DB_PROVIDER === 'firebase') {
       return this.academicRepo.createSubject({
         name: data.name.trim(),
         tenantId,
@@ -253,7 +309,7 @@ export class TimetableService {
   }
 
   async deleteSubject(tenantId: string, id: string) {
-    if (true) {
+    if (process.env.DB_PROVIDER === 'firebase') {
       return this.academicRepo.deleteSubject ? this.academicRepo.deleteSubject(id) : { id };
     }
     return this.prisma.subject.delete({
@@ -266,7 +322,7 @@ export class TimetableService {
       throw new BadRequestException('No subject data provided.');
     }
 
-    if (true) {
+    if (process.env.DB_PROVIDER === 'firebase') {
       let created = 0;
       for (const item of subjectsData) {
         if (item.name && item.name.trim()) {
@@ -363,109 +419,52 @@ export class TimetableService {
     return { success: true, ...data };
   }
 
-  // TEACHERS FOR SUBJECTS (STRICT SKILL FILTERING BY TENANT)
+  // TEACHERS FOR SUBJECTS
   async getTeachersForSubject(tenantId: string, subjectIds: string[]) {
-    if (!tenantId || tenantId === 'undefined' || tenantId === 'null') {
-      throw new BadRequestException('Tenant ID is required');
-    }
     if (!subjectIds || subjectIds.length === 0) return {};
 
-    const db = this.firebase?.getFirestore();
-    const teachers = await this.teacherRepo.findTeachersByTenant(tenantId);
-
-    // Fetch subject docs for subject name resolution
-    const subjectMap: Record<string, string> = {};
-    if (db) {
-      try {
-        const subSnap = await db.collection('tenants').doc(tenantId).collection('subjects').get();
-        subSnap.docs.forEach((doc) => {
-          const d = doc.data();
-          if (d.name) subjectMap[doc.id] = d.name;
-        });
-      } catch (e) {}
-    }
-
-    const result: Record<string, any[]> = {};
-    for (const sid of subjectIds) {
-      const subjectName = (subjectMap[sid] || sid).toLowerCase().trim();
-
-      const qualified = teachers.filter((t) => {
-        // Collect all potential skill/subject indicators
-        const rawSubs: any = t.subjectsTaught || t.subjects || t.qualification || t.skills || [];
-        let subStrings: string[] = [];
-
-        if (Array.isArray(rawSubs)) {
-          subStrings = rawSubs.map((s) => {
-            if (typeof s === 'string') return s.toLowerCase().trim();
-            if (s && typeof s === 'object') return (s.name || s.subjectName || s.subjectId || '').toLowerCase().trim();
-            return '';
-          }).filter(Boolean);
-        } else if (typeof rawSubs === 'string') {
-          subStrings = rawSubs.split(',').map((s) => s.toLowerCase().trim());
-        }
-
-        if (t.qualification && typeof t.qualification === 'string') {
-          subStrings.push(t.qualification.toLowerCase().trim());
-        }
-
-        return subStrings.some((s) => s.includes(subjectName) || subjectName.includes(s));
-      });
-
-      result[sid] = qualified.map((t) => ({
-        Id: t.id || t.teacherId || t.userId,
-        Name: t.name || t.teacherName || t.User?.name || `${t.firstName || ''} ${t.lastName || ''}`.trim() || 'Teacher',
-        Teacher_Skill__c: 'Expert',
-      }));
-    }
-    return result;
-  }
-
-  async getTeachersForSubjectInClass(tenantId: string, subjectId?: string, classSectionId?: string) {
-    if (!tenantId || tenantId === 'undefined' || tenantId === 'null') {
-      throw new BadRequestException('Tenant ID is required');
-    }
-    const tid = tenantId;
-    const db = this.firebase?.getFirestore();
-    const teachers = await this.teacherRepo.findTeachersByTenant(tid);
-
-    if (!subjectId) {
-      return teachers.map((t) => ({
-        id: t.id || t.teacherId || t.userId,
-        name: t.name || t.teacherName || t.User?.name || `${t.firstName || ''} ${t.lastName || ''}`.trim() || 'Teacher',
-        teacherId: t.id || t.teacherId || t.userId,
-        teacherName: t.name || t.teacherName || t.User?.name || `${t.firstName || ''} ${t.lastName || ''}`.trim() || 'Teacher',
-      }));
-    }
-
-    let subjectName = subjectId;
-    if (db && subjectId) {
-      try {
-        const subDoc = await db.collection('tenants').doc(tid).collection('subjects').doc(subjectId).get();
-        if (subDoc.exists && subDoc.data()?.name) {
-          subjectName = subDoc.data()?.name;
-        }
-      } catch (e) {}
-    }
-
-    const cleanSubject = subjectName.toLowerCase().trim();
-
-    const qualified = teachers.filter((t) => {
-      const rawSubs: any = t.subjectsTaught || t.subjects || t.qualification || t.skills || [];
-      let subStrings: string[] = [];
-      if (Array.isArray(rawSubs)) {
-        subStrings = rawSubs.map((s) => (typeof s === 'string' ? s.toLowerCase().trim() : (s?.name || s?.subjectName || '').toLowerCase().trim())).filter(Boolean);
-      } else if (typeof rawSubs === 'string') {
-        subStrings = rawSubs.split(',').map((s) => s.toLowerCase().trim());
+    if (process.env.DB_PROVIDER === 'firebase') {
+      const teachers = await this.teacherRepo.findTeachersByTenant(tenantId);
+      const result: Record<string, any[]> = {};
+      for (const sid of subjectIds) {
+        result[sid] = teachers.map((t) => ({
+          Id: t.id || t.teacherId || t.userId,
+          Name: t.name || t.teacherName || t.User?.name || `${t.firstName || ''} ${t.lastName || ''}`.trim() || 'Teacher',
+          Teacher_Skill__c: 'Expert',
+        }));
       }
-      return subStrings.some((s) => s.includes(cleanSubject) || cleanSubject.includes(s));
+      return result;
+    }
+
+    const skills = await this.prisma.teacherSkill.findMany({
+      where: {
+        tenantId,
+        subjectId: { in: subjectIds },
+      },
+      include: {
+        StaffProfile: {
+          include: { User: true },
+        },
+      },
+      orderBy: {
+        StaffProfile: {
+          User: { name: 'asc' },
+        },
+      },
     });
 
-    return qualified.map((t) => ({
-      id: t.id || t.teacherId || t.userId,
-      name: t.name || t.teacherName || t.User?.name || `${t.firstName || ''} ${t.lastName || ''}`.trim() || 'Teacher',
-      teacherId: t.id || t.teacherId || t.userId,
-      teacherName: t.name || t.teacherName || t.User?.name || `${t.firstName || ''} ${t.lastName || ''}`.trim() || 'Teacher',
-    }));
+    const result: Record<string, any[]> = {};
+    for (const ts of skills) {
+      if (!result[ts.subjectId]) {
+        result[ts.subjectId] = [];
+      }
+      result[ts.subjectId].push({
+        Id: ts.StaffProfile.id,
+        Name: ts.StaffProfile.User.name,
+        Teacher_Skill__c: ts.skillLevel || 'Expert',
+      });
+    }
+    return result;
   }
 
   // CREATE TEACHER WITH SKILLS
@@ -477,11 +476,12 @@ export class TimetableService {
       throw new BadRequestException('Email is required.');
     }
 
-    if (true) {
+    if (process.env.DB_PROVIDER === 'firebase') {
+      const db = this.firebase?.getFirestore();
       const userId = 'user-t-' + Date.now();
-      const teacherId = 'teacher-' + Date.now();
+      const staffProfileId = 'sp-' + userId;
 
-      await this.userRepo.create({
+      const userData = {
         id: userId,
         email: data.email,
         name: `${data.firstName} ${data.lastName}`,
@@ -490,33 +490,58 @@ export class TimetableService {
         tenantId,
         isActive: true,
         createdAt: new Date().toISOString(),
-      });
+      };
 
-      await this.teacherRepo.createTeacherAssignment({
-        id: teacherId,
+      const staffProfileData = {
+        id: staffProfileId,
         userId,
         tenantId,
+        employeeId: data.employeeId || `TEA-${Math.floor(100 + Math.random() * 900)}`,
+        designation: 'Teacher',
         qualification: data.qualification || '',
-        basicSalary: data.basicSalary || 0,
+        joiningDate: data.joiningDate || new Date().toISOString().split('T')[0],
+        status: 'Active',
+        basicSalary: Number(data.basicSalary) || 30000,
+        allowances: Number(data.hra) || 3600,
+        pfDeduction: Number(data.pf) || 1500,
+        subjectsTaught: (data.skills && Array.isArray(data.skills)) ? data.skills.map((s: any) => s.subjectId).filter(Boolean) : [],
         createdAt: new Date().toISOString(),
-      });
+      };
 
-      if (data.skills && Array.isArray(data.skills)) {
-        for (const skill of data.skills) {
-          if (skill.subjectId) {
-            await this.teacherRepo.createTeacherSkill({
-              teacherId,
-              subjectId: skill.subjectId,
-              skillLevel: skill.skillLevel || 'Expert',
-              yearsOfExperience: skill.yearsOfExperience || 1,
-              tenantId,
-            });
+      if (db) {
+        const batch = db.batch();
+        const userRef = db.collection('users').doc(userId);
+        const profileRef = db.collection('staffProfiles').doc(staffProfileId);
+
+        batch.set(userRef, userData, { merge: true });
+        batch.set(profileRef, staffProfileData, { merge: true });
+
+        if (data.skills && Array.isArray(data.skills)) {
+          for (const skill of data.skills) {
+            if (skill.subjectId) {
+              const skillDocId = `${staffProfileId}_${skill.subjectId}`;
+              const skillRef = db.collection('tenants').doc(tenantId).collection('teacherSkills').doc(skillDocId);
+              batch.set(skillRef, {
+                id: skillDocId,
+                teacherId: staffProfileId,
+                userId,
+                subjectId: skill.subjectId,
+                skillLevel: skill.skillLevel || 'Expert',
+                yearsOfExperience: skill.yearsOfExperience || 1,
+                tenantId,
+              }, { merge: true });
+            }
           }
         }
+        await batch.commit();
+      } else {
+        await this.userRepo.create(userData);
+        await this.teacherRepo.createStaffProfile(staffProfileData);
       }
 
-      return { id: teacherId, userId, name: `${data.firstName} ${data.lastName}` };
+      return { id: staffProfileId, userId, name: `${data.firstName} ${data.lastName}` };
     }
+
 
     const existingUser = await this.prisma.user.findUnique({
       where: { email: data.email },
@@ -576,100 +601,32 @@ export class TimetableService {
     });
   }
 
-  async getTeacherSkills(tenantId: string, teacherId: string) {
-    if (!tenantId) throw new Error('tenantId is required');
-    if (this.firebase) {
-      try {
-        const db = this.firebase.getFirestore();
-        const subSnap = await db.collection('tenants').doc(tenantId).collection('subjects').get();
-        const subjectsMap = new Map<string, string>();
-        subSnap.docs.forEach(d => subjectsMap.set(d.id, d.data()?.name || 'Subject'));
-
-        const snap = await db.collection('tenants').doc(tenantId).collection('teacherSkills').where('teacherId', '==', teacherId).get();
-        return snap.docs.map(doc => {
-          const d = doc.data();
-          return {
-            id: doc.id,
-            ...d,
-            subjectName: subjectsMap.get(d.subjectId) || d.subjectName || 'Subject',
-          };
-        });
-      } catch (e) {
-        return [];
-      }
-    }
-    return [];
-  }
-
-  // BULK CREATE TEACHERS (Firestore + Fuzzy Spelling Auto-Correction)
+  // BULK CREATE TEACHERS
   async bulkCreateTeachers(tenantId: string, teachersData: any[]) {
     if (!teachersData || teachersData.length === 0) {
       throw new BadRequestException('No teacher data provided.');
     }
 
-    if (!tenantId || tenantId === 'undefined' || tenantId === 'null') {
-      throw new BadRequestException('Tenant ID is required');
+    const subjects = await this.prisma.subject.findMany({
+      where: { tenantId, isActive: true },
+    });
+    const subjectNameToId: Record<string, string> = {};
+    for (const s of subjects) {
+      subjectNameToId[s.name.toLowerCase().trim()] = s.id;
     }
-    const tid = tenantId;
-    let created = 0;
-    let skillsCreated = 0;
+
+    const incomingEmails = teachersData.filter(t => t.email).map(t => t.email.trim().toLowerCase());
+    const existingUsers = await this.prisma.user.findMany({
+      where: { email: { in: incomingEmails } },
+    });
+    const existingEmails = new Set(existingUsers.map(u => u.email.toLowerCase()));
+
     const skipped: string[] = [];
     const errorDetails: string[] = [];
+    let created = 0;
+    let skillsCreated = 0;
 
-    // Helper for fuzzy subject matching & typo correction
-    const typoSubjectMap: Record<string, string> = {
-      'math': 'Mathematics',
-      'maths': 'Mathematics',
-      'mathematic': 'Mathematics',
-      'mathematics': 'Mathematics',
-      'mathamatios': 'Mathematics',
-      'mathamatic': 'Mathematics',
-      'phy': 'Physics',
-      'physic': 'Physics',
-      'physics': 'Physics',
-      'chem': 'Chemistry',
-      'chemist': 'Chemistry',
-      'chemistry': 'Chemistry',
-      'bio': 'Biology',
-      'biol': 'Biology',
-      'biology': 'Biology',
-      'sci': 'Science',
-      'scinece': 'Science',
-      'science': 'Science',
-      'eng': 'English',
-      'inglish': 'English',
-      'english': 'English',
-      'hin': 'Hindi',
-      'hindi': 'Hindi',
-      'hindhi': 'Hindi',
-      'soc': 'Social Science',
-      'social': 'Social Science',
-      'sst': 'Social Science',
-      'social science': 'Social Science',
-      'comp': 'Computer Science',
-      'cs': 'Computer Science',
-      'computer': 'Computer Science',
-      'computers': 'Computer Science',
-      'computer science': 'Computer Science',
-      'eco': 'Economics',
-      'economics': 'Economics',
-      'pe': 'Physical Education',
-      'sports': 'Physical Education',
-      'physical education': 'Physical Education',
-      'art': 'Art & Craft',
-      'arts': 'Art & Craft',
-      'art & craft': 'Art & Craft'
-    };
-
-    const normalizeSubject = (raw: string): string => {
-      if (!raw || !raw.trim()) return 'General';
-      const clean = raw.trim().toLowerCase();
-      if (typoSubjectMap[clean]) return typoSubjectMap[clean];
-      for (const [key, target] of Object.entries(typoSubjectMap)) {
-        if (clean.includes(key) || key.includes(clean)) return target;
-      }
-      return raw.trim().charAt(0).toUpperCase() + raw.trim().slice(1);
-    };
+    const hashedPassword = await bcrypt.hash('Welcome2026!', 10);
 
     for (let i = 0; i < teachersData.length; i++) {
       const row = teachersData[i];
@@ -677,100 +634,89 @@ export class TimetableService {
       const lastName = row.lastName ? row.lastName.trim() : '';
       const email = row.email ? row.email.trim() : '';
 
-      if (!firstName || !email) {
-        errorDetails.push(`Row ${i + 1}: First Name and Email are required.`);
+      if (!firstName || !lastName || !email) {
+        errorDetails.push(`Row ${i + 1}: Name and Email are required.`);
         continue;
       }
 
-      const fullName = lastName ? `${firstName} ${lastName}` : firstName;
+      if (existingEmails.has(email.toLowerCase())) {
+        skipped.push(`${firstName} ${lastName} (${email})`);
+        continue;
+      }
 
       try {
-        // Check if user already exists
-        const existingUser = await this.userRepo.findByEmail(email);
-        if (existingUser) {
-          skipped.push(`${fullName} (${email})`);
-          continue;
-        }
+        await this.prisma.$transaction(async (tx) => {
+          const userId = randomUUID();
+          const teacherId = randomUUID();
 
-        const userId = randomUUID();
-        const staffProfileId = randomUUID();
-        const defaultPassword = row.phone || 'edutrack123';
-        const passwordHash = await bcrypt.hash(defaultPassword, 10);
-
-        // 1. Create User in Repository / Firestore
-        await this.userRepo.create({
-          id: userId,
-          email,
-          passwordHash,
-          name: fullName,
-          role: 'TEACHER',
-          phone: row.phone || null,
-          isActive: true,
-          tenantId: tid,
-          updatedAt: new Date(),
-        });
-
-        // 2. Resolve Subjects Taught with Smart Typo Correction
-        const subjectsTaughtList: string[] = [];
-        if (Array.isArray(row.skills) && row.skills.length > 0) {
-          row.skills.forEach((sk: any) => {
-            const raw = sk.subjectId || sk.subjectName || sk.subject;
-            if (raw) subjectsTaughtList.push(normalizeSubject(raw));
+          // 1. Create User
+          await tx.user.create({
+            data: {
+              id: userId,
+              email,
+              passwordHash: hashedPassword,
+              name: `${firstName} ${lastName}`,
+              role: 'TEACHER',
+              phone: row.phone || null,
+              isActive: true,
+              tenantId,
+              updatedAt: new Date(),
+            },
           });
-        }
-        for (let sIdx = 1; sIdx <= 3; sIdx++) {
-          const raw = row[`subject${sIdx}`] || row[`Subject ${sIdx}`];
-          if (raw) subjectsTaughtList.push(normalizeSubject(raw));
-        }
 
-        const safeSubjects = Array.from(new Set(subjectsTaughtList.filter(Boolean)));
-        const finalSubjects = safeSubjects.length > 0 ? safeSubjects : ['Mathematics'];
+          // 2. Create StaffProfile
+          await tx.staffProfile.create({
+            data: {
+              id: teacherId,
+              userId,
+              employeeId: row.employeeId || null,
+              designation: row.designation || null,
+              qualification: row.qualification || null,
+              joiningDate: row.joiningDate ? new Date(row.joiningDate) : null,
+              status: 'Active',
+              basicSalary: row.basicSalary || null,
+              allowances: row.allowances || null,
+              deductions: row.deductions || null,
+              pfDeduction: row.pf || null,
+            },
+          });
 
-        const safeJoiningDate = row.joiningDate && !isNaN(new Date(row.joiningDate).getTime())
-          ? new Date(row.joiningDate)
-          : new Date();
-
-        // 3. Create StaffProfile in Repository / Firestore
-        await this.teacherRepo.createStaffProfile({
-          id: staffProfileId,
-          userId,
-          tenantId: tid,
-          employeeId: row.employeeId || `EMP-T-${staffProfileId.substring(0, 4).toUpperCase()}`,
-          designation: row.designation || 'Teacher',
-          qualification: row.qualification || 'Master Degree',
-          joiningDate: safeJoiningDate,
-          status: 'Active',
-          basicSalary: row.basicSalary ? Number(row.basicSalary) : 35000,
-          allowances: row.allowances ? Number(row.allowances) : 4000,
-          pfDeduction: row.pf ? Number(row.pf) : 1500,
-          subjectsTaught: finalSubjects,
-        });
-
-        // 4. Save Teacher Skills if Firestore is active
-        if (this.firebase) {
-          try {
-            const db = this.firebase.getFirestore();
-            for (const subName of finalSubjects) {
-              await db.collection('tenants').doc(tid).collection('teacherSkills').add({
-                teacherId: staffProfileId,
-                subjectName: subName,
-                skillLevel: 'Expert',
-                yearsOfExperience: 5,
-                createdAt: new Date().toISOString(),
-              });
-              skillsCreated++;
+          // 3. Process skills from row keys
+          const skillRecords = [];
+          for (let skillIdx = 1; skillIdx <= 3; skillIdx++) {
+            const subKey = `subject${skillIdx}`;
+            const lvlKey = `skillLevel${skillIdx}`;
+            if (row[subKey] && row[subKey].trim()) {
+              const subName = row[subKey].trim();
+              const subjectId = subjectNameToId[subName.toLowerCase()];
+              if (subjectId) {
+                skillRecords.push({
+                  id: randomUUID(),
+                  tenantId,
+                  teacherId,
+                  subjectId,
+                  skillLevel: row[lvlKey] || 'Expert',
+                  yearsOfExperience: 0,
+                });
+              }
             }
-          } catch (fErr) {}
-        }
+          }
 
+          if (skillRecords.length > 0) {
+            await tx.teacherSkill.createMany({
+              data: skillRecords,
+            });
+            skillsCreated += skillRecords.length;
+          }
+        });
         created++;
+        existingEmails.add(email.toLowerCase());
       } catch (err: any) {
-        errorDetails.push(`${fullName}: ${err.message || 'Import error'}`);
+        errorDetails.push(`${firstName} ${lastName}: ${err.message}`);
       }
     }
 
     return {
-      success: true,
       created,
       skipped: skipped.length,
       errors: errorDetails.length,
@@ -780,18 +726,27 @@ export class TimetableService {
     };
   }
 
-  // WORKLOAD SUMMARY
   async getWorkloadSummary(tenantId: string, academicYearId?: string) {
-    if (true) {
+    if (process.env.DB_PROVIDER === 'firebase' || !this.prisma) {
       const db = this.firebase?.getFirestore();
+
       if (!db) return { totalClassSections: 0, totalTeachers: 0, totalAssignments: 0, avgLoadPercent: 0 };
 
       try {
+        let totalClassSections = 0;
         const csSnap = await db.collection('tenants').doc(tenantId).collection('classSections').get();
-        const totalClassSections = csSnap.size;
+        totalClassSections = csSnap.size;
+        if (totalClassSections === 0) {
+          const cSnap = await db.collection('tenants').doc(tenantId).collection('classes').get();
+          totalClassSections = cSnap.size;
+        }
 
         const teachers = await this.teacherRepo.findTeachersByTenant(tenantId);
-        const totalTeachers = teachers.length;
+        const teachingStaff = teachers.filter((t: any) =>
+          (t.User?.role === 'TEACHER' || t.user?.role === 'TEACHER' || t.staffType === 'Teaching' || (t.subjectsTaught && t.subjectsTaught.length > 0)) &&
+          (t.User?.role !== 'DRIVER' && t.User?.role !== 'STAFF' && t.staffType !== 'Non-Teaching')
+        );
+        const totalTeachers = teachingStaff.length || teachers.length;
 
         let totalAssignments = 0;
         try {
@@ -856,16 +811,21 @@ export class TimetableService {
     };
   }
 
-  // GET ALL TEACHER WORKLOADS
   async getAllTeacherWorkloads(tenantId: string) {
-    if (true) {
+    if (process.env.DB_PROVIDER === 'firebase' || !this.prisma) {
       try {
+
         const db = this.firebase?.getFirestore();
         if (!db) return [];
 
         const teachers = await this.teacherRepo.findTeachersByTenant(tenantId);
-        
-        // Fetch all teacher assignments for this tenant without needing composite indexes
+        const teachingStaff = teachers.filter((t: any) =>
+          (t.User?.role === 'TEACHER' || t.user?.role === 'TEACHER' || t.staffType === 'Teaching' || (t.subjectsTaught && t.subjectsTaught.length > 0)) &&
+          (t.User?.role !== 'DRIVER' && t.User?.role !== 'STAFF' && t.staffType !== 'Non-Teaching')
+        );
+
+        const listToUse = teachingStaff.length > 0 ? teachingStaff : teachers;
+
         let assignments: any[] = [];
         try {
           const assignSnap = await db.collection('tenants').doc(tenantId).collection('teacherAssignments').get();
@@ -885,7 +845,7 @@ export class TimetableService {
 
         const MAX_WEEKLY_PERIODS = 48;
 
-        return teachers.map((t: any) => {
+        return listToUse.map((t: any) => {
           const tId = t.id || t.teacherId || t.userId;
           const myAssignments = assignMap.get(tId) || assignMap.get(t.userId) || [];
           const totalPeriods = myAssignments.reduce((sum, a) => sum + (Number(a.periodsPerWeek) || 5), 0);
@@ -908,6 +868,7 @@ export class TimetableService {
         return [];
       }
     }
+
 
     // Existing Prisma path
     const teachers = await this.prisma.staffProfile.findMany({
@@ -966,10 +927,10 @@ export class TimetableService {
     });
   }
 
-  // GET ALL CLASS WORKLOADS
   async getAllClassWorkloads(tenantId: string) {
-    if (true) {
+    if (process.env.DB_PROVIDER === 'firebase' || !this.prisma) {
       try {
+
         const db = this.firebase?.getFirestore();
         if (!db) return [];
 
@@ -1055,90 +1016,143 @@ export class TimetableService {
 
   // GET DETAILED WORKLOAD FOR TEACHER
   async getTeacherWorkload(tenantId: string, teacherId: string) {
-    if (!tenantId) throw new Error('tenantId is required');
-    const db = this.firebase?.getFirestore();
-    if (!db) throw new Error('Firestore DB not initialized');
+    const teacher = await this.prisma.staffProfile.findUnique({
+      where: { id: teacherId },
+      include: { User: true },
+    });
+    if (!teacher) throw new NotFoundException('Teacher not found.');
 
-    let teacherName = 'Teacher';
-    const tDoc = await db.collection('staffProfiles').doc(teacherId).get();
-    if (tDoc.exists) {
-      const d = tDoc.data();
-      teacherName = d?.user?.name || d?.name || 'Teacher';
+    const assignments = await this.prisma.teacherAssignment.findMany({
+      where: { teacherId, tenantId },
+      include: {
+        ClassSection: {
+          include: { Class: { include: { AcademicYear: true } }, Section: true },
+        },
+        Subject: true,
+      },
+      orderBy: [
+        { ClassSection: { Class: { name: 'asc' } } },
+        { Subject: { name: 'asc' } },
+      ],
+    });
+
+    // Count periods scheduled for this teacher in periods grid
+    const periods = await this.prisma.period.groupBy({
+      by: ['classSectionId', 'subjectId'],
+      where: { tenantId, teacherId },
+      _count: { id: true },
+    });
+    const periodCountMap = new Map<string, number>();
+    for (const p of periods) {
+      periodCountMap.set(`${p.classSectionId}|${p.subjectId}`, p._count.id);
     }
 
-    const periodsSnap = await db.collection('tenants').doc(tenantId).collection('periods').where('teacherId', '==', teacherId).get();
-    const periods = periodsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-
-    const classSectionMap = new Map<string, any[]>();
-    for (const p of periods) {
-      const csId = (p as any).classSectionId || 'default-cs';
-      if (!classSectionMap.has(csId)) classSectionMap.set(csId, []);
-      classSectionMap.get(csId)!.push(p);
+    const bySection: Record<string, any[]> = {};
+    for (const ta of assignments) {
+      const secId = ta.classSectionId;
+      if (!bySection[secId]) bySection[secId] = [];
+      bySection[secId].push(ta);
     }
 
     const classes = [];
-    for (const [csId, pList] of classSectionMap.entries()) {
+    for (const secId in bySection) {
+      const list = bySection[secId];
+      const first = list[0];
+
+      const subjects = list.map((ta) => {
+        const countKey = `${ta.classSectionId}|${ta.subjectId}`;
+        const timetableCount = periodCountMap.get(countKey);
+        const periodsPerWeek = timetableCount !== undefined ? timetableCount : ta.periodsPerWeek;
+
+        return {
+          assignmentId: ta.id,
+          subjectId: ta.subjectId,
+          subjectName: ta.Subject.name,
+          periodsPerWeek,
+          fromTimetable: timetableCount !== undefined,
+        };
+      });
+
       classes.push({
-        classSectionId: csId,
-        className: pList[0]?.className || 'Class Section',
-        academicYear: '2026-2027',
-        subjects: pList.map(p => ({
-          assignmentId: p.id,
-          subjectId: p.subjectId,
-          subjectName: p.subjectName || 'Subject',
-          periodsPerWeek: 5,
-          fromTimetable: true,
-        })),
+        classSectionId: secId,
+        className: `${first.ClassSection.Class.name} - ${first.ClassSection.Section.name}`,
+        academicYear: first.ClassSection.Class.AcademicYear.name,
+        subjects,
       });
     }
 
     return {
-      teacherName,
+      teacherName: teacher.User.name,
       classes,
     };
   }
 
   // GET DETAILED WORKLOAD FOR CLASS SECTION
   async getClassSectionWorkload(tenantId: string, classSectionId: string) {
-    if (!tenantId) throw new Error('tenantId is required');
-    const db = this.firebase?.getFirestore();
-    if (!db) throw new Error('Firestore DB not initialized');
+    const cs = await this.prisma.classSection.findUnique({
+      where: { id: classSectionId },
+      include: {
+        Class: { include: { AcademicYear: true } },
+        Section: true,
+      },
+    });
+    if (!cs) throw new NotFoundException('Class section not found.');
 
-    let csName = 'Class-2 - Section A';
-    let academicYear = '2026-2027';
+    const classSubjects = await this.prisma.classSubject.findMany({
+      where: { classSectionId, tenantId },
+      include: { Subject: true },
+      orderBy: { Subject: { name: 'asc' } },
+    });
 
-    const csDoc = await db.collection('tenants').doc(tenantId).collection('classSections').doc(classSectionId).get();
-    if (csDoc.exists) {
-      const data = csDoc.data();
-      if (data?.name) csName = data.name;
+    const assignments = await this.prisma.teacherAssignment.findMany({
+      where: { classSectionId, tenantId },
+      include: { StaffProfile: { include: { User: true } } },
+    });
+
+    const periodCounts = await this.prisma.period.groupBy({
+      by: ['subjectId', 'teacherId'],
+      where: { classSectionId, tenantId, teacherId: { not: null } },
+      _count: { id: true },
+    });
+    const periodCountMap = new Map<string, number>();
+    for (const pc of periodCounts) {
+      periodCountMap.set(`${pc.subjectId}|${pc.teacherId}`, pc._count.id);
     }
 
-    const subSnap = await db.collection('tenants').doc(tenantId).collection('subjects').get();
-    const subjectsList = subSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    const bySubject: Record<string, any[]> = {};
+    for (const a of assignments) {
+      if (!bySubject[a.subjectId]) bySubject[a.subjectId] = [];
+      bySubject[a.subjectId].push(a);
+    }
 
-    const periodsSnap = await db.collection('tenants').doc(tenantId).collection('periods').where('classSectionId', '==', classSectionId).get();
-    const periods = periodsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    const uniqueTeachers = new Set(assignments.map(a => a.teacherId));
 
-    const uniqueTeachers = new Set(periods.map((p: any) => p.teacherId).filter(Boolean));
+    const subjects = classSubjects.map((csub) => {
+      const teachersList = bySubject[csub.subjectId] || [];
+      const teachers = teachersList.map((ta) => {
+        const countKey = `${ta.subjectId}|${ta.teacherId}`;
+        const timetableCount = periodCountMap.get(countKey);
+        const periodsPerWeek = timetableCount !== undefined ? timetableCount : ta.periodsPerWeek;
 
-    const subjects = subjectsList.map((sub: any) => {
-      const subPeriods = periods.filter((p: any) => p.subjectId === sub.id);
+        return {
+          teacherId: ta.teacherId,
+          teacherName: ta.StaffProfile.User.name,
+          assignmentId: ta.id,
+          periodsPerWeek,
+          fromTimetable: timetableCount !== undefined,
+        };
+      });
+
       return {
-        subjectId: sub.id,
-        subjectName: sub.name || 'Subject',
-        teachers: subPeriods.map((p: any) => ({
-          teacherId: p.teacherId || '',
-          teacherName: p.teacherName || 'Assigned Teacher',
-          assignmentId: p.id,
-          periodsPerWeek: 5,
-          fromTimetable: true,
-        })),
+        subjectId: csub.subjectId,
+        subjectName: csub.Subject.name,
+        teachers,
       };
     });
 
     return {
-      name: csName,
-      academicYear,
+      name: `${cs.Class.name} - ${cs.Section.name}`,
+      academicYear: cs.Class.AcademicYear.name,
       teacherCount: uniqueTeachers.size,
       subjects,
     };
@@ -1146,25 +1160,30 @@ export class TimetableService {
 
   // UPDATE TEACHER ASSIGNMENT
   async updateTeacherAssignment(tenantId: string, id: string, newTeacherId?: string, periodsPerWeek?: number) {
-    if (!tenantId) throw new Error('tenantId is required');
-    const db = this.firebase?.getFirestore();
-    if (!db) throw new Error('Firestore DB not initialized');
+    const ta = await this.prisma.teacherAssignment.findUnique({
+      where: { id },
+    });
+    if (!ta) throw new NotFoundException('Assignment not found.');
 
-    const ref = db.collection('tenants').doc(tenantId).collection('periods').doc(id);
-    const updates: any = {};
-    if (newTeacherId) updates.teacherId = newTeacherId;
-    await ref.set(updates, { merge: true });
-    return { id, ...updates };
+    const data: any = {};
+    if (newTeacherId) {
+      data.teacherId = newTeacherId;
+    }
+    if (periodsPerWeek !== undefined) {
+      data.periodsPerWeek = periodsPerWeek;
+    }
+
+    return this.prisma.teacherAssignment.update({
+      where: { id },
+      data,
+    });
   }
 
   // DELETE TEACHER ASSIGNMENT
   async deleteTeacherAssignment(tenantId: string, id: string) {
-    if (!tenantId) throw new Error('tenantId is required');
-    const db = this.firebase?.getFirestore();
-    if (!db) throw new Error('Firestore DB not initialized');
-
-    await db.collection('tenants').doc(tenantId).collection('periods').doc(id).delete();
-    return { success: true, id };
+    return this.prisma.teacherAssignment.delete({
+      where: { id },
+    });
   }
 
   // CREATE CLASS SECTION (JUNCTION)
@@ -1293,7 +1312,7 @@ export class TimetableService {
 
   // GET ALL CLASS SECTIONS
   async getAllClassSections(tenantId: string) {
-    if (true) {
+    if (process.env.DB_PROVIDER === 'firebase') {
       try {
         const classSections = await this.academicRepo.findClassSections(tenantId);
         const results = [];
@@ -1348,7 +1367,7 @@ export class TimetableService {
 
   // GET ALL TEACHERS
   async getAllTeachers(tenantId: string) {
-    if (true) {
+    if (process.env.DB_PROVIDER === 'firebase') {
       try {
         const teachers = await this.teacherRepo.findTeachersByTenant(tenantId);
         return teachers.map((t: any) => ({
@@ -1372,60 +1391,47 @@ export class TimetableService {
   async getTimetableForClass(
     tenantId: string,
     classSectionId: string,
-    academicYearId?: string,
+    academicYearId: string,
     startDate?: string,
     endDate?: string
   ) {
-    if (!tenantId) throw new Error('tenantId is required');
-    const db = this.firebase?.getFirestore();
-    if (!db) throw new Error('Firestore DB not initialized');
-
-    const periodsSnap = await db.collection('tenants').doc(tenantId).collection('periods').where('classSectionId', '==', classSectionId).get();
-    const periods = periodsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-
-    const subjectsSnap = await db.collection('tenants').doc(tenantId).collection('subjects').get();
-    const subjectsMap = new Map<string, string>();
-    subjectsSnap.docs.forEach(doc => subjectsMap.set(doc.id, doc.data()?.name));
-
-    const teachersSnap = await db.collection('staffProfiles').where('tenantId', '==', tenantId).get();
-    const teachersMap = new Map<string, string>();
-    teachersSnap.docs.forEach(doc => {
-      const d = doc.data();
-      teachersMap.set(doc.id, d?.user?.name || d?.name || 'Teacher');
+    // Find all periods scheduled for this section
+    const periods = await this.prisma.period.findMany({
+      where: {
+        classSectionId,
+        tenantId,
+      },
+      include: {
+        Subject: true,
+        StaffProfile_Period_teacherIdToStaffProfile: { include: { User: true } },
+        StaffProfile_Period_substituteTeacherIdToStaffProfile: { include: { User: true } },
+      },
     });
 
-    const resultList: any[] = [];
-    const resultMap: Record<string, any> = {};
+    const result: Record<string, any> = {};
 
     for (const p of periods) {
-      const rawDay = (p as any).dayOfWeek || (p as any).day || 'Monday';
-      const cleanDay = rawDay.charAt(0).toUpperCase() + rawDay.slice(1).toLowerCase();
-      const num = Number((p as any).periodNumber || (p as any).num || 1);
-      const key = `${cleanDay.toUpperCase()}_${num}`;
+      const key = `${p.dayOfWeek}_${p.periodTimingId}`;
 
-      const regularTeacherId = (p as any).teacherId;
-      const regularTeacherName = (p as any).teacherName || teachersMap.get((p as any).teacherId) || 'Unassigned';
+      const regularTeacherId = p.teacherId;
+      const regularTeacherName = p.StaffProfile_Period_teacherIdToStaffProfile?.User?.name || 'Unassigned';
 
       let isOnLeave = false;
       let onLeaveTeacherName = null;
       let substituteTeacherIdStr = null;
       let substituteTeacherName = null;
 
-      if ((p as any).substituteTeacherId) {
+      if (p.substituteTeacherId) {
         isOnLeave = true;
         onLeaveTeacherName = regularTeacherName;
-        substituteTeacherIdStr = (p as any).substituteTeacherId;
-        substituteTeacherName = teachersMap.get((p as any).substituteTeacherId) || 'Substitute';
+        substituteTeacherIdStr = p.substituteTeacherId;
+        substituteTeacherName = p.StaffProfile_Period_substituteTeacherIdToStaffProfile?.User?.name || null;
       }
 
-      const item = {
-        periodId: (p as any).id,
-        id: (p as any).id,
-        day: cleanDay,
-        dayOfWeek: cleanDay,
-        periodNumber: num,
-        subjectId: (p as any).subjectId,
-        subjectName: (p as any).subjectName || subjectsMap.get((p as any).subjectId) || (p as any).subjectId || '—',
+      result[key] = {
+        periodId: p.id,
+        subjectId: p.subjectId,
+        subjectName: p.Subject?.name || '—',
         teacherId: isOnLeave ? substituteTeacherIdStr : regularTeacherId,
         teacherName: isOnLeave ? substituteTeacherName : regularTeacherName,
         regularTeacherId,
@@ -1434,58 +1440,71 @@ export class TimetableService {
         substituteTeacherId: substituteTeacherIdStr,
         substituteTeacherName,
       };
-
-      resultList.push(item);
-      resultMap[key] = item;
     }
 
-    Object.assign(resultList, resultMap);
-    return resultList;
+    return result;
   }
 
   // LEASER PERIODS (TEACHER ON LEAVE / SUBSTITUTED)
   async getLeaserPeriodsForTeacher(tenantId: string, teacherId: string) {
-    if (!tenantId) throw new Error('tenantId is required');
-    const db = this.firebase?.getFirestore();
-    if (!db) throw new Error('Firestore DB not initialized');
-
-    const snap = await db.collection('tenants').doc(tenantId).collection('periods').where('substituteTeacherId', '==', teacherId).get();
-    return snap.docs.map(doc => doc.id);
+    const list = await this.prisma.period.findMany({
+      where: {
+        tenantId,
+        substituteTeacherId: teacherId,
+      },
+      select: { id: true },
+    });
+    return list.map(item => item.id);
   }
 
   // GET PERIODS FOR TEACHER
   async getPeriodsForTeacher(tenantId: string, teacherId: string): Promise<any[]> {
-    if (!tenantId) throw new Error('tenantId is required');
-    const db = this.firebase?.getFirestore();
-    if (!db) throw new Error('Firestore DB not initialized');
+    const periods = await this.prisma.period.findMany({
+      where: {
+        tenantId,
+        OR: [
+          { teacherId },
+          { substituteTeacherId: teacherId },
+        ],
+      },
+      include: {
+        ClassSection: {
+          include: { Class: true, Section: true },
+        },
+        Subject: true,
+        PeriodTiming: true,
+        StaffProfile_Period_teacherIdToStaffProfile: { include: { User: true } },
+        StaffProfile_Period_substituteTeacherIdToStaffProfile: { include: { User: true } },
+      },
+      orderBy: [
+        { dayOfWeek: 'asc' },
+        { PeriodTiming: { periodNumber: 'asc' } },
+      ],
+    });
 
-    const snap1 = await db.collection('tenants').doc(tenantId).collection('periods').where('teacherId', '==', teacherId).get();
-    const snap2 = await db.collection('tenants').doc(tenantId).collection('periods').where('substituteTeacherId', '==', teacherId).get();
-
-    const map = new Map<string, any>();
-    snap1.docs.forEach(doc => map.set(doc.id, { id: doc.id, ...doc.data() }));
-    snap2.docs.forEach(doc => map.set(doc.id, { id: doc.id, ...doc.data() }));
-
-    const periods = Array.from(map.values());
-    return periods.map(p => {
+    return periods.map((p) => {
       const isSubbed = p.substituteTeacherId === teacherId;
+      const regularTeacherName = p.StaffProfile_Period_teacherIdToStaffProfile?.User?.name || 'Unassigned';
+      const substituteTeacherName = p.StaffProfile_Period_substituteTeacherIdToStaffProfile?.User?.name || null;
+
       return {
         periodId: p.id,
-        day: p.dayOfWeek || 'MONDAY',
-        periodNumber: p.periodNumber || 1,
-        classSectionId: p.classSectionId || '',
-        className: p.className || 'Class Section',
-        academicYear: p.academicYear || '',
-        startTime: p.startTime || '',
-        endTime: p.endTime || '',
-        subjectId: p.subjectId || '',
-        subjectName: p.subjectName || 'Subject',
+        day: p.dayOfWeek,
+        periodNumber: p.PeriodTiming.periodNumber,
+        classSectionId: p.classSectionId,
+        className: `${p.ClassSection.Class.name} - ${p.ClassSection.Section.name}`,
+        academicYear: p.ClassSection.Class.academicYearId,
+        startTime: p.PeriodTiming.startTime,
+        endTime: p.PeriodTiming.endTime,
+        subjectId: p.subjectId,
+        subjectName: p.Subject.name,
         isLeaser: isSubbed,
         isSubstitute: !!p.substituteTeacherId,
-        substituteTeacherId: p.substituteTeacherId || null,
-        originalTeacherName: p.teacherName || 'Teacher',
+        substituteTeacherId: p.substituteTeacherId,
+        substituteTeacherName,
+        originalTeacherName: regularTeacherName,
         teacherId: isSubbed ? p.substituteTeacherId : p.teacherId,
-        teacherName: p.teacherName || 'Teacher',
+        teacherName: isSubbed ? substituteTeacherName : regularTeacherName,
       };
     });
   }
@@ -1493,7 +1512,11 @@ export class TimetableService {
   // GET PERIODS FOR TEACHER WITH GAPS
   async getPeriodsForTeacherWithGaps(tenantId: string, teacherId: string): Promise<any[]> {
     const actualPeriods = await this.getPeriodsForTeacher(tenantId, teacherId);
-    const totalPeriods = 8;
+
+    const totalPeriodsCount = await this.prisma.periodTiming.count({
+      where: { tenantId, isActive: true },
+    });
+    const totalPeriods = totalPeriodsCount || 8;
 
     const existingKeys = new Set<string>();
     const daySet = new Map<string, string>();
@@ -1538,100 +1561,72 @@ export class TimetableService {
 
   // SUBSTITUTE TEACHER MANAGEMENT
   async saveSubstituteForPeriod(tenantId: string, periodId: string, substituteTeacherId?: string) {
-    if (!tenantId) throw new Error('tenantId is required');
-    const db = this.firebase?.getFirestore();
-    if (!db) throw new Error('Firestore DB not initialized');
+    const p = await this.prisma.period.findUnique({
+      where: { id: periodId },
+    });
+    if (!p) throw new NotFoundException('Period not found.');
 
-    const ref = db.collection('tenants').doc(tenantId).collection('periods').doc(periodId);
-    await ref.set({ substituteTeacherId: substituteTeacherId || null }, { merge: true });
-    return { id: periodId, substituteTeacherId: substituteTeacherId || null };
+    return this.prisma.period.update({
+      where: { id: periodId },
+      data: {
+        substituteTeacherId: substituteTeacherId || null,
+      },
+    });
   }
 
   // SAVE TIMETABLE PERIODS
   async saveTimetablePeriods(tenantId: string, data: any) {
-    if (!tenantId) throw new Error('tenantId is required');
     if (!data.periods || data.periods.length === 0) {
       throw new BadRequestException('No periods provided.');
     }
-    const db = this.firebase?.getFirestore();
-    if (!db) throw new Error('Firestore DB not initialized');
 
-    const batch = db.batch();
-    const colRef = db.collection('tenants').doc(tenantId).collection('periods');
-
-    const existingSnap = await colRef.where('classSectionId', '==', data.classSectionId).get();
-    existingSnap.docs.forEach(doc => batch.delete(doc.ref));
-
-    let csName = 'Class';
-    let secName = 'Section';
-    if (data.classSectionId) {
-      try {
-        const csDoc = await db.collection('tenants').doc(tenantId).collection('classSections').doc(data.classSectionId).get().catch(() => null);
-        if (csDoc && csDoc.exists) {
-          const d = csDoc.data();
-          csName = d?.className || d?.name || csName;
-          secName = d?.sectionName || d?.section || secName;
-        }
-      } catch (e) {}
-    }
-
-    let savedCount = 0;
-    for (const p of data.periods) {
-      if (!p.subjectId || !p.teacherId) continue;
-      const id = p.id || randomUUID();
-      const ref = colRef.doc(id);
-
-      const rawDay = String(p.day || p.dayOfWeek || 'Monday').trim();
-      const normalizedDay = rawDay.charAt(0).toUpperCase() + rawDay.slice(1).toLowerCase();
-
-      const startTime = p.startTime || p.periodTiming?.startTime || (p.time ? p.time.split('-')[0]?.trim() : '') || '09:00 AM';
-      const endTime = p.endTime || p.periodTiming?.endTime || (p.time ? p.time.split('-')[1]?.trim() : '') || '09:45 AM';
-
-      const periodTiming = {
-        periodNumber: Number(p.periodNumber || p.num || 1),
-        displayPeriodNumber: p.periodNumber || p.num || 1,
-        startTime,
-        endTime,
-        isBreak: !!p.isBreak,
-      };
-
-      const payload = {
-        id,
-        tenantId,
-        academicYearId: data.academicYearId || 'ay-2026',
-        classSectionId: data.classSectionId,
-        className: data.className || csName,
-        sectionName: data.sectionName || secName,
-        classSection: {
-          id: data.classSectionId,
-          class: { name: data.className || csName },
-          section: { name: data.sectionName || secName },
+    return this.prisma.$transaction(async (tx) => {
+      // 1. Delete all existing periods for the classSectionId
+      await tx.period.deleteMany({
+        where: {
+          classSectionId: data.classSectionId,
+          tenantId,
         },
-        dayOfWeek: normalizedDay,
-        day: normalizedDay,
-        periodNumber: Number(p.periodNumber || p.num || 1),
-        periodTimingId: p.periodTimingId || p.periodNumber || 1,
-        periodTiming,
-        startTime,
-        endTime,
-        isBreak: !!p.isBreak,
-        subjectId: p.subjectId,
-        subjectName: p.subjectName || '',
-        subject: {
-          id: p.subjectId,
-          name: p.subjectName || '',
-        },
-        teacherId: p.teacherId,
-        teacherName: p.teacherName || '',
-        substituteTeacherId: p.substituteTeacherId || null,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
-      batch.set(ref, payload, { merge: true });
-      savedCount++;
-    }
+      });
 
-    await batch.commit();
-    return { savedCount, success: true };
+      // 2. Fetch period timings to map timing IDs
+      const timings = await tx.periodTiming.findMany({
+        where: { tenantId, isActive: true },
+      });
+      const timingNumToId: Record<number, string> = {};
+      for (const t of timings) {
+        timingNumToId[t.periodNumber] = t.id;
+      }
+
+      // 3. Create new Period records
+      const toInsert = [];
+      for (const p of data.periods) {
+        const timingId = timingNumToId[p.periodNumber];
+        if (!timingId) continue;
+        if (!p.subjectId || !p.teacherId) continue; // Skip unassigned cells
+
+        toInsert.push({
+          id: randomUUID(),
+          tenantId,
+          classSectionId: data.classSectionId,
+          periodTimingId: timingId,
+          dayOfWeek: p.day,
+          subjectId: p.subjectId,
+          teacherId: p.teacherId,
+          substituteTeacherId: null,
+        });
+      }
+
+      if (toInsert.length > 0) {
+        await tx.period.createMany({
+          data: toInsert,
+        });
+      }
+
+      return {
+        savedCount: toInsert.length,
+        success: true,
+      };
+    });
   }
 }

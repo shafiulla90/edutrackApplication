@@ -38,8 +38,11 @@ function AdminDashboardOverview() {
   const [recentPayments, setRecentPayments] = useState<any[]>([]);
   const [chartData, setChartData] = useState<any[]>([]);
 
+  const [loading, setLoading] = useState(true);
+
   const loadDashboardData = useCallback(async () => {
     try {
+      setLoading(true);
       const [setupRes, summaryRes] = await Promise.all([
         api.get('/tenant/setup-status'),
         api.get('/dashboard/summary')
@@ -52,6 +55,8 @@ function AdminDashboardOverview() {
       setChartData(summaryRes.data.chartData);
     } catch (err) {
       console.error('Failed to load dashboard data', err);
+    } finally {
+      setLoading(false);
     }
   }, []);
 
@@ -73,17 +78,6 @@ function AdminDashboardOverview() {
     ...chartData.map(d => Math.max(d.feeCollection, d.salaryExpense, d.netRevenue)),
     10000
   );
-
-  const classesCount = setupStatus?.classesCount ?? setupStatus?.setup?.classesCount ?? stats.classesCount ?? 0;
-  const teachersCount = setupStatus?.teachersCount ?? setupStatus?.setup?.teachersCount ?? stats.teachersCount ?? 0;
-  const studentsCount = setupStatus?.studentsCount ?? setupStatus?.setup?.studentsCount ?? stats.studentsCount ?? 0;
-
-  let completedSteps = 1;
-  if (classesCount > 0) completedSteps++;
-  if (teachersCount > 0) completedSteps++;
-  if (studentsCount > 0) completedSteps++;
-  const completionPercentage = setupStatus?.completionPercentage ?? Math.round((completedSteps / 4) * 100);
-  const setupCompleted = setupStatus?.setupCompleted ?? completionPercentage === 100;
 
   return (
     <div className="space-y-6 animate-in">
@@ -131,7 +125,7 @@ function AdminDashboardOverview() {
         </div>
       </div>
 
-      {!setupCompleted && showBanner && (
+      {setupStatus && !setupStatus.setupCompleted && showBanner && (
         <div className="bg-amber-50 border border-amber-200 rounded-2xl p-5 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 shadow-sm relative">
           <div className="flex items-start sm:items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
@@ -181,28 +175,36 @@ function AdminDashboardOverview() {
             {/* Completion Rate */}
             <div className="bg-slate-50 border border-slate-200/50 p-3 sm:p-4 rounded-xl flex items-center gap-2.5 sm:gap-4 min-w-0">
               <div className="relative w-10 h-10 sm:w-12 sm:h-12 flex items-center justify-center shrink-0">
-                <svg className="w-full h-full transform -rotate-90" viewBox="0 0 48 48">
-                  <circle cx="24" cy="24" r="20" stroke="#e2e8f0" strokeWidth="3.5" fill="transparent" />
-                  <circle
-                    cx="24"
-                    cy="24"
-                    r="20"
-                    stroke="#2563eb"
-                    strokeWidth="3.5"
-                    fill="transparent"
-                    strokeDasharray={`${2 * Math.PI * 20}`}
-                    strokeDashoffset={`${2 * Math.PI * 20 * (1 - completionPercentage / 100)}`}
-                    strokeLinecap="round"
-                  />
-                </svg>
-                <span className="absolute text-[10px] sm:text-[11px] font-bold text-slate-700">{completionPercentage}%</span>
+                {loading || !setupStatus ? (
+                  <div className="w-8 h-8 rounded-full bg-slate-200 animate-pulse" />
+                ) : (
+                  <>
+                    <svg className="w-full h-full transform -rotate-90" viewBox="0 0 48 48">
+                      <circle cx="24" cy="24" r="20" stroke="#e2e8f0" strokeWidth="3.5" fill="transparent" />
+                      <circle
+                        cx="24"
+                        cy="24"
+                        r="20"
+                        stroke="#2563eb"
+                        strokeWidth="3.5"
+                        fill="transparent"
+                        strokeDasharray={`${2 * Math.PI * 20}`}
+                        strokeDashoffset={`${2 * Math.PI * 20 * (1 - (setupStatus.completionPercentage || 0) / 100)}`}
+                        strokeLinecap="round"
+                      />
+                    </svg>
+                    <span className="absolute text-[10px] sm:text-[11px] font-bold text-slate-700">{setupStatus.completionPercentage}%</span>
+                  </>
+                )}
               </div>
               <div className="min-w-0 flex-1">
                 <div className="text-[9px] sm:text-[11px] font-bold text-slate-400 uppercase tracking-wider truncate">Profile Setup</div>
                 <div className="text-[11px] sm:text-xs font-semibold text-slate-800 mt-0.5 truncate">
-                  {setupCompleted ? 'Completed' : 'Complete Profile'}
+                  {loading || !setupStatus ? (
+                    <span className="text-slate-400 font-normal">Loading...</span>
+                  ) : setupStatus.setupCompleted ? 'Completed' : 'Complete Profile'}
                 </div>
-                {!setupCompleted && (
+                {!loading && setupStatus && !setupStatus.setupCompleted && (
                   <Link href="/dashboard/setup-checklist" className="text-[10px] sm:text-[11px] text-blue-600 hover:underline font-medium mt-0.5 block truncate">
                     Complete now
                   </Link>
@@ -213,12 +215,14 @@ function AdminDashboardOverview() {
             {/* Classes Created */}
             <div className="bg-slate-50 border border-slate-200/50 p-3 sm:p-4 rounded-xl flex items-center gap-2.5 sm:gap-4 min-w-0">
               <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-blue-100 text-blue-700 flex items-center justify-center font-bold text-base sm:text-lg shrink-0">
-                {classesCount}
+                {loading || !setupStatus ? <span className="animate-pulse">...</span> : setupStatus.classesCount}
               </div>
               <div className="min-w-0 flex-1">
                 <div className="text-[9px] sm:text-[11px] font-bold text-slate-400 uppercase tracking-wider truncate">Classes Created</div>
                 <div className="text-[11px] sm:text-xs font-semibold text-slate-800 mt-0.5 truncate">
-                  {classesCount > 0 ? `${classesCount} Active Class(es)` : 'No classes added'}
+                  {loading || !setupStatus ? (
+                    <span className="text-slate-400 font-normal">Loading...</span>
+                  ) : setupStatus.classesCount > 0 ? `${setupStatus.classesCount} Active Class(es)` : 'No classes added'}
                 </div>
                 <Link href="/dashboard/teachers" className="text-[10px] sm:text-[11px] text-blue-600 hover:underline font-medium mt-0.5 block truncate">
                   Add Classes
@@ -229,12 +233,14 @@ function AdminDashboardOverview() {
             {/* Teachers Added */}
             <div className="bg-slate-50 border border-slate-200/50 p-3 sm:p-4 rounded-xl flex items-center gap-2.5 sm:gap-4 min-w-0">
               <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-purple-100 text-purple-700 flex items-center justify-center font-bold text-base sm:text-lg shrink-0">
-                {teachersCount}
+                {loading || !setupStatus ? <span className="animate-pulse">...</span> : setupStatus.teachersCount}
               </div>
               <div className="min-w-0 flex-1">
                 <div className="text-[9px] sm:text-[11px] font-bold text-slate-400 uppercase tracking-wider truncate">Teachers Added</div>
                 <div className="text-[11px] sm:text-xs font-semibold text-slate-800 mt-0.5 truncate">
-                  {teachersCount > 0 ? `${teachersCount} Faculty Registered` : 'No faculty added'}
+                  {loading || !setupStatus ? (
+                    <span className="text-slate-400 font-normal">Loading...</span>
+                  ) : setupStatus.teachersCount > 0 ? `${setupStatus.teachersCount} Faculty Registered` : 'No faculty added'}
                 </div>
                 <Link href="/dashboard/teachers" className="text-[10px] sm:text-[11px] text-blue-600 hover:underline font-medium mt-0.5 block truncate">
                   Add Teachers
@@ -245,12 +251,14 @@ function AdminDashboardOverview() {
             {/* Students Added */}
             <div className="bg-slate-50 border border-slate-200/50 p-3 sm:p-4 rounded-xl flex items-center gap-2.5 sm:gap-4 min-w-0">
               <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold text-base sm:text-lg shrink-0">
-                {studentsCount}
+                {loading || !setupStatus ? <span className="animate-pulse">...</span> : setupStatus.studentsCount}
               </div>
               <div className="min-w-0 flex-1">
                 <div className="text-[9px] sm:text-[11px] font-bold text-slate-400 uppercase tracking-wider truncate">Students Added</div>
                 <div className="text-[11px] sm:text-xs font-semibold text-slate-800 mt-0.5 truncate">
-                  {studentsCount > 0 ? `${studentsCount} Active Student(s)` : 'No students added'}
+                  {loading || !setupStatus ? (
+                    <span className="text-slate-400 font-normal">Loading...</span>
+                  ) : setupStatus.studentsCount > 0 ? `${setupStatus.studentsCount} Active Student(s)` : 'No students added'}
                 </div>
                 <Link href="/dashboard/admissions" className="text-[10px] sm:text-[11px] text-blue-600 hover:underline font-medium mt-0.5 block truncate">
                   New Admission
@@ -438,28 +446,21 @@ function AdminDashboardOverview() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 text-[13px] text-slate-600 font-medium">
-                    {displayAdmissions.map((adm) => {
-                      const photoSrc = adm.profilePhotoUrl || adm.photo || adm.avatarUrl || adm.photoUrl || adm.imageUrl;
-                      return (
-                        <tr key={adm.id} className="hover:bg-slate-50 transition-colors">
-                          <td className="px-4 py-3">
-                            <div className="flex items-center gap-3">
-                              {photoSrc ? (
-                                <img src={photoSrc} alt={adm.name} className="w-9 h-9 rounded-lg object-cover border border-slate-200" />
-                              ) : (
-                                <div className="w-9 h-9 rounded-lg bg-gradient-to-tr from-blue-500 to-indigo-500 text-white flex items-center justify-center font-bold text-xs select-none">
-                                  {adm.avatar || adm.name?.charAt(0) || 'S'}
-                                </div>
-                              )}
-                              <div className="font-semibold text-slate-800">{adm.name}</div>
+                    {displayAdmissions.map((adm) => (
+                      <tr key={adm.id} className="hover:bg-slate-50 transition-colors">
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-3">
+                            <div className="w-9 h-9 rounded-lg bg-gradient-to-tr from-blue-500 to-indigo-500 text-white flex items-center justify-center font-bold text-xs select-none">
+                              {adm.avatar}
                             </div>
-                          </td>
-                          <td className="px-4 py-3 text-slate-500 font-mono">{adm.rollNo}</td>
-                          <td className="px-4 py-3 text-slate-500">{adm.class || adm.classSection || `${adm.className || 'Grade 1'} - ${adm.sectionName || 'A'}`}</td>
-                          <td className="px-4 py-3 text-slate-400 font-mono text-xs">{adm.joiningDate}</td>
-                        </tr>
-                      );
-                    })}
+                            <div className="font-semibold text-slate-800">{adm.name}</div>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 text-slate-500 font-mono">{adm.rollNo}</td>
+                        <td className="px-4 py-3 text-slate-500">{adm.class}</td>
+                        <td className="px-4 py-3 text-slate-400 font-mono text-xs">{adm.joiningDate}</td>
+                      </tr>
+                    ))}
                   </tbody>
                 </table>
               )}
@@ -512,38 +513,26 @@ function AdminDashboardOverview() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 text-[13px] text-slate-600 font-medium">
-                    {displayPayments.map((pay) => {
-                      const pType = pay.type || 'Fee Payment';
-                      let pName = pay.particulars || pay.name || pay.studentName;
-                      if (!pName || pName.toLowerCase() === 'student') {
-                        pName = 'Fee Collection';
-                      }
-                      const isFee = pType === 'Fee Payment';
-                      const pDate = new Date(pay.date).toLocaleDateString('en-IN') !== 'Invalid Date'
-                        ? new Date(pay.date).toLocaleDateString('en-IN')
-                        : pay.date;
-
-                      return (
-                        <tr key={pay.id} className="hover:bg-slate-50 transition-colors">
-                          <td className="px-4 py-3">
-                            <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded border uppercase ${
-                              isFee
-                                ? 'bg-emerald-50 text-emerald-600 border-emerald-100'
-                                : 'bg-rose-50 text-rose-600 border-rose-100'
-                            }`}>
-                              {pType}
-                            </span>
-                          </td>
-                          <td className="px-4 py-3 text-slate-800 truncate max-w-[180px]" title={pName}>{pName}</td>
-                          <td className={`px-4 py-3 font-bold font-mono text-right ${
-                            isFee ? 'text-emerald-600' : 'text-rose-600'
+                    {displayPayments.map((pay) => (
+                      <tr key={pay.id} className="hover:bg-slate-50 transition-colors">
+                        <td className="px-4 py-3">
+                          <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded border uppercase ${
+                            pay.type === 'Fee Payment'
+                              ? 'bg-emerald-50 text-emerald-600 border-emerald-100'
+                              : 'bg-rose-50 text-rose-600 border-rose-100'
                           }`}>
-                            {isFee ? '+' : '-'}{formatCurrency(pay.amount)}
-                          </td>
-                          <td className="px-4 py-3 text-slate-400 font-mono text-xs">{pDate}</td>
-                        </tr>
-                      );
-                    })}
+                            {pay.type}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-slate-800 truncate max-w-[150px]" title={pay.name}>{pay.name}</td>
+                        <td className={`px-4 py-3 font-bold font-mono text-right ${
+                          pay.type === 'Fee Payment' ? 'text-emerald-600' : 'text-rose-600'
+                        }`}>
+                          {pay.type === 'Fee Payment' ? '+' : '-'}{formatCurrency(pay.amount)}
+                        </td>
+                        <td className="px-4 py-3 text-slate-400 font-mono text-xs">{pay.date}</td>
+                      </tr>
+                    ))}
                   </tbody>
                 </table>
               )}
@@ -795,27 +784,22 @@ function TeacherDashboardView() {
           <div className="py-8 text-center text-slate-400 text-xs italic">No teaching periods scheduled for today.</div>
         ) : (
           <div className="space-y-3">
-            {data?.today?.classes?.map((cls: any, idx: number) => {
-              const clsName = typeof cls.className === 'object' ? (cls.className?.name || 'Class') : String(cls.className || cls.name || 'Class');
-              const subName = typeof cls.subjectName === 'object' ? (cls.subjectName?.name || 'Subject') : String(cls.subjectName || cls.subject || 'Subject');
-              const timeVal = typeof cls.time === 'object' ? (cls.time?.name || '') : String(cls.time || '');
-              return (
-                <div key={cls.id || idx} className="bg-slate-50 border border-slate-100 rounded-2xl p-4 flex justify-between items-center">
-                  <div>
-                    <h4 className="font-bold text-sm text-slate-800">{clsName}</h4>
-                    <p className="text-xs text-slate-500 font-medium mt-0.5">{subName} • Period {cls.periodNumber || 1}</p>
-                    {timeVal && <p className="text-[11px] text-slate-400 font-mono mt-1">{timeVal}</p>}
-                  </div>
-                  <Link
-                    href={`/dashboard/homework?classSectionId=${encodeURIComponent(cls.classSectionId || cls.id || '')}&subjectId=${encodeURIComponent(cls.subjectId || '')}&subjectName=${encodeURIComponent(subName)}&className=${encodeURIComponent(clsName)}&periodNumber=${encodeURIComponent(cls.periodNumber || '')}&create=true`}
-                    className="px-3.5 py-1.5 bg-[#2E5BFF] hover:bg-blue-600 text-white rounded-xl text-xs font-semibold shadow-xs flex items-center gap-1.5 transition-all cursor-pointer"
-                  >
-                    <BookOpen className="w-3.5 h-3.5" />
-                    Assign Homework
-                  </Link>
+            {data?.today?.classes?.map((cls: any) => (
+              <div key={cls.id} className="bg-slate-50 border border-slate-100 rounded-2xl p-4 flex justify-between items-center">
+                <div>
+                  <h4 className="font-bold text-sm text-slate-800">{cls.className}</h4>
+                  <p className="text-xs text-slate-500 font-medium mt-0.5">{cls.subjectName} • Period {cls.periodNumber}</p>
+                  <p className="text-[11px] text-slate-400 font-mono mt-1">{cls.time}</p>
                 </div>
-              );
-            })}
+                <Link
+                  href={`/dashboard/homework?classSectionId=${encodeURIComponent(cls.classSectionId)}&subjectId=${encodeURIComponent(cls.subjectId || '')}&subjectName=${encodeURIComponent(cls.subjectName)}&className=${encodeURIComponent(cls.className)}&periodNumber=${encodeURIComponent(cls.periodNumber || '')}&create=true`}
+                  className="px-3.5 py-1.5 bg-[#2E5BFF] hover:bg-blue-600 text-white rounded-xl text-xs font-semibold shadow-xs flex items-center gap-1.5 transition-all cursor-pointer"
+                >
+                  <BookOpen className="w-3.5 h-3.5" />
+                  Assign Homework
+                </Link>
+              </div>
+            ))}
           </div>
         )}
       </div>
@@ -843,24 +827,15 @@ function TeacherDashboardView() {
 import DriverTransportTrackerPage from './transport-tracker/page';
 
 export default function DashboardOverview() {
-  const { currentUser, loading } = useTenant();
+  const { currentUser } = useTenant();
 
-  if (loading) {
-    return (
-      <div className="flex justify-center items-center py-20">
-        <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-      </div>
-    );
-  }
-
-  const activeRole = typeof window !== 'undefined' ? sessionStorage.getItem('active_role') : null;
-  const isDriver = currentUser?.role === 'DRIVER' || currentUser?.staffProfile?.staffRole === 'Driver' || currentUser?.staffProfile?.designation?.toLowerCase().includes('driver') || activeRole === 'DRIVER';
+  const isDriver = currentUser?.role === 'DRIVER' || currentUser?.staffProfile?.staffRole === 'Driver' || currentUser?.staffProfile?.designation?.toLowerCase().includes('driver');
 
   if (isDriver) {
     return <DriverTransportTrackerPage />;
   }
 
-  if (currentUser?.role === 'TEACHER' || activeRole === 'TEACHER') {
+  if (currentUser?.role === 'TEACHER') {
     return <TeacherDashboardView />;
   }
 

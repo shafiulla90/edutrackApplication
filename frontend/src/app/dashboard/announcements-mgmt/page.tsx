@@ -66,34 +66,12 @@ export default function AnnouncementsMgmtPage() {
 
   async function loadData() {
     try {
-      const [annRes, attClsRes, acadClsRes] = await Promise.all([
+      const [annRes, clsRes] = await Promise.all([
         api.get('/teacher-portal/announcements'),
-        api.get('/attendance/classes').catch(() => ({ data: [] })),
-        api.get('/academics/classes').catch(() => ({ data: [] })),
+        api.get('/teacher-portal/classes'),
       ]);
-      setAnnouncements(annRes.data || []);
-      
-      const rawClasses = [...(attClsRes.data || []), ...(acadClsRes.data || [])];
-      const uniqueClasses: any[] = [];
-      const seen = new Set();
-
-      for (const item of rawClasses) {
-        const id = item.id || item.value || item.classSectionId;
-        const name = item.label || item.name || item.className;
-        if (id && name && !seen.has(name)) {
-          seen.add(name);
-          uniqueClasses.push({ id, name, value: name });
-        }
-      }
-
-      if (uniqueClasses.length === 0) {
-        uniqueClasses.push(
-          { id: 'Class-1', name: 'Class-1', value: 'Class-1' },
-          { id: 'Class-2', name: 'Class-2', value: 'Class-2' }
-        );
-      }
-
-      setClasses(uniqueClasses);
+      setAnnouncements(annRes.data);
+      setClasses(clsRes.data);
     } catch (err) {
       console.error('Failed to load announcements:', err);
     } finally {
@@ -394,11 +372,7 @@ export default function AnnouncementsMgmtPage() {
                 required
               >
                 <option value="" className="dark:bg-slate-800">Select Class Section...</option>
-                {classes.map((c, idx) => (
-                  <option key={c.id || c.value || `cls-${idx}`} value={c.name || c.value || c.id} className="dark:bg-slate-800">
-                    {c.name || c.label || c.className}
-                  </option>
-                ))}
+                {classes.map(c => <option key={c.classSectionId} value={c.classSectionId} className="dark:bg-slate-800">{c.className}</option>)}
               </select>
             </div>
           )}

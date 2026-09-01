@@ -181,15 +181,15 @@ export default function ExpensesPage() {
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
         <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs">
           <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">This Month</span>
-          <span className="text-2xl font-extrabold text-slate-800 mt-1 block">₹{(summary?.currentMonth || 0).toLocaleString()}</span>
+          <span className="text-2xl font-extrabold text-slate-800 mt-1 block">₹{summary.currentMonth.toLocaleString()}</span>
         </div>
         <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs">
           <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Previous Month</span>
-          <span className="text-2xl font-extrabold text-slate-800 mt-1 block">₹{(summary?.prevMonth || 0).toLocaleString()}</span>
+          <span className="text-2xl font-extrabold text-slate-800 mt-1 block">₹{summary.prevMonth.toLocaleString()}</span>
         </div>
         <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs">
           <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Yearly Total</span>
-          <span className="text-2xl font-extrabold text-slate-800 mt-1 block">₹{(summary?.yearly || 0).toLocaleString()}</span>
+          <span className="text-2xl font-extrabold text-slate-800 mt-1 block">₹{summary.yearly.toLocaleString()}</span>
         </div>
       </div>
 

@@ -27,20 +27,7 @@ interface InvoicePDFData {
   studentDob: string;
   addressVillage: string;
   totalAmount: number;
-  totalFeeAmount?: number;
-  totalDiscount?: number;
-  previouslyPaid?: number;
-  currentPayment?: number;
-  remainingBalance?: number;
-  paidAmount?: number;
-  items: {
-    particulars: string;
-    totalAmount?: number;
-    previouslyPaid?: number;
-    currentPayment?: number;
-    remainingBalance?: number;
-    amount: number;
-  }[];
+  items: { particulars: string; amount: number }[];
 }
 
 export default function InvoicePrintPage() {
@@ -175,102 +162,45 @@ export default function InvoicePrintPage() {
           ]}
           footerText="This is a computer generated fee receipt. No physical signature is required. For verification query, contact the accounting department."
         >
-          {/* ── Fee Summary Section ── */}
-          <div className="mt-4 mb-4 grid grid-cols-2 sm:grid-cols-5 gap-2.5 bg-slate-50 p-3.5 border border-slate-200 rounded-xl text-xs font-semibold">
-            <div>
-              <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Total Fee Amount</span>
-              <span className="text-sm font-bold font-mono text-slate-800">
-                ₹{(invoiceData.totalFeeAmount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-              </span>
-            </div>
-            <div>
-              <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Total Discount</span>
-              <span className="text-sm font-bold font-mono text-slate-500">
-                ₹{(invoiceData.totalDiscount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-              </span>
-            </div>
-            <div>
-              <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Previously Paid</span>
-              <span className="text-sm font-bold font-mono text-emerald-600">
-                ₹{(invoiceData.previouslyPaid || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-              </span>
-            </div>
-            <div>
-              <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Current Payment</span>
-              <span className="text-sm font-bold font-mono text-blue-600">
-                ₹{(invoiceData.currentPayment || invoiceData.totalAmount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-              </span>
-            </div>
-            <div className="col-span-2 sm:col-span-1 bg-rose-50 border border-rose-150 p-2 rounded-lg">
-              <span className="text-[10px] text-rose-700 font-bold uppercase tracking-wider block">Remaining Balance</span>
-              <span className="text-sm font-black font-mono text-rose-700">
-                ₹{(invoiceData.remainingBalance || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-              </span>
-            </div>
-          </div>
+          {/* Main Content Area */}
+          <div className="mt-4">
 
-          {/* ── Detailed Fee Particulars Table ── */}
+          {/* ── Fee Parti          {/* ── Fee Particulars Table ── */}
           <PDFTable
             items={invoiceData.items}
             columns={[
               {
                 header: 'Sl. No',
-                width: '8%',
+                width: '12%',
                 align: 'left',
                 render: (_, idx) => <span>{idx + 1}</span>,
               },
               {
-                header: 'Fee Particular',
-                width: '32%',
+                header: 'Particulars Description',
+                width: '58%',
                 align: 'left',
                 render: (item) => <span className="font-semibold">{item.particulars}</span>,
               },
               {
-                header: 'Total Amount',
-                width: '20%',
+                header: 'Amount Paid',
+                width: '30%',
                 align: 'right',
                 render: (item) => (
-                  <span className="font-mono text-slate-700">
-                    ₹{(item.totalAmount || item.amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                  </span>
-                ),
-              },
-              {
-                header: 'Previously Paid',
-                width: '20%',
-                align: 'right',
-                render: (item) => (
-                  <span className="font-mono text-emerald-600 font-semibold">
-                    ₹{(item.previouslyPaid || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                  </span>
-                ),
-              },
-              {
-                header: 'Current Payment',
-                width: '20%',
-                align: 'right',
-                render: (item) => (
-                  <span className="font-mono font-bold text-blue-700">
-                    ₹{(item.currentPayment !== undefined ? item.currentPayment : item.amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                  <span style={{ fontWeight: 700, color: item.amount < 0 ? '#16a34a' : '#0f172a' }}>
+                    {item.amount < 0 ? '-' : ''}₹{Math.abs(item.amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                   </span>
                 ),
               },
             ]}
           />
+        </div>
 
-          {/* ── Grand Settlement Footer ── */}
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '1.25rem', breakInside: 'avoid' }}>
-            <div style={{ backgroundColor: '#fff5f5', border: '1px solid #fed7d7', borderRadius: '0.5rem', padding: '0.75rem 1.25rem' }}>
-              <span style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', color: '#c53030', display: 'block' }}>Outstanding Balance Remaining</span>
-              <span style={{ fontSize: '16px', fontWeight: 900, fontFamily: 'monospace', color: '#9b2c2c' }}>
-                ₹{(invoiceData.remainingBalance || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-              </span>
-            </div>
-
-            <div style={{ backgroundColor: '#1a365d', color: '#ffffff', borderRadius: '0.5rem', padding: '0.75rem 1.75rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1.5rem' }}>
-              <span style={{ fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#cbd5e1' }}>Current Receipt Total</span>
-              <span style={{ fontSize: '18px', fontWeight: 900, fontFamily: 'monospace', color: '#ffffff' }}>
-                ₹{(invoiceData.currentPayment || invoiceData.totalAmount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+          {/* ── Grand Total ── */}
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '1rem', breakInside: 'avoid' }}>
+            <div style={{ backgroundColor: '#1a365d', color: '#ffffff', borderRadius: '0.5rem', padding: '1rem 2rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '2rem', minWidth: '280px' }}>
+              <span style={{ fontSize: '12px', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#cbd5e1' }}>Grand Total Paid</span>
+              <span style={{ fontSize: '20px', fontWeight: 900, fontFamily: 'monospace', color: '#ffffff' }}>
+                ₹{invoiceData.totalAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
               </span>
             </div>
           </div>

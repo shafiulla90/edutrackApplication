@@ -7,13 +7,7 @@ import { Clock, BookOpen, MapPin, CalendarDays, ChevronRight } from 'lucide-reac
 export default function MyTimetablePage() {
   const [periods, setPeriods] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const getCurrentDayName = () => {
-    const dayIdx = new Date().getDay();
-    const dayNames = ['Monday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-    return dayNames[dayIdx] || 'Monday';
-  };
-
-  const [activeDay, setActiveDay] = useState(getCurrentDayName);
+  const [activeDay, setActiveDay] = useState('Monday');
 
   const daysOfWeek = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
@@ -31,7 +25,7 @@ export default function MyTimetablePage() {
     loadTimetable();
   }, []);
 
-  const filteredPeriods = periods.filter(p => (p.dayOfWeek || p.day || '').toLowerCase() === activeDay.toLowerCase());
+  const filteredPeriods = periods.filter(p => p.dayOfWeek === activeDay);
 
   return (
     <div className="space-y-6 max-w-md mx-auto sm:max-w-none">

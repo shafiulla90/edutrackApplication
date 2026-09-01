@@ -36,12 +36,11 @@ export default function GradesMarksPage() {
   const { schoolName } = useTenant();
   
   // Metadata options
-  const [rawClassSections, setRawClassSections] = useState<any[]>([]);
-  const [uniqueClasses, setUniqueClasses] = useState<string[]>([]);
-  const [selectedClassName, setSelectedClassName] = useState('');
-  const [availableSections, setAvailableSections] = useState<string[]>([]);
-  const [selectedSectionName, setSelectedSectionName] = useState('ALL');
+  const [classes, setClasses] = useState<ClassSectionOption[]>([]);
   const [examTypes, setExamTypes] = useState<string[]>([]);
+
+  // Selection filters
+  const [selectedClassSectionId, setSelectedClassSectionId] = useState('');
   const [selectedExamName, setSelectedExamName] = useState('');
 
   // Results list
@@ -103,28 +102,15 @@ export default function GradesMarksPage() {
   const fetchMetadata = async () => {
     try {
       const classRes = await api.get('/exams/classes');
-      const classData: any[] = Array.isArray(classRes.data) ? classRes.data : (classRes.data?.data || []);
-      setRawClassSections(classData);
-
-      // Extract unique Class names
-      const classNamesSet = new Set<string>();
-      classData.forEach((c: any) => {
-        let cName = c.className || (c.label ? c.label.split('-')[0].trim() : '');
-        if (cName) classNamesSet.add(cName);
-      });
-      const uniqueClassList = Array.from(classNamesSet);
-      setUniqueClasses(uniqueClassList);
-
-      if (uniqueClassList.length > 0) {
-        setSelectedClassName(uniqueClassList[0]);
+      setClasses(classRes.data);
+      if (classRes.data.length > 0) {
+        setSelectedClassSectionId(classRes.data[0].value);
       }
 
       const typeRes = await api.get('/exams/exam-types');
-      const rawTypes = Array.isArray(typeRes.data) ? typeRes.data : (typeRes.data?.data || []);
-      const formattedTypes = rawTypes.map((t: any) => typeof t === 'string' ? t : (t.name || t.id));
-      setExamTypes(formattedTypes);
-      if (formattedTypes.length > 0) {
-        setSelectedExamName(formattedTypes[0]);
+      setExamTypes(typeRes.data);
+      if (typeRes.data.length > 0) {
+        setSelectedExamName(typeRes.data[0]);
       }
     } catch (err: any) {
       console.error('Error fetching grades metadata:', err);
@@ -132,60 +118,18 @@ export default function GradesMarksPage() {
     }
   };
 
-  // Update available sections when selected class changes
   useEffect(() => {
-    if (!selectedClassName) {
-      setAvailableSections([]);
-      return;
+    if (selectedClassSectionId && selectedExamName) {
+      fetchGrades();
     }
-    const matchingSections = rawClassSections.filter((c: any) => {
-      const cName = c.className || (c.label ? c.label.split('-')[0].trim() : '');
-      return cName === selectedClassName;
-    });
+  }, [selectedClassSectionId, selectedExamName]);
 
-    const secSet = new Set<string>();
-    matchingSections.forEach((c: any) => {
-      let sName = c.sectionName || (c.label && c.label.includes('-') ? c.label.split('-').slice(1).join('-').trim() : '');
-      if (sName) secSet.add(sName);
-    });
-
-    const secList = Array.from(secSet);
-    setAvailableSections(secList);
-    setSelectedSectionName('ALL');
-  }, [selectedClassName, rawClassSections]);
-
-  const getActiveClassSectionId = () => {
-    if (!selectedClassName) return '';
-    const matching = rawClassSections.filter((c: any) => {
-      const cName = c.className || (c.label ? c.label.split('-')[0].trim() : '');
-      return cName === selectedClassName;
-    });
-
-    if (selectedSectionName !== 'ALL') {
-      const matchSec = matching.find((c: any) => {
-        const sName = c.sectionName || (c.label && c.label.includes('-') ? c.label.split('-').slice(1).join('-').trim() : '');
-        return sName === selectedSectionName;
-      });
-      if (matchSec) return matchSec.value;
-    }
-
-    return matching[0]?.value || '';
-  };
-
-  useEffect(() => {
-    const activeCsId = getActiveClassSectionId();
-    if (selectedClassName && selectedExamName) {
-      fetchGrades(activeCsId);
-    }
-  }, [selectedClassName, selectedSectionName, selectedExamName]);
-
-  const fetchGrades = async (csId?: string) => {
-    const activeCsId = csId !== undefined ? csId : getActiveClassSectionId();
+  const fetchGrades = async () => {
     setIsLoading(true);
     setErrorMsg('');
     try {
       const res = await api.get(
-        `/exams/grades-report?classSectionId=${activeCsId}&className=${encodeURIComponent(selectedClassName)}&sectionName=${encodeURIComponent(selectedSectionName)}&examName=${encodeURIComponent(
+        `/exams/grades-report?classSectionId=${selectedClassSectionId}&examName=${encodeURIComponent(
           selectedExamName
         )}`
       );
@@ -200,8 +144,7 @@ export default function GradesMarksPage() {
 
   const handleResetFilters = () => {
     setSearch('');
-    if (uniqueClasses.length > 0) setSelectedClassName(uniqueClasses[0]);
-    setSelectedSectionName('ALL');
+    if (classes.length > 0) setSelectedClassSectionId(classes[0].value);
     if (examTypes.length > 0) setSelectedExamName(examTypes[0]);
   };
 
@@ -213,18 +156,21 @@ export default function GradesMarksPage() {
     );
   });
 
-  // KPI Calculations
+  // KPI Calculations (only operating on evaluated students where score !== null & score !== undefined)
+  const evaluatedRecords = filteredRecords.filter(
+    r => (r as any).evaluated !== false && r.score !== null && r.score !== undefined
+  );
   const totalStudents = filteredRecords.length;
-  const averageScore = totalStudents > 0
-    ? Math.round(filteredRecords.reduce((sum, r) => sum + r.score, 0) / totalStudents)
+  const averageScore = evaluatedRecords.length > 0
+    ? Math.round(evaluatedRecords.reduce((sum, r) => sum + Number(r.score || 0), 0) / evaluatedRecords.length)
     : 0;
-  const passedCount = filteredRecords.filter(r => r.score >= 45).length;
-  const failedCount = filteredRecords.filter(r => r.score < 45).length;
-  const passRate = totalStudents > 0 ? Math.round((passedCount / totalStudents) * 100) : 0;
+  const passedCount = evaluatedRecords.filter(r => Number(r.score) >= 45).length;
+  const failedCount = evaluatedRecords.filter(r => Number(r.score) < 45).length;
+  const passRate = evaluatedRecords.length > 0 ? Math.round((passedCount / evaluatedRecords.length) * 100) : 0;
 
-  // Top Scorer
-  const topScorer = filteredRecords.length > 0
-    ? [...filteredRecords].sort((a, b) => b.score - a.score)[0]
+  // Top Scorer (only evaluated)
+  const topScorer = evaluatedRecords.length > 0
+    ? [...evaluatedRecords].sort((a, b) => Number(b.score) - Number(a.score))[0]
     : null;
 
   const getGradeBadge = (letter: string) => {
@@ -232,8 +178,10 @@ export default function GradesMarksPage() {
     if (letter === 'B') return 'bg-blue-50 text-blue-600 border-blue-100';
     if (letter === 'C') return 'bg-slate-50 text-slate-650 border-slate-200';
     if (letter === 'D') return 'bg-amber-50 text-amber-600 border-amber-100';
+    if (letter === '-') return 'bg-slate-100 text-slate-400 border-slate-200';
     return 'bg-rose-50 text-rose-600 border-rose-100';
   };
+
 
   const getSubjectGrade = (score: number) => {
     if (score >= 90) return 'A+';
@@ -244,9 +192,7 @@ export default function GradesMarksPage() {
     return 'F';
   };
 
-  const classLabel = selectedSectionName !== 'ALL'
-    ? `${selectedClassName} - ${selectedSectionName}`
-    : selectedClassName || 'Class Section';
+  const classLabel = classes.find(c => c.value === selectedClassSectionId)?.label || 'Class Section';
 
   return (
     <div className="space-y-6 animate-in">
@@ -262,7 +208,7 @@ export default function GradesMarksPage() {
         </div>
         <div className="flex items-center gap-2">
           <button
-            onClick={() => fetchGrades()}
+            onClick={fetchGrades}
             className="px-4 py-2.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 font-semibold text-[13px] flex items-center gap-2 shadow-xs transition-colors"
           >
             <RefreshCw className="w-4 h-4 text-slate-500" />
@@ -285,9 +231,9 @@ export default function GradesMarksPage() {
       )}
 
       {/* Filters config bar */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3 print:hidden">
+      <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 print:hidden">
         {/* Search */}
-        <div className="relative flex items-center bg-white border border-slate-200 rounded-xl px-3 py-2 md:col-span-2 shadow-xs focus-within:border-[#2E5BFF]">
+        <div className="relative flex items-center bg-white border border-slate-200 rounded-xl px-3 py-2 sm:col-span-2 shadow-xs focus-within:border-[#2E5BFF]">
           <Search className="w-4 h-4 text-slate-400 mr-2" />
           <input
             type="text"
@@ -300,28 +246,12 @@ export default function GradesMarksPage() {
 
         {/* Class select */}
         <select
-          value={selectedClassName}
-          onChange={(e) => setSelectedClassName(e.target.value)}
-          className="border border-slate-200 rounded-xl p-2.5 text-[13px] text-slate-755 font-bold bg-white shadow-xs outline-none cursor-pointer"
+          value={selectedClassSectionId}
+          onChange={(e) => setSelectedClassSectionId(e.target.value)}
+          className="border border-slate-200 rounded-xl p-2.5 text-[13px] text-slate-755 font-bold bg-white shadow-xs outline-none"
         >
-          {uniqueClasses.length === 0 ? (
-            <option value="">No classes available for this school. Please create a class first.</option>
-          ) : (
-            uniqueClasses.map(cName => (
-              <option key={cName} value={cName}>{cName}</option>
-            ))
-          )}
-        </select>
-
-        {/* Section select */}
-        <select
-          value={selectedSectionName}
-          onChange={(e) => setSelectedSectionName(e.target.value)}
-          className="border border-slate-200 rounded-xl p-2.5 text-[13px] text-slate-755 font-bold bg-white shadow-xs outline-none cursor-pointer"
-        >
-          <option value="ALL">All Sections</option>
-          {availableSections.map(sName => (
-            <option key={sName} value={sName}>{sName}</option>
+          {classes.map(c => (
+            <option key={c.value} value={c.value}>{c.label}</option>
           ))}
         </select>
 
@@ -329,7 +259,7 @@ export default function GradesMarksPage() {
         <select
           value={selectedExamName}
           onChange={(e) => setSelectedExamName(e.target.value)}
-          className="border border-slate-200 rounded-xl p-2.5 text-[13px] text-slate-755 font-bold bg-white shadow-xs outline-none cursor-pointer"
+          className="border border-slate-200 rounded-xl p-2.5 text-[13px] text-slate-755 font-bold bg-white shadow-xs outline-none"
         >
           {examTypes.map(t => (
             <option key={t} value={t}>{t}</option>
@@ -425,17 +355,24 @@ export default function GradesMarksPage() {
                       <td className="px-6 py-4 font-bold text-slate-800">Rank {r.rank}</td>
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-2">
-                          <div className="flex-1 bg-slate-150 h-1.5 rounded-full overflow-hidden w-28">
-                            <div className="bg-[#2E5BFF] h-full rounded-full" style={{ width: `${r.score}%` }} />
-                          </div>
-                          <span className="font-bold font-mono text-[11px] shrink-0">{r.score}%</span>
+                          {r.score !== null && r.score !== undefined && (r as any).evaluated !== false ? (
+                            <>
+                              <div className="flex-1 bg-slate-150 h-1.5 rounded-full overflow-hidden w-28">
+                                <div className="bg-[#2E5BFF] h-full rounded-full" style={{ width: `${r.score}%` }} />
+                              </div>
+                              <span className="font-bold font-mono text-[11px] shrink-0">{r.score}%</span>
+                            </>
+                          ) : (
+                            <span className="font-bold font-mono text-[11px] text-slate-400 shrink-0">-</span>
+                          )}
                         </div>
                       </td>
                       <td className="px-6 py-4">
-                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${getGradeBadge(r.grade)}`}>
-                          {r.grade}
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${getGradeBadge(r.score !== null && r.score !== undefined && (r as any).evaluated !== false ? r.grade : '-')}`}>
+                          {r.score !== null && r.score !== undefined && (r as any).evaluated !== false ? r.grade : '-'}
                         </span>
                       </td>
+
                       <td className="px-6 py-4 text-right">
                         <span className="text-blue-600 hover:text-blue-500 text-xs font-bold inline-flex items-center gap-0.5">
                           Report Card <ChevronRight className="w-3.5 h-3.5" />
@@ -463,25 +400,32 @@ export default function GradesMarksPage() {
                       </div>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
-                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${getGradeBadge(r.grade)}`}>
-                        {r.grade}
+                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${getGradeBadge(r.score !== null && r.score !== undefined && (r as any).evaluated !== false ? r.grade : '-')}`}>
+                        {r.score !== null && r.score !== undefined && (r as any).evaluated !== false ? r.grade : '-'}
                       </span>
                       <ChevronRight className="w-4 h-4 text-blue-400" />
                     </div>
                   </div>
                   {/* Score bar */}
                   <div className="flex items-center gap-2">
-                    <div className="flex-1 bg-slate-100 h-2 rounded-full overflow-hidden">
-                      <div
-                        className="h-full rounded-full"
-                        style={{
-                          width: `${r.score}%`,
-                          background: r.score >= 75 ? '#10b981' : r.score >= 45 ? '#2E5BFF' : '#ef4444'
-                        }}
-                      />
-                    </div>
-                    <span className="font-bold font-mono text-[12px] shrink-0 text-slate-700">{r.score}%</span>
+                    {r.score !== null && r.score !== undefined && (r as any).evaluated !== false ? (
+                      <>
+                        <div className="flex-1 bg-slate-100 h-2 rounded-full overflow-hidden">
+                          <div
+                            className="h-full rounded-full"
+                            style={{
+                              width: `${r.score}%`,
+                              background: r.score >= 75 ? '#10b981' : r.score >= 45 ? '#2E5BFF' : '#ef4444'
+                            }}
+                          />
+                        </div>
+                        <span className="font-bold font-mono text-[12px] shrink-0 text-slate-700">{r.score}%</span>
+                      </>
+                    ) : (
+                      <span className="font-bold font-mono text-[12px] shrink-0 text-slate-400">-</span>
+                    )}
                   </div>
+
                 </button>
               ))}
             </div>

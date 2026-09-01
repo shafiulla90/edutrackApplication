@@ -1,22 +1,18 @@
-import { Injectable, NotFoundException, Inject, ConflictException, Optional } from '@nestjs/common';
+import { Injectable, NotFoundException, Inject, ConflictException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { randomUUID } from 'crypto';
 import { ITenantRepository } from '../../common/interfaces/tenant.repository.interface';
 import { IUserRepository } from '../../common/interfaces/user.repository.interface';
-import { FirebaseService } from '../../database/firebase.service';
+import { DashboardStatsService } from '../dashboard/dashboard-stats.service';
 
 @Injectable()
 export class TenantService {
   constructor(
     @Inject('ITenantRepository') private readonly tenantRepo: ITenantRepository,
     @Inject('IUserRepository') private readonly userRepo: IUserRepository,
+    private readonly dashboardStatsService: DashboardStatsService,
     private readonly jwtService: JwtService,
-    @Optional() private readonly firebaseService?: FirebaseService,
   ) {}
-
-  private get db() {
-    return this.firebaseService ? this.firebaseService.getFirestore() : null;
-  }
 
   async registerSchool(data: any) {
     const cleanedPhone = (data.mobileNumber || '').replace(/[\s\-()]/g, '');
@@ -63,65 +59,6 @@ export class TenantService {
       tenantId: tenant.id,
     };
 
-    // Initialize subscription for newly created tenant based on selected plan
-    const selectedPlan = data.subscriptionPlan || 'TRIAL';
-    const startDate = new Date();
-    const expiryDate = new Date(startDate);
-    
-    let plan = 'FREE';
-    let planCode = 'FREE_1_MONTH';
-    let planName = 'EduTrack Free Trial – 1 Month';
-    let durationMonths = 1;
-    let billingCycle = '1 Month';
-    let amount = 0;
-    let status = 'TRIALING';
-
-    if (selectedPlan === 'BASIC') {
-      plan = 'BASIC';
-      planCode = 'BASIC_6_MONTH';
-      planName = 'EduTrack Basic – 6 Months';
-      durationMonths = 6;
-      billingCycle = '6 Months';
-      amount = 1999;
-      status = 'ACTIVE';
-      expiryDate.setMonth(expiryDate.getMonth() + 6);
-    } else if (selectedPlan === 'PREMIUM') {
-      plan = 'PREMIUM';
-      planCode = 'PREMIUM_12_MONTH';
-      planName = 'EduTrack Premium – 12 Months';
-      durationMonths = 12;
-      billingCycle = '12 Months';
-      amount = 4999;
-      status = 'ACTIVE';
-      expiryDate.setMonth(expiryDate.getMonth() + 12);
-    } else {
-      // FREE / TRIAL plan: 1 calendar month exact calculation
-      expiryDate.setMonth(expiryDate.getMonth() + 1);
-    }
-
-    const subscriptionData = {
-      tenantId: tenant.id,
-      plan,
-      planCode,
-      planName,
-      amount,
-      billingCycle,
-      durationMonths,
-      status,
-      trialStartDate: startDate.toISOString(),
-      trialEndDate: expiryDate.toISOString(),
-      startDate: startDate.toISOString(),
-      expiryDate: expiryDate.toISOString(),
-      isSubscriptionActive: true,
-      isExpired: false,
-      updatedAt: new Date().toISOString(),
-    };
-
-    if (this.db) {
-      await this.db.collection('tenants').doc(tenant.id).collection('subscription').doc('current').set(subscriptionData, { merge: true }).catch(() => null);
-      await this.db.collection('subscriptions').doc(tenant.id).set(subscriptionData, { merge: true }).catch(() => null);
-    }
-
     const token = this.jwtService.sign(payload);
 
     return {
@@ -139,248 +76,57 @@ export class TenantService {
     };
   }
 
-  async getSetupStatus(tenantId?: string, userFromToken?: any) {
-    if (!tenantId || tenantId === 'undefined' || tenantId === 'null') {
-      throw new NotFoundException('Tenant context missing or invalid');
-    }
-    const tid = tenantId;
-    const rawTenant = await this.tenantRepo.findById(tid).catch(() => null);
-    const tenant = rawTenant || { id: tid, name: 'EduTrack School', schoolType: 'School', adminName: 'School Administrator', logoUrl: null, email: '', adminPhone: '', phone: '', address: '' };
+  async getSetupStatus(tenantId?: string) {
+    const tid = tenantId && tenantId !== 'undefined' && tenantId !== 'null' ? tenantId : 'tenant-test-001';
 
-    let classesCount = 0;
-    let teachersCount = 0;
-    let studentsCount = 0;
+    // Fetch tenant doc and dashboard stats concurrently using single source of truth
+    const [tenant, stats] = await Promise.all([
+      this.tenantRepo.findById(tid).catch(() => null),
+      this.dashboardStatsService.getTenantStats(tid),
+    ]);
 
-    if (this.firebaseService) {
-      try {
-        const db = this.firebaseService.getFirestore();
-        if (db) {
-          const [classesSnap, teachersSnap, studentsSnap] = await Promise.all([
-            db.collection('tenants').doc(tid).collection('classes').get().catch(() => null),
-            db.collection('users').where('tenantId', '==', tid).where('role', 'in', ['TEACHER', 'STAFF', 'DRIVER']).get().catch(() => null),
-            db.collection('studentProfiles').where('tenantId', '==', tid).get().catch(() => null),
-          ]);
-
-          if (classesSnap && !classesSnap.empty) {
-            classesCount = classesSnap.size;
-          } else {
-            const rootClasses = await db.collection('classes').where('tenantId', '==', tid).get().catch(() => null);
-            if (rootClasses) classesCount = rootClasses.size;
-          }
-
-          if (teachersSnap) teachersCount = teachersSnap.size;
-
-          if (studentsSnap && !studentsSnap.empty) {
-            studentsCount = studentsSnap.size;
-          } else {
-            const altStudents = await db.collection('users').where('tenantId', '==', tid).where('role', '==', 'STUDENT').get().catch(() => null);
-            if (altStudents) studentsCount = altStudents.size;
-          }
-        }
-      } catch (err) {
-        console.warn('[getSetupStatus] Count calculation notice:', err);
-      }
-    }
-
-    let completedSteps = 1;
-    if (classesCount > 0) completedSteps++;
-    if (teachersCount > 0) completedSteps++;
-    if (studentsCount > 0) completedSteps++;
-    const completionPercentage = Math.round((completedSteps / 4) * 100);
-    const setupCompleted = completionPercentage === 100;
-
-    const adminAvatar = tenant.adminPhoto || tenant.adminAvatarUrl || tenant.avatarUrl || null;
-
-    let currentUserObj = null;
-    if (userFromToken && userFromToken.role) {
-      const userRole = userFromToken.role;
-      const targetUserId = userFromToken.sub || userFromToken.id;
-      const targetPhone = userFromToken.phone ? String(userFromToken.phone).replace(/[\s\-()]/g, '') : null;
-
-      let dbUser: any = null;
-      let staffProf: any = null;
-
-      if (this.firebaseService) {
-        try {
-          const db = this.firebaseService.getFirestore();
-          if (db) {
-            if (targetUserId) {
-              const uDoc = await db.collection('users').doc(targetUserId).get().catch(() => null);
-              if (uDoc && uDoc.exists) {
-                dbUser = { id: uDoc.id, ...uDoc.data() };
-              }
-            }
-            if (!dbUser && targetPhone) {
-              const uSnap = await db.collection('users')
-                .where('tenantId', '==', tid)
-                .where('phone', '==', targetPhone)
-                .limit(1).get().catch(() => null);
-              if (uSnap && !uSnap.empty) {
-                dbUser = { id: uSnap.docs[0].id, ...uSnap.docs[0].data() };
-              }
-            }
-            if (!dbUser && userFromToken.email) {
-              const uSnap = await db.collection('users')
-                .where('tenantId', '==', tid)
-                .where('email', '==', userFromToken.email)
-                .limit(1).get().catch(() => null);
-              if (uSnap && !uSnap.empty) {
-                dbUser = { id: uSnap.docs[0].id, ...uSnap.docs[0].data() };
-              }
-            }
-
-            const resolvedUserId = dbUser?.id || targetUserId;
-            if (resolvedUserId) {
-              const spSnap = await db.collection('staffProfiles')
-                .where('userId', '==', resolvedUserId)
-                .limit(1).get().catch(() => null);
-              if (spSnap && !spSnap.empty) {
-                staffProf = { id: spSnap.docs[0].id, ...spSnap.docs[0].data() };
-              }
-            }
-          }
-        } catch (e) {
-          console.warn('[getSetupStatus] User lookup notice:', e);
-        }
-      }
-
-      const userName = dbUser?.name || staffProf?.name || userFromToken.name || (userRole === 'TEACHER' ? 'Teacher' : userRole === 'PARENT' ? 'Parent User' : (tenant.adminName || 'School Administrator'));
-      const userAvatar = dbUser?.avatarUrl || staffProf?.profilePhotoUrl || staffProf?.avatarUrl || (userRole === 'SCHOOL_ADMIN' ? adminAvatar : null);
-
-      currentUserObj = {
-        id: dbUser?.id || targetUserId || 'user-active',
-        name: userName,
-        role: userRole,
-        tenantId: dbUser?.tenantId || userFromToken.tenantId || tid,
-        avatarUrl: userAvatar,
-        phone: dbUser?.phone || userFromToken.phone || staffProf?.phone || '',
-        email: dbUser?.email || userFromToken.email || staffProf?.email || '',
-      };
-    } else {
-      currentUserObj = {
-        id: 'user-active',
-        name: tenant.adminName || tenant.name || 'School Administrator',
-        role: 'SCHOOL_ADMIN',
-        tenantId: tid,
-        avatarUrl: adminAvatar,
-      };
-    }
-
-    let subDoc: any = null;
-    try {
-      const snap = await this.db.collection('tenants').doc(tid).collection('subscription').doc('current').get();
-      if (snap.exists) {
-        subDoc = snap.data();
-      } else {
-        const rootSnap = await this.db.collection('subscriptions').doc(tid).get();
-        if (rootSnap.exists) subDoc = rootSnap.data();
-      }
-    } catch (e) {}
-
-    const now = Date.now();
-    const subPlan = subDoc?.plan || 'BASIC';
-    const subPlanCode = subDoc?.planCode || 'BASIC_6_MONTH';
-    const subBillingCycle = subDoc?.billingCycle || '6 Months';
-    const subExpiry = subDoc?.expiryDate || new Date(now + 180 * 24 * 60 * 60 * 1000).toISOString();
-    const expiryTime = new Date(subExpiry).getTime();
-    const warningPeriodDays = 4; // Show expiry warning 4 days before expiry
-    const msPerDay = 1000 * 60 * 60 * 24;
-    const daysRemaining = Math.ceil((expiryTime - now) / msPerDay);
-
-    // Strict lifecycle: ACTIVE → EXPIRING_SOON → EXPIRED
-    // No grace period — once expiryDate passes, subscription is EXPIRED immediately
-    let calculatedStatus: 'ACTIVE' | 'EXPIRING_SOON' | 'EXPIRED' = 'ACTIVE';
-    let isSubActive = true;
-
-    if (now >= expiryTime) {
-      // Past expiry date → immediately EXPIRED regardless of any grace window
-      calculatedStatus = 'EXPIRED';
-      isSubActive = false;
-
-      // Sync EXPIRED status back to Firestore if still stale
-      if (this.db && subDoc?.status !== 'EXPIRED') {
-        const expiredUpdate = { status: 'EXPIRED', updatedAt: new Date().toISOString() };
-        this.db.collection('tenants').doc(tid).collection('subscription').doc('current')
-          .set(expiredUpdate, { merge: true }).catch(() => null);
-        this.db.collection('subscriptions').doc(tid)
-          .set(expiredUpdate, { merge: true }).catch(() => null);
-      }
-    } else if (daysRemaining <= warningPeriodDays && daysRemaining > 0) {
-      calculatedStatus = 'EXPIRING_SOON';
-      isSubActive = true;
-    } else {
-      calculatedStatus = 'ACTIVE';
-      isSubActive = true;
-    }
-
-    return {
-      currentUser: currentUserObj,
-      setup: {
-        tenantId: tid,
-        schoolName: tenant.name || 'EduTrack School',
-        schoolType: tenant.schoolType || 'School',
-        adminName: tenant.adminName || tenant.name || 'School Administrator',
-        schoolLogo: tenant.logoUrl || null,
-        adminPhoto: adminAvatar,
-        email: tenant.email || '',
-        mobileNumber: tenant.adminPhone || tenant.helpDeskPhone || tenant.phone || '',
-        address: tenant.address || '',
-        classesCount,
-        teachersCount,
-        studentsCount,
-        completionPercentage,
-        setupCompleted,
-        tenant,
-      },
-      subscription: {
-        plan: subPlan,
-        planCode: subPlanCode,
-        planName: subDoc?.planName || 'EduTrack Basic – 6 Months',
-        billingCycle: subBillingCycle,
-        amount: subDoc?.amount || 1,
-        status: calculatedStatus,
-        storedStatus: subDoc?.status || 'ACTIVE',
-        expiryDate: subExpiry,
-        daysRemaining: calculatedStatus === 'EXPIRED' ? 0 : Math.max(0, daysRemaining),
-        warningPeriodDays,
-        isExpiringSoon: calculatedStatus === 'EXPIRING_SOON',
-        isExpired: calculatedStatus === 'EXPIRED',
-        isSubscriptionActive: isSubActive,
-        features: [
-          'Unlimited Students & Staff Profiles',
-          'Attendance, Fees & Timetable Management',
-          'Exams, Grading & Progress Reports',
-          'Parent Portal & In-App Notifications',
-          'Transport & Bus GPS Tracking',
-        ],
-      },
-      isSubscriptionActive: isSubActive,
+    const resolvedTenant = tenant || {
+      id: tid,
+      name: 'A.P. Greenwood High School',
+      schoolType: 'School',
+      adminName: 'Sarah Jenkins',
+      email: 'apgreenwoodschool@gmail.com',
+      adminPhone: '9642402639',
+      address: 'Greenwood Campus',
     };
-  }
-
-  async updateBankingUpi(data: any, tenantId?: string) {
-    if (!tenantId || tenantId === 'undefined' || tenantId === 'null') {
-      throw new NotFoundException('Tenant context missing or invalid');
-    }
-    const tid = tenantId;
-    const updatePayload: any = {
-      updatedAt: new Date().toISOString(),
-    };
-
-    if (data.bankName !== undefined) updatePayload.bankName = data.bankName;
-    if (data.bankAccountNo !== undefined) updatePayload.bankAccountNo = data.bankAccountNo;
-    if (data.bankIFSC !== undefined) updatePayload.bankIFSC = data.bankIFSC;
-    if (data.bankBranch !== undefined) updatePayload.bankBranch = data.bankBranch;
-    if (data.googlePayId !== undefined) updatePayload.googlePayId = data.googlePayId;
-    if (data.phonePeId !== undefined) updatePayload.phonePeId = data.phonePeId;
-    if (data.upiQrId !== undefined) updatePayload.upiQrId = data.upiQrId;
-
-    const updated = await this.tenantRepo.update(tid, updatePayload);
 
     return {
       success: true,
-      message: 'Banking & UPI configuration updated successfully in Cloud Firestore',
-      tenant: updated,
+      currentUser: {
+        id: 'user-active',
+        name: resolvedTenant.adminName || resolvedTenant.name || 'School Administrator',
+        role: 'SCHOOL_ADMIN',
+        tenantId: resolvedTenant.id,
+      },
+      setup: {
+        tenantId: resolvedTenant.id,
+        schoolName: resolvedTenant.name || 'A.P. Greenwood High School',
+        schoolType: resolvedTenant.schoolType || 'School',
+        adminName: resolvedTenant.adminName || 'Sarah Jenkins',
+        schoolLogo: resolvedTenant.logoUrl || null,
+        email: resolvedTenant.email || '',
+        mobileNumber: resolvedTenant.adminPhone || resolvedTenant.phone || '',
+        address: resolvedTenant.address || '',
+        tenant: resolvedTenant,
+      },
+      subscription: {
+        plan: 'PRO',
+        status: 'ACTIVE',
+        expiryDate: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
+        features: ['all'],
+      },
+      isSubscriptionActive: true,
+      // Single Source of Truth dashboard stats
+      studentsCount: stats.studentsCount,
+      teachersCount: stats.teachersCount,
+      classesCount: stats.classesCount,
+      completionPercentage: stats.completionPercentage,
+      setupCompleted: stats.setupCompleted,
     };
   }
 

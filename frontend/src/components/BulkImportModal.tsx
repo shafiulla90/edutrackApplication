@@ -4,6 +4,7 @@ import React, { useState, useRef } from 'react';
 import { Download, Upload, CheckCircle, AlertCircle, RefreshCw, X, FileText, ChevronRight } from 'lucide-react';
 import { api } from '@/lib/api';
 import Modal from '@/components/Modal';
+import { dispatchSchoolSetupUpdated } from '@/lib/events';
 
 interface BulkImportModalProps {
   isOpen: boolean;
@@ -115,6 +116,7 @@ export default function BulkImportModal({ isOpen, onClose, onImportSuccess }: Bu
       setErrors(errors || []);
       
       if (successCount > 0) {
+        dispatchSchoolSetupUpdated();
         onImportSuccess(successCount);
       }
     } catch (err: any) {

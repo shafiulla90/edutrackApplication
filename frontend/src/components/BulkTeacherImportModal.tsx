@@ -4,6 +4,7 @@ import React, { useState, useRef } from 'react';
 import { Download, Upload, AlertCircle, RefreshCw, X, FileText } from 'lucide-react';
 import { api } from '@/lib/api';
 import Modal from '@/components/Modal';
+import { dispatchSchoolSetupUpdated } from '@/lib/events';
 
 interface BulkTeacherImportModalProps {
   isOpen: boolean;
@@ -222,49 +223,19 @@ export default function BulkTeacherImportModal({ isOpen, onClose, onImportSucces
       const deductions = parseNumVal(deductionsRaw);
       const pf = parseNumVal(pfRaw);
 
-      const typoSubjectMap: Record<string, string> = {
-        'math': 'Mathematics', 'maths': 'Mathematics', 'mathematic': 'Mathematics', 'mathematics': 'Mathematics',
-        'phy': 'Physics', 'physic': 'Physics', 'physics': 'Physics',
-        'chem': 'Chemistry', 'chemist': 'Chemistry', 'chemistry': 'Chemistry',
-        'bio': 'Biology', 'biol': 'Biology', 'biology': 'Biology',
-        'sci': 'Science', 'scinece': 'Science', 'science': 'Science',
-        'eng': 'English', 'inglish': 'English', 'english': 'English',
-        'hin': 'Hindi', 'hindi': 'Hindi', 'hindhi': 'Hindi',
-        'soc': 'Social Science', 'social': 'Social Science', 'sst': 'Social Science',
-        'comp': 'Computer Science', 'cs': 'Computer Science', 'computer': 'Computer Science',
-        'eco': 'Economics', 'economics': 'Economics',
-        'pe': 'Physical Education', 'sports': 'Physical Education',
-        'art': 'Art & Craft', 'arts': 'Art & Craft'
-      };
-
-      const resolveSubjectName = (rawName: string): string | null => {
-        if (!rawName || !rawName.trim()) return null;
-        const clean = rawName.trim().toLowerCase();
-        if (typoSubjectMap[clean]) return typoSubjectMap[clean];
-
-        const matchedSub = allSubjects?.find(s => 
-          s.name?.toLowerCase() === clean || 
-          clean.includes(s.name?.toLowerCase()) || 
-          s.name?.toLowerCase().includes(clean)
-        );
-        if (matchedSub) return matchedSub.name;
-
-        return rawName.trim().charAt(0).toUpperCase() + rawName.trim().slice(1);
-      };
-
       const skills: any[] = [];
       const mapSkill = (subNameKey: string, skillLevelKey: string) => {
         const sName = getRowVal(row, subNameKey);
         if (sName) {
-          const resolvedSubject = resolveSubjectName(sName);
-          if (resolvedSubject) {
+          const matchedSub = allSubjects.find(s => s.name.toLowerCase() === sName.toLowerCase());
+          if (matchedSub) {
             skills.push({
-              subject: resolvedSubject,
-              subjectId: resolvedSubject,
-              subjectName: resolvedSubject,
+              subjectId: matchedSub.id,
               skillLevel: getRowVal(row, skillLevelKey) || 'Expert',
               yearsOfExperience: 5
             });
+          } else {
+            errorLogs.push(`Row ${rowNum}: Subject "${sName}" not found in database catalog.`);
           }
         }
       };
@@ -285,10 +256,7 @@ export default function BulkTeacherImportModal({ isOpen, onClose, onImportSucces
         deductions,
         pf,
         joiningDate: getRowVal(row, 'Joining Date') || undefined,
-        skills,
-        subject1: getRowVal(row, 'Subject 1'),
-        subject2: getRowVal(row, 'Subject 2'),
-        subject3: getRowVal(row, 'Subject 3')
+        skills
       });
     });
 
@@ -304,6 +272,7 @@ export default function BulkTeacherImportModal({ isOpen, onClose, onImportSucces
       setSuccessCount(createdCount);
       setIsProcessing(false);
       if (createdCount > 0) {
+        dispatchSchoolSetupUpdated();
         onImportSuccess(createdCount);
       }
     } catch (err: any) {

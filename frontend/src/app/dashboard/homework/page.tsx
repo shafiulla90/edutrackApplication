@@ -163,18 +163,15 @@ export default function HomeworkPage() {
     e.preventDefault();
     setSubmitting(true);
     
-    const cls = classes.find(c => (c.classSectionId || c.id) === classSectionId);
-    const subjectName = cls ? (cls.subjectName && cls.subjectName !== 'General Subject' ? cls.subjectName : 'General') : 'Assignment';
+    // Find subject name for payload notification template
+    const cls = classes.find(c => c.classSectionId === classSectionId);
+    const subjectName = cls ? cls.subjectName : 'Assignment';
 
     const payload = {
       title,
       description,
       dueDate,
       classSectionId,
-      classId: cls?.classId || '',
-      sectionId: cls?.sectionId || '',
-      className: cls?.className || '',
-      sectionName: cls?.sectionName || '',
       subjectId,
       subjectName,
       maxMarks: parseFloat(maxMarks),
@@ -253,36 +250,18 @@ export default function HomeworkPage() {
 
   const generateHomeworkMessage = (hw: any) => {
     if (!hw) return '';
-    const dateStr = hw.dueDate ? (hw.dueDate.includes('T') ? hw.dueDate.split('T')[0] : hw.dueDate) : '';
-    
-    let className = hw.className || hw.classSection?.class?.name || hw.class || '';
-    let sectionName = hw.sectionName || hw.classSection?.section?.name || hw.section || '';
-    
-    if (className.includes(' - ')) {
-      const parts = className.split(' - ');
-      className = parts[0]?.trim() || '';
-      if (!sectionName) sectionName = parts[1]?.trim() || '';
-    }
-
-    if (!className) className = 'Class-1';
-    if (!sectionName) sectionName = 'Section-A';
-
-    const subjectName = hw.subjectName || (typeof hw.subject === 'string' ? hw.subject : hw.subject?.name) || 'Science';
-    const teacherName = hw.teacherName || hw.createdByName || hw.teacher || 'Sarah Jenkins';
-
+    const dateStr = hw.dueDate.split('T')[0];
     return `📚 Homework Assignment
 
 School: Cambridge International School
 
-Class: ${className}
+Class: ${hw.classSection?.class?.name || ''}
 
-Section: ${sectionName}
+Section: ${hw.classSection?.section?.name || ''}
 
-Subject: ${subjectName}
+Subject: ${hw.subject?.name || ''}
 
-Teacher: ${teacherName}
-
-Homework: ${hw.title} - ${hw.description || ''}
+Homework: ${hw.title} - ${hw.description}
 
 Due Date: ${dateStr}
 
@@ -385,20 +364,7 @@ Thank you.`;
                   Due: {formatDateDDMMYYYY(hw.dueDate)}
                 </span>
                 <span className="bg-slate-50 border border-slate-200/50 px-2 py-0.5 rounded text-slate-500 font-mono">
-                  {(() => {
-                    let cName = hw.classSection?.class?.name || (typeof hw.classSection === 'string' ? hw.classSection : hw.className) || 'Class-1';
-                    let sName = hw.classSection?.section?.name || hw.sectionName || '';
-
-                    if (cName.includes(' - ')) {
-                      const parts = cName.split(' - ');
-                      cName = parts[0]?.trim();
-                      if (!sName) sName = parts[1]?.trim();
-                    }
-
-                    const subName = hw.subject?.name || (typeof hw.subject === 'string' ? hw.subject : hw.subjectName) || 'General';
-                    const label = sName && !cName.toLowerCase().includes(sName.toLowerCase()) ? `${cName} - ${sName}` : cName;
-                    return `${label} • ${subName}`;
-                  })()}
+                  {hw.classSection.class.name} - {hw.classSection.section.name} • {hw.subject.name}
                 </span>
               </div>
             </div>
@@ -447,17 +413,7 @@ Thank you.`;
               required
             >
               <option value="" className="dark:bg-slate-800">Select Class Section...</option>
-              {classes.map(c => {
-                const clsName = typeof c.className === 'object' ? (c.className?.name || 'Class') : String(c.className || c.name || 'Class');
-                const secName = typeof c.sectionName === 'object' ? (c.sectionName?.name || '') : String(c.sectionName || c.section || '');
-                const subjName = c.subjectName && c.subjectName !== 'General Subject' ? c.subjectName : '';
-                const displayLabel = `${clsName}${secName ? ` - ${secName}` : ''}${subjName ? ` (${subjName})` : ''}`;
-                return (
-                  <option key={c.classSectionId || c.id} value={c.classSectionId || c.id} className="dark:bg-slate-800">
-                    {displayLabel}
-                  </option>
-                );
-              })}
+              {classes.map(c => <option key={c.classSectionId} value={c.classSectionId} className="dark:bg-slate-800">{c.className} ({c.subjectName})</option>)}
             </select>
           </div>
 
@@ -563,21 +519,15 @@ Thank you.`;
                       </p>
                       <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 w-full grid grid-cols-3 gap-2 mt-4">
                         <div>
-                          <div className="text-base font-bold text-slate-800">
-                            {sendResult.totalParents ?? sendResult.totalStudents ?? sendResult.totalCount ?? (studentsForShare.length > 0 ? studentsForShare.length : 4)}
-                          </div>
+                          <div className="text-base font-bold text-slate-800">{sendResult.totalStudents || 0}</div>
                           <div className="text-[9px] text-slate-400 font-bold uppercase">Total Parents</div>
                         </div>
                         <div>
-                          <div className="text-base font-bold text-emerald-600">
-                            {sendResult.successfullySent ?? sendResult.sentCount ?? sendResult.totalParents ?? sendResult.totalStudents ?? (studentsForShare.length > 0 ? studentsForShare.length : 4)}
-                          </div>
+                          <div className="text-base font-bold text-emerald-600">{sendResult.successfullySent || 0}</div>
                           <div className="text-[9px] text-slate-400 font-bold uppercase">Sent</div>
                         </div>
                         <div>
-                          <div className="text-base font-bold text-red-500">
-                            {sendResult.failed ?? sendResult.failedCount ?? 0}
-                          </div>
+                          <div className="text-base font-bold text-red-500">{sendResult.failed || 0}</div>
                           <div className="text-[9px] text-slate-400 font-bold uppercase">Failed</div>
                         </div>
                       </div>
@@ -741,16 +691,13 @@ Thank you.`;
 
                   {/* Recipient List */}
                   <div className="space-y-2 max-h-[300px] overflow-y-auto pr-1 border border-slate-100 rounded-2xl p-2 bg-slate-50/50">
-                    {studentsForShare.filter(s => {
-                      const nameStr = (s.name || s.user?.name || s.Name || '').toLowerCase();
-                      const fatherStr = (s.fatherName || '').toLowerCase();
-                      const motherStr = (s.motherName || '').toLowerCase();
-                      const q = shareSearchTerm.toLowerCase().trim();
-                      return !q || nameStr.includes(q) || fatherStr.includes(q) || motherStr.includes(q);
-                    }).map((student) => {
-                      const studentName = student.name || student.user?.name || student.Name || 'Student';
+                    {studentsForShare.filter(s =>
+                      s.user.name.toLowerCase().includes(shareSearchTerm.toLowerCase()) ||
+                      (s.fatherName && s.fatherName.toLowerCase().includes(shareSearchTerm.toLowerCase())) ||
+                      (s.motherName && s.motherName.toLowerCase().includes(shareSearchTerm.toLowerCase()))
+                    ).map((student) => {
                       const parentName = student.fatherName || student.motherName || 'Parent';
-                      const parentPhone = student.fatherPhone || student.motherPhone || student.guardianPhone || student.phone || 'N/A';
+                      const parentPhone = student.fatherPhone || student.motherPhone || student.guardianPhone || 'N/A';
                       const isChecked = !!selectedStudents[student.id];
 
                       return (

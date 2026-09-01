@@ -242,6 +242,7 @@ export default function AdmissionsPage() {
               aadharNo: tempStudent.aadharNo,
               selectedClass: tempStudent.selectedClass,
               selectedSection: tempStudent.selectedSection,
+              academicYearId: tempStudent.academicYear,
               academicYear: tempStudent.academicYear,
               village: tempStudent.village,
               city: tempStudent.city,

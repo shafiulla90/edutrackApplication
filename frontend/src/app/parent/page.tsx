@@ -33,45 +33,36 @@ export default function ParentDashboard() {
   });
   const [childDashboard, setChildDashboard] = useState<any>(null);
   const [loading, setLoading] = useState(false);
-  const latestChildIdRef = React.useRef<string>('');
 
-  const fetchStats = async (studentId?: string) => {
+  const fetchStats = async () => {
     try {
-      const sId = studentId || selectedChild?.id || '';
-      const url = sId ? `/parent-portal/dashboard?studentId=${sId}` : '/parent-portal/dashboard';
-      const res = await api.get(url);
-      setStats(res.data || {});
+      const tenantId = localStorage.getItem('parent_tenantId') || 'demo-school';
+      const res = await api.get('/parent-portal/dashboard');
+      setStats(res.data);
     } catch (err) {
       console.error('Failed to fetch parent dashboard stats:', err);
     }
   };
 
   const fetchChildDashboard = async (childId: string) => {
-    if (!childId) return;
-    latestChildIdRef.current = childId;
-    setLoading(true);
-    setChildDashboard(null); // Clear previous child data so stale child data is never displayed
     try {
+      setLoading(true);
       const res = await api.get(`/parent-portal/children/${childId}/dashboard`);
-      if (latestChildIdRef.current === childId) {
-        setChildDashboard(res.data);
-      }
+      setChildDashboard(res.data);
     } catch (err) {
       console.error('Failed to fetch child dashboard:', err);
     } finally {
-      if (latestChildIdRef.current === childId) {
-        setLoading(false);
-      }
+      setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchStats(selectedChild?.id);
+    fetchStats();
     
     // Fallback polling every 30 seconds
-    const interval = setInterval(() => fetchStats(selectedChild?.id), 30000);
+    const interval = setInterval(fetchStats, 30000);
     return () => clearInterval(interval);
-  }, [children, selectedChild]);
+  }, [children]);
 
   useEffect(() => {
     if (!selectedChild) return;
@@ -79,14 +70,14 @@ export default function ParentDashboard() {
 
     // Refresh when tab/window gains focus
     const handleFocus = () => {
-      fetchStats(selectedChild.id);
-      if (selectedChild) fetchChildDashboard(selectedChild.id);
+      fetchStats();
+      fetchChildDashboard(selectedChild.id);
     };
     window.addEventListener('focus', handleFocus);
 
     // Fallback polling every 30 seconds
     const interval = setInterval(() => {
-      if (selectedChild) fetchChildDashboard(selectedChild.id);
+      fetchChildDashboard(selectedChild.id);
     }, 30000);
 
     return () => {
@@ -99,7 +90,7 @@ export default function ParentDashboard() {
   useEffect(() => {
     const handleChildChange = (e: any) => {
       fetchChildDashboard(e.detail);
-      fetchStats(e.detail);
+      fetchStats();
     };
     window.addEventListener('parentChildChanged', handleChildChange);
     return () => window.removeEventListener('parentChildChanged', handleChildChange);
@@ -151,25 +142,12 @@ export default function ParentDashboard() {
         </div>
 
         <div className="bg-white border border-slate-200 p-5 rounded-3xl shadow-sm flex flex-col justify-between hover:border-rose-500/30 transition-all">
-          <div className="w-10 h-10 rounded-2xl bg-rose-50 flex items-center justify-center text-rose-600 mb-3">
+          <div className="w-10 h-10 rounded-2xl bg-rose-50 flex items-center justify-center text-rose-600 mb-4">
             <CreditCard className="w-5 h-5" />
           </div>
           <div>
             <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Pending Fees</p>
-            <h3 className="text-lg font-black text-slate-800 mt-1">₹{Number(stats.pendingFees || 0).toLocaleString('en-IN')}</h3>
-
-            {stats.feesBreakdown && stats.feesBreakdown.length > 0 && (
-              <div className="mt-3 pt-2 border-t border-slate-100 space-y-1">
-                {stats.feesBreakdown.map((fb: any) => (
-                  <div key={fb.studentId} className="flex justify-between items-center text-[10px]">
-                    <span className="text-slate-500 font-medium truncate max-w-[100px]">{fb.studentName}</span>
-                    <span className={`font-bold ${fb.amount > 0 ? 'text-rose-600' : 'text-slate-400'}`}>
-                      ₹{Number(fb.amount).toLocaleString('en-IN')}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            )}
+            <h3 className="text-lg font-black text-slate-800 mt-1">₹{Number(stats.pendingFees).toLocaleString('en-IN')}</h3>
           </div>
         </div>
 
@@ -221,7 +199,7 @@ export default function ParentDashboard() {
                       {child.name}
                     </h3>
                     <p className="text-xs text-slate-500 font-light mt-0.5">
-                      Class {child.class || (child as any).className || '1'} • Sec {child.section || (child as any).sectionName || 'A'}
+                      Class {child.class} • Sec {child.section}
                     </p>
                   </div>
                 </div>
@@ -229,11 +207,11 @@ export default function ParentDashboard() {
                 <div className="grid grid-cols-2 gap-3 mt-6 border-t border-slate-100 pt-4 text-xs text-slate-500">
                   <div>
                     <span className="text-[10px] text-slate-400 block">Roll Number</span>
-                    <strong className="text-slate-700">{child.rollNo || 'N/A'}</strong>
+                    <strong className="text-slate-700">{child.rollNo}</strong>
                   </div>
                   <div>
                     <span className="text-[10px] text-slate-400 block">Relationship</span>
-                    <strong className="text-slate-700">{child.relationship || 'Parent'}</strong>
+                    <strong className="text-slate-700">{child.relationship}</strong>
                   </div>
                 </div>
               </button>
@@ -253,24 +231,7 @@ export default function ParentDashboard() {
             {loading && <Loader2 className="w-5 h-5 animate-spin text-[#2E5BFF]" />}
           </div>
 
-          {loading || !childDashboard ? (
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-pulse">
-              <div className="bg-white border border-slate-200 p-6 rounded-3xl h-64 flex flex-col items-center justify-center space-y-4">
-                <div className="w-20 h-20 rounded-full bg-slate-100 animate-spin" />
-                <div className="h-4 w-32 bg-slate-100 rounded" />
-              </div>
-              <div className="bg-white border border-slate-200 p-6 rounded-3xl h-64 space-y-3">
-                <div className="h-5 w-28 bg-slate-100 rounded" />
-                <div className="h-14 bg-slate-50 rounded-2xl" />
-                <div className="h-14 bg-slate-50 rounded-2xl" />
-              </div>
-              <div className="bg-white border border-slate-200 p-6 rounded-3xl h-64 space-y-3">
-                <div className="h-5 w-32 bg-slate-100 rounded" />
-                <div className="h-14 bg-slate-50 rounded-2xl" />
-                <div className="h-14 bg-slate-50 rounded-2xl" />
-              </div>
-            </div>
-          ) : (
+          {childDashboard && !loading && (
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               
               {/* Performance Indicator Ring & Actions */}
@@ -279,7 +240,7 @@ export default function ParentDashboard() {
                   <div className="text-center">
                     <span className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Attendance Rate</span>
                     <div className="relative w-28 h-28 mx-auto mt-4 flex items-center justify-center">
-                      {(childDashboard?.metrics?.hasAttendanceData || childDashboard?.attendancePercentage !== undefined) && (childDashboard?.metrics?.attendancePercentage ?? childDashboard?.attendancePercentage) !== null ? (
+                      {childDashboard.metrics.hasAttendanceData && childDashboard.metrics.attendancePercentage !== null ? (
                         <>
                           <svg className="w-full h-full transform -rotate-90" viewBox="0 0 36 36">
                             <path
@@ -291,7 +252,7 @@ export default function ParentDashboard() {
                             />
                             <path
                               className="text-[#2E5BFF]"
-                              strokeDasharray={`${childDashboard?.metrics?.attendancePercentage ?? childDashboard?.attendancePercentage ?? 100}, 100`}
+                              strokeDasharray={`${childDashboard.metrics.attendancePercentage}, 100`}
                               strokeWidth="2.5"
                               strokeLinecap="round"
                               stroke="currentColor"
@@ -300,7 +261,7 @@ export default function ParentDashboard() {
                             />
                           </svg>
                           <div className="absolute text-center">
-                            <span className="text-2xl font-black text-slate-800">{childDashboard?.metrics?.attendancePercentage ?? childDashboard?.attendancePercentage ?? 100}%</span>
+                            <span className="text-2xl font-black text-slate-800">{childDashboard.metrics.attendancePercentage}%</span>
                           </div>
                         </>
                       ) : (
@@ -334,11 +295,11 @@ export default function ParentDashboard() {
                   <div className="grid grid-cols-2 gap-4 pt-2 text-center text-xs">
                     <div className="bg-slate-50 p-3 rounded-2xl border border-slate-100">
                       <span className="text-[9px] text-slate-400 font-semibold block uppercase">Due Fees</span>
-                      <strong className="text-slate-700 text-sm">₹{Number(childDashboard.metrics.pendingFees || 0).toLocaleString('en-IN')}</strong>
+                      <strong className="text-slate-700 text-sm">₹{Number(childDashboard.metrics.pendingFees).toLocaleString('en-IN')}</strong>
                     </div>
                     <div className="bg-slate-50 p-3 rounded-2xl border border-slate-100">
                       <span className="text-[9px] text-slate-400 font-semibold block uppercase">Pending Hwk</span>
-                      <strong className="text-slate-700 text-sm">{childDashboard.metrics.pendingHomework || 0} Tasks</strong>
+                      <strong className="text-slate-700 text-sm">{childDashboard.metrics.pendingHomework} Tasks</strong>
                     </div>
                   </div>
                 </div>
@@ -370,25 +331,34 @@ export default function ParentDashboard() {
                   </Link>
                 </div>
                 <div className="space-y-3 max-h-[260px] overflow-y-auto pr-1">
-                  {!childDashboard.homeworks || childDashboard.homeworks.length === 0 ? (
+                  {childDashboard.metrics.pendingHomework === 0 ? (
                     <div className="flex flex-col items-center justify-center py-10 text-slate-500">
                       <CheckCircle className="w-8 h-8 text-slate-300 mb-2" />
                       <p className="text-xs font-light">All caught up! No pending homework.</p>
                     </div>
                   ) : (
                     <div className="space-y-2.5">
-                      {childDashboard.homeworks.map((hw: any) => (
-                        <div key={hw.id || Math.random()} className="p-3 bg-slate-50 rounded-2xl border border-slate-100 space-y-1">
-                          <div className="flex justify-between text-[10px]">
-                            <span className="font-bold text-blue-600">{hw.subjectName || hw.subject || 'Subject'}</span>
-                            <span className="text-slate-400 flex items-center gap-1">
-                              <Clock className="w-3.5 h-3.5" /> Due {hw.dueDate || 'Soon'}
-                            </span>
-                          </div>
-                          <h4 className="text-xs font-bold text-slate-700">{hw.title || hw.name || 'Assignment'}</h4>
-                          <p className="text-[11px] text-slate-500 font-light truncate">{hw.description || hw.instructions || 'No details provided.'}</p>
+                      <div className="p-3 bg-slate-50 rounded-2xl border border-slate-100 space-y-1">
+                        <div className="flex justify-between text-[10px]">
+                          <span className="font-bold text-blue-600">Mathematics</span>
+                          <span className="text-slate-400 flex items-center gap-1">
+                            <Clock className="w-3.5 h-3.5" /> Due Tomorrow
+                          </span>
                         </div>
-                      ))}
+                        <h4 className="text-xs font-bold text-slate-700">Algebra Quadratic Equations Worksheet</h4>
+                        <p className="text-[11px] text-slate-500 font-light truncate">Solve problems 1 to 15 in notebook.</p>
+                      </div>
+
+                      <div className="p-3 bg-slate-50 rounded-2xl border border-slate-100 space-y-1">
+                        <div className="flex justify-between text-[10px]">
+                          <span className="font-bold text-indigo-600">Science</span>
+                          <span className="text-slate-400 flex items-center gap-1">
+                            <Clock className="w-3.5 h-3.5" /> Due in 3 days
+                          </span>
+                        </div>
+                        <h4 className="text-xs font-bold text-slate-700">Photosynthesis Experiment Model</h4>
+                        <p className="text-[11px] text-slate-500 font-light truncate">Bring model along with observation chart.</p>
+                      </div>
                     </div>
                   )}
                 </div>
@@ -403,37 +373,26 @@ export default function ParentDashboard() {
                   </Link>
                 </div>
                 <div className="space-y-2.5 max-h-[260px] overflow-y-auto pr-1">
-                  {!childDashboard?.recentMarks || childDashboard.recentMarks.length === 0 ? (
+                  {childDashboard.recentMarks.length === 0 ? (
                     <div className="flex flex-col items-center justify-center py-10 text-slate-500">
                       <AlertCircle className="w-8 h-8 text-slate-300 mb-2" />
-                      <p className="text-xs font-light">No published exam results.</p>
+                      <p className="text-xs font-light">No exam marks entered yet.</p>
                     </div>
                   ) : (
-                    childDashboard.recentMarks?.map((mark: any) => {
-                      const hasMarks = mark.marksObtained !== null && mark.marksObtained !== undefined && mark.status !== 'NOT_SUBMITTED';
-                      const marksVal = hasMarks ? Number(mark.marksObtained) : null;
-                      const isPassing = marksVal !== null ? marksVal >= 40 : false;
+                    childDashboard.recentMarks.map((mark: any) => {
+                      const marksVal = Number(mark.marksObtained);
+                      const isPassing = marksVal >= 50;
                       return (
-                        <div key={mark.id || Math.random()} className="flex justify-between items-center p-3 bg-slate-50 rounded-2xl border border-slate-100">
+                        <div key={mark.id} className="flex justify-between items-center p-3 bg-slate-50 rounded-2xl border border-slate-100">
                           <div>
-                            <span className="text-[9px] text-slate-400 font-semibold uppercase">{mark.exam?.name || mark.examName || 'Exam'}</span>
-                            <h4 className="text-xs font-bold text-slate-700 mt-0.5">{mark.subject?.name || mark.subjectName || 'Subject'}</h4>
+                            <span className="text-[9px] text-slate-400 font-semibold uppercase">{mark.exam.name}</span>
+                            <h4 className="text-xs font-bold text-slate-700 mt-0.5">{mark.subject.name}</h4>
                           </div>
                           <div className="text-right">
-                            {hasMarks ? (
-                              <>
-                                <span className={`text-xs font-black ${isPassing ? 'text-blue-600' : 'text-rose-500'}`}>
-                                  {marksVal} / {mark.maxMarks || 100} Marks
-                                </span>
-                                <span className="text-[9px] text-slate-400 block font-light">
-                                  {mark.grade || (isPassing ? 'PASS' : 'FAIL')}
-                                </span>
-                              </>
-                            ) : (
-                              <span className="text-[10px] font-bold text-amber-600 bg-amber-50 px-2 py-0.5 rounded border border-amber-200 inline-block">
-                                Marks Not Published
-                              </span>
-                            )}
+                            <span className={`text-xs font-black ${isPassing ? 'text-blue-600' : 'text-rose-500'}`}>
+                              {marksVal} Marks
+                            </span>
+                            <span className="text-[9px] text-slate-400 block font-light">Grade B+</span>
                           </div>
                         </div>
                       );

@@ -145,12 +145,9 @@ export default function StudentPromotionPage() {
           sectionName: sourceSection || undefined,
         }
       });
-      const raw = res.data;
-      const candidates = Array.isArray(raw) ? raw : (raw?.data || raw?.students || raw?.candidates || []);
-      setStudentsState(candidates);
+      setStudentsState(res.data);
     } catch (err) {
       console.error('Error fetching candidates:', err);
-      setStudentsState([]);
     } finally {
       setIsLoading(false);
     }
@@ -189,9 +186,8 @@ export default function StudentPromotionPage() {
   // Calculate Class Summaries
   const getClassSummaries = (): ClassSummary[] => {
     const counts: Record<string, number> = {};
-    const list = Array.isArray(studentsState) ? studentsState : [];
     
-    list.forEach(student => {
+    studentsState.forEach(student => {
       // For demo, we count students who match their current class
       const key = `${student.class}:${student.section}`;
       counts[key] = (counts[key] || 0) + 1;
@@ -235,12 +231,12 @@ export default function StudentPromotionPage() {
   })();
 
   // Filtered Students for Drilldown view
-  const currentStudentsList = (Array.isArray(studentsState) ? studentsState : []).filter(s => {
+  const currentStudentsList = studentsState.filter(s => {
     const matchesClass = s.class === sourceClass;
     const matchesSection = !sourceSection || s.section === sourceSection;
     const matchesSearch = !searchQuery || 
-      (s.name || '').toLowerCase().includes(searchQuery.toLowerCase()) || 
-      (s.rollNo || '').includes(searchQuery);
+      s.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+      s.rollNo.includes(searchQuery);
     return matchesClass && matchesSection && matchesSearch;
   });
 
@@ -352,15 +348,12 @@ export default function StudentPromotionPage() {
     try {
       const valRes = await api.post('/students/promote/validate', {
         studentIds: candidateIds,
-        sourceYearId: sourceYear,
-        targetYearId: targetYear,
-        targetClassName: targetClass,
-        targetSectionName: targetSection,
+        sourceYearId: sourceYear
       });
       setValidationData(valRes.data);
       setIsLoading(false);
 
-      if (valRes.data.totalSelected > 0 || valRes.data.priceBookConfigured === false) {
+      if (valRes.data.totalSelected > 0) {
         setShowValidationModal(true);
       } else {
         alert('No students selected for promotion');
@@ -877,43 +870,41 @@ export default function StudentPromotionPage() {
                 <div className="grid grid-cols-3 gap-3 bg-slate-50 p-3 border border-slate-200 rounded-xl text-center text-xs">
                   <div>
                     <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider block">Promoted</span>
-                    <strong className="text-sm font-extrabold text-blue-600">{reportData.promotedCount || 0}</strong>
+                    <strong className="text-sm font-extrabold text-blue-600">{reportData.promotedCount}</strong>
                   </div>
                   <div>
                     <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider block">Carried Forward</span>
-                    <strong className="text-sm font-extrabold text-amber-600">{reportData.studentsWithCarriedForwardDues || 0}</strong>
+                    <strong className="text-sm font-extrabold text-amber-600">{reportData.studentsWithCarriedForwardDues}</strong>
                   </div>
                   <div>
                     <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider block">CF Amount</span>
-                    <strong className="text-sm font-extrabold text-rose-600">₹{(Number(reportData.totalCarriedForwardAmount || 0)).toLocaleString()}</strong>
+                    <strong className="text-sm font-extrabold text-rose-600">₹{reportData.totalCarriedForwardAmount.toLocaleString()}</strong>
                   </div>
                 </div>
 
-                {Array.isArray(reportData.studentOutstandingBalances) && reportData.studentOutstandingBalances.length > 0 && (
-                  <div className="max-h-40 overflow-y-auto border border-slate-200 rounded-xl text-xs text-left">
-                    <table className="w-full border-collapse">
-                      <thead>
-                        <tr className="bg-slate-50 border-b border-slate-250 text-slate-400 font-bold">
-                          <th className="p-2">Student</th>
-                          <th className="p-2 text-right">Carried Forward</th>
-                          <th className="p-2 text-right">Total Outstanding</th>
+                <div className="max-h-40 overflow-y-auto border border-slate-200 rounded-xl text-xs text-left">
+                  <table className="w-full border-collapse">
+                    <thead>
+                      <tr className="bg-slate-50 border-b border-slate-250 text-slate-400 font-bold">
+                        <th className="p-2">Student</th>
+                        <th className="p-2 text-right">Carried Forward</th>
+                        <th className="p-2 text-right">Total Outstanding</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 text-slate-655 font-semibold">
+                      {reportData.studentOutstandingBalances.map((item: any, idx: number) => (
+                        <tr key={idx} className="hover:bg-slate-50">
+                          <td className="p-2">
+                            <div className="font-bold text-slate-800">{item.name}</div>
+                            <div className="text-[9px] text-slate-400">Roll: {item.rollNo}</div>
+                          </td>
+                          <td className="p-2 text-right font-bold text-amber-600">₹{item.carriedForwardAmount.toLocaleString()}</td>
+                          <td className="p-2 text-right font-bold text-slate-800">₹{item.totalOutstanding.toLocaleString()}</td>
                         </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100 text-slate-655 font-semibold">
-                        {reportData.studentOutstandingBalances.map((item: any, idx: number) => (
-                          <tr key={item?.studentId || idx} className="hover:bg-slate-50">
-                            <td className="p-2">
-                              <div className="font-bold text-slate-800">{item?.name || 'Student'}</div>
-                              <div className="text-[9px] text-slate-400">Roll: {item?.rollNo || '—'}</div>
-                            </td>
-                            <td className="p-2 text-right font-bold text-amber-600">₹{(Number(item?.carriedForwardAmount || 0)).toLocaleString()}</td>
-                            <td className="p-2 text-right font-bold text-slate-800">₹{(Number(item?.totalOutstanding || 0)).toLocaleString()}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             )}
 
@@ -946,17 +937,12 @@ export default function StudentPromotionPage() {
             {/* Header */}
             <div className="flex items-start justify-between border-b border-slate-200 pb-4 mb-4">
               <div className="flex items-center gap-2">
-                {validationData.priceBookConfigured === false ? (
-                  <AlertCircle className="w-5 h-5 text-rose-500 shrink-0" />
-                ) : validationData.studentsWithPendingDue > 0 || (validationData.totalPreviousYearDue || 0) > 0 ? (
+                {validationData.studentsWithPendingDue > 0 ? (
                   <AlertCircle className="w-5 h-5 text-amber-500 shrink-0" />
                 ) : (
                   <CheckCircle className="w-5 h-5 text-emerald-500 shrink-0" />
                 )}
-                <div>
-                  <h3 className="text-lg font-bold text-slate-800">Student Promotion Summary</h3>
-                  <p className="text-xs text-slate-400 font-medium">Fee calculation &amp; target academic year price book verification</p>
-                </div>
+                <h3 className="text-lg font-bold text-slate-800">Student Promotion Summary</h3>
               </div>
               <button 
                 onClick={() => setShowValidationModal(false)}
@@ -966,99 +952,87 @@ export default function StudentPromotionPage() {
               </button>
             </div>
 
-            {/* Price Book Missing Error Alert */}
-            {validationData.priceBookConfigured === false && (
-              <div className="p-4 bg-rose-50 border border-rose-200 rounded-xl mb-4 text-xs text-rose-800 flex gap-3 animate-in">
-                <AlertCircle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
-                <div>
-                  <strong className="font-extrabold block text-sm mb-1 text-rose-900">Price Book Not Configured</strong>
-                  <p className="leading-relaxed font-semibold">
-                    {validationData.message || `Price Book is not configured for destination class for the target academic year. Please configure the Price Book before promoting this student.`}
-                  </p>
-                </div>
-              </div>
-            )}
-
             {/* Metrics */}
             <div className="grid grid-cols-4 gap-4 bg-slate-50 p-4 border border-slate-200 rounded-xl mb-4 text-center">
               <div>
                 <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Selected</span>
-                <span className="text-base font-extrabold text-slate-700">{validationData.totalSelected || 0}</span>
+                <span className="text-base font-extrabold text-slate-700">{validationData.totalSelected}</span>
               </div>
               <div>
-                <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Prev Year Balance</span>
-                <span className="text-base font-extrabold text-amber-600">₹{(Number(validationData.totalPreviousYearDue || 0)).toLocaleString()}</span>
+                <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">No Due</span>
+                <span className="text-base font-extrabold text-emerald-600">{validationData.studentsWithNoDue}</span>
               </div>
               <div>
-                <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Next Year Fee</span>
-                <span className="text-base font-extrabold text-indigo-600">₹{(Number(validationData.totalNextYearFee || validationData.nextYearPriceBookTotal || 0)).toLocaleString()}</span>
+                <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Pending Due</span>
+                <span className="text-base font-extrabold text-amber-600">{validationData.studentsWithPendingDue}</span>
               </div>
               <div>
-                <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Total Payable</span>
-                <span className="text-base font-extrabold text-rose-600">₹{(Number(validationData.totalOutstandingDue ?? validationData.totalOutstandingBalance ?? 0)).toLocaleString()}</span>
+                <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Total Due</span>
+                <span className="text-base font-extrabold text-rose-650">₹{validationData.totalOutstandingDue.toLocaleString()}</span>
               </div>
             </div>
 
             {/* Table */}
-            <div className="flex-1 overflow-y-auto min-h-[160px] border border-slate-200 rounded-xl mb-4">
+            <div className="flex-1 overflow-y-auto min-h-[150px] border border-slate-200 rounded-xl mb-4">
               <table className="w-full text-left border-collapse text-xs">
                 <thead>
                   <tr className="bg-slate-50 border-b border-slate-250 text-slate-400 font-bold sticky top-0">
                     <th className="p-3">Student</th>
-                    <th className="p-3">Source &rarr; Destination</th>
-                    <th className="p-3 text-right">Prev Year C/F Balance</th>
-                    <th className="p-3 text-right">Next Year Fee</th>
-                    <th className="p-3 text-right">Total Amount Payable</th>
+                    <th className="p-3">Class</th>
+                    <th className="p-3">Previous Academic Year</th>
+                    <th className="p-3 text-right">Prev Year Due</th>
+                    <th className="p-3 text-right">Total Pending</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 text-slate-655 font-semibold">
-                  {(validationData.dueList || []).map((item: any) => {
-                    const prevDue = Number(item?.previousYearDue || 0);
-                    const nyFee = Number(item?.nextYearFee || validationData.nextYearPriceBookTotal || 0);
-                    const pendDue = Number(item?.pendingDue || (prevDue + nyFee));
-                    return (
-                      <tr key={item?.studentId || item?.id || Math.random()} className="hover:bg-slate-50">
-                        <td className="p-3">
-                          <div className="font-bold text-slate-800">{item?.name || 'Student'}</div>
-                          <div className="text-[10px] text-slate-400">Roll: {item?.rollNo || '—'}</div>
-                        </td>
-                        <td className="p-3">
-                          <div className="font-bold text-slate-700">{item?.sourceClass || item?.class || '—'} &rarr; {item?.targetClass || targetClass || 'Class-2'}</div>
-                          <div className="text-[10px] text-slate-400">{item?.sourceYear || sourceYearLabel} &rarr; {item?.targetYear || targetYearLabel}</div>
-                        </td>
-                        <td className="p-3 text-right">
-                          {prevDue > 0 ? (
-                            <span className="text-amber-600 font-mono font-bold">₹{prevDue.toLocaleString()}</span>
-                          ) : (
-                            <span className="text-emerald-600 font-bold">₹0 (Clear)</span>
-                          )}
-                        </td>
-                        <td className="p-3 text-right font-bold text-indigo-600 font-mono">
-                          ₹{nyFee.toLocaleString()}
-                        </td>
-                        <td className="p-3 text-right font-extrabold text-slate-900 font-mono text-sm">
-                          ₹{pendDue.toLocaleString()}
-                        </td>
-                      </tr>
-                    );
-                  })}
+                  {validationData.dueList.map((item: any) => (
+                    <tr key={item.studentId} className="hover:bg-slate-50">
+                      <td className="p-3">
+                        <div className="font-bold text-slate-800">{item.name}</div>
+                        <div className="text-[10px] text-slate-400">Roll: {item.rollNo}</div>
+                      </td>
+                      <td className="p-3">
+                        <span className="font-medium text-slate-700">{item.class}</span>
+                        {item.section && item.section !== '—' && (
+                          <span className="text-slate-400"> / {item.section}</span>
+                        )}
+                      </td>
+                      <td className="p-3 text-slate-500">{item.sourceYear || '—'}</td>
+                      <td className="p-3 text-right">
+                        {item.previousYearDue > 0 ? (
+                          <span className="text-amber-600 font-mono">₹{item.previousYearDue.toLocaleString()}</span>
+                        ) : (
+                          <span className="text-slate-300">—</span>
+                        )}
+                      </td>
+                      <td className="p-3 text-right font-bold">
+                        {item.pendingDue > 0 ? (
+                          <span className="text-rose-600 font-mono">₹{item.pendingDue.toLocaleString()}</span>
+                        ) : (
+                          <span className="px-2 py-0.5 rounded bg-emerald-50 text-emerald-600 border border-emerald-100 text-[10px] font-bold">
+                            Paid Clear
+                          </span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
                 </tbody>
               </table>
             </div>
 
             {/* Warning/Success Message */}
-            {validationData.priceBookConfigured === false ? null : (validationData.totalPreviousYearDue || 0) > 0 ? (
-              <div className="p-3.5 bg-amber-50 border border-amber-200 rounded-xl mb-5 flex gap-3 text-xs text-amber-900 animate-in">
-                <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+            {validationData.studentsWithPendingDue > 0 ? (
+              <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl mb-6 flex gap-3 text-xs text-amber-800 animate-in">
+                <AlertCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
                 <p className="leading-relaxed font-semibold">
-                  <strong className="font-extrabold">Fee Carry-Forward Notice:</strong> Previous year's balance of ₹{(Number(validationData.totalPreviousYearDue || 0)).toLocaleString()} will be brought forward as a traceable opening balance, and combined with the new academic year's Price Book fee (₹{(Number(validationData.totalNextYearFee || 0)).toLocaleString()}) for a total payable of ₹{(Number(validationData.totalOutstandingDue || 0)).toLocaleString()}.
+                  Warning: Some students still have pending fees from the previous academic year. If you continue, these outstanding balances will automatically be carried forward to the next academic year along with the new academic year's fee structure. Do you want to continue?
                 </p>
               </div>
             ) : (
-              <div className="p-3.5 bg-emerald-50 border border-emerald-250 rounded-xl mb-5 flex gap-3 text-xs text-emerald-800 animate-in">
-                <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+              <div className="p-4 bg-emerald-50 border border-emerald-250 rounded-xl mb-6 flex gap-3 text-xs text-emerald-800 animate-in">
+                <CheckCircle className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
                 <p className="leading-relaxed font-semibold">
-                  All selected students are clear of previous year dues. Proceeding will enroll them in {targetYearLabel} and allocate the {targetClass} Price Book fees (₹{(Number(validationData.totalNextYearFee || 0)).toLocaleString()}).
+                  All selected students are clear of any outstanding dues. Proceeding will enroll them in the target academic year and allocate their new class standard fee structures.
                 </p>
               </div>
             )}
@@ -1069,14 +1043,20 @@ export default function StudentPromotionPage() {
                 onClick={() => setShowValidationModal(false)}
                 className="px-5 py-2.5 rounded-xl border border-slate-200 text-slate-700 font-semibold hover:bg-slate-50 cursor-pointer text-xs"
               >
-                Cancel
+                Cancel Promotion
               </button>
-              {validationData.priceBookConfigured === false ? (
+              {validationData.studentsWithPendingDue > 0 ? (
                 <button
-                  disabled
-                  className="px-5 py-2.5 rounded-xl bg-slate-200 text-slate-400 font-bold cursor-not-allowed text-xs"
+                  onClick={() => {
+                    setShowValidationModal(false);
+                    const candidateIds = sourceClass === 'ALL' 
+                      ? studentsState.map(s => s.id)
+                      : Object.keys(selectedStudentIds).filter(id => selectedStudentIds[id]);
+                    executePromotion(candidateIds);
+                  }}
+                  className="px-5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-bold cursor-pointer text-xs transition-all hover:scale-[1.02]"
                 >
-                  Price Book Missing
+                  Promote Anyway
                 </button>
               ) : (
                 <button
@@ -1087,9 +1067,9 @@ export default function StudentPromotionPage() {
                       : Object.keys(selectedStudentIds).filter(id => selectedStudentIds[id]);
                     executePromotion(candidateIds);
                   }}
-                  className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold cursor-pointer text-xs transition-all hover:scale-[1.02] shadow-md shadow-indigo-600/20"
+                  className="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold cursor-pointer text-xs transition-all hover:scale-[1.02]"
                 >
-                  Confirm Promotion &amp; Fee Assignment
+                  Confirm Promotion
                 </button>
               )}
             </div>

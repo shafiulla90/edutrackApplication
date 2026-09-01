@@ -26,11 +26,10 @@ export default function ProfilePage() {
   async function loadProfile() {
     try {
       const res = await api.get('/teacher-portal/profile');
-      const pData = res.data || {};
-      setProfile(pData);
-      setName(pData.name || pData.displayName || pData.user?.name || '');
-      setPhone(pData.phone || pData.user?.phone || '');
-      setQualification(pData.qualification || '');
+      setProfile(res.data);
+      setName(res.data.user.name);
+      setPhone(res.data.user.phone || '');
+      setQualification(res.data.qualification || '');
     } catch (err) {
       console.error('Failed to load profile:', err);
     } finally {
@@ -65,7 +64,7 @@ export default function ProfilePage() {
     setErrorMsg('');
     setTimeout(() => {
       setOtpStep('OTP_SENT');
-      setOtpMessage(`Verification OTP sent to +91 ${phone || profile?.phone || profile?.user?.phone}`);
+      setOtpMessage(`Verification OTP sent to +91 ${phone || profile?.user?.phone}`);
     }, 1000);
   };
 
@@ -92,18 +91,6 @@ export default function ProfilePage() {
       </div>
     );
   }
-
-  const teacherName = profile?.name || profile?.displayName || profile?.user?.name || 'Teacher';
-  const teacherAvatar = profile?.profilePhotoUrl || profile?.user?.avatarUrl || null;
-  const teacherEmail = profile?.email || profile?.user?.email || 'Not Available';
-  const teacherPhone = profile?.phone || profile?.user?.phone || 'Not Available';
-  const teacherEmployeeId = profile?.employeeId || 'Not Available';
-
-  const subjectsList = Array.isArray(profile?.subjectsTaught) && profile.subjectsTaught.length > 0
-    ? profile.subjectsTaught
-    : (Array.isArray(profile?.subjects) && profile.subjects.length > 0 ? profile.subjects : []);
-
-  const assignedClassesList = Array.isArray(profile?.assignedClasses) ? profile.assignedClasses : [];
 
   return (
     <div className="space-y-6 max-w-md mx-auto sm:max-w-none">
@@ -133,41 +120,35 @@ export default function ProfilePage() {
         
         {/* Profile Card Summary */}
         <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm flex flex-col items-center text-center space-y-4">
-          {teacherAvatar ? (
-            <img src={teacherAvatar} alt={teacherName} className="w-24 h-24 rounded-full object-cover border-2 border-[#2E5BFF]" />
+          {profile?.user?.avatarUrl ? (
+            <img src={profile.user.avatarUrl} alt={profile.user.name} className="w-24 h-24 rounded-full object-cover border-2 border-[#2E5BFF]" />
           ) : (
             <div className="w-24 h-24 rounded-full bg-gradient-to-tr from-blue-500 to-indigo-500 text-white flex items-center justify-center font-black text-3xl select-none shadow-lg">
-              {teacherName.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase()}
+              {profile?.user?.name.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase()}
             </div>
           )}
           <div>
-            <h3 className="font-bold text-slate-800 text-lg">{teacherName}</h3>
+            <h3 className="font-bold text-slate-800 text-lg">{profile?.user?.name}</h3>
             <p className="text-xs font-semibold text-slate-400 mt-1 uppercase tracking-wide">{profile?.designation || 'Faculty Teacher'}</p>
           </div>
 
-          <div className="w-full border-t border-slate-100 pt-4 space-y-2.5 text-left">
+          <div className="w-full border-t border-slate-100 pt-4 space-y-2 text-left">
             <div className="flex items-center gap-2 text-xs font-medium text-slate-600">
-              <Shield className="w-4 h-4 text-slate-400 shrink-0" />
-              <span>Employee ID: <strong>{teacherEmployeeId}</strong></span>
+              <Shield className="w-4 h-4 text-slate-400" />
+              <span>Employee ID: <strong>{profile?.employeeId || 'N/A'}</strong></span>
             </div>
             <div className="flex items-center gap-2 text-xs font-medium text-slate-600">
-              <Mail className="w-4 h-4 text-slate-400 shrink-0" />
-              <span>{teacherEmail}</span>
+              <Mail className="w-4 h-4 text-slate-400" />
+              <span>{profile?.user?.email}</span>
             </div>
             <div className="flex items-center gap-2 text-xs font-medium text-slate-600">
-              <Phone className="w-4 h-4 text-slate-400 shrink-0" />
-              <span>+91 {teacherPhone}</span>
+              <Phone className="w-4 h-4 text-slate-400" />
+              <span>+91 {profile?.user?.phone || 'N/A'}</span>
             </div>
             <div className="flex items-center gap-2 text-xs font-medium text-slate-600">
-              <BookOpen className="w-4 h-4 text-slate-400 shrink-0" />
-              <span>Subjects: {subjectsList.length > 0 ? subjectsList.join(', ') : 'Not Available'}</span>
+              <BookOpen className="w-4 h-4 text-slate-400" />
+              <span>Subjects: {profile?.subjectsTaught?.join(', ') || 'N/A'}</span>
             </div>
-            {assignedClassesList.length > 0 && (
-              <div className="flex items-start gap-2 text-xs font-medium text-slate-600">
-                <Sparkles className="w-4 h-4 text-[#2E5BFF] shrink-0 mt-0.5" />
-                <span>Assigned Classes: {assignedClassesList.map((c: any) => typeof c === 'string' ? c : (c.displayName || `${c.className} ${c.sectionName}`)).join(', ')}</span>
-              </div>
-            )}
           </div>
         </div>
 

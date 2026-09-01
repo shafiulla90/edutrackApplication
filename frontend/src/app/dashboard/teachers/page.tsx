@@ -243,15 +243,15 @@ export default function TeacherClassManagement() {
           }
           
           generated.push({
-            periodNumber: periodIndex,
+            periodNumber: null,
             name: matchingBreak.name,
             startTime: formatMinutesToTime(bStart),
             endTime: formatMinutesToTime(bEnd),
             isBreak: true
           });
-          periodIndex++;
           currentMins = bEnd;
           breakInserted = true;
+
         }
       }
 
@@ -450,7 +450,6 @@ export default function TeacherClassManagement() {
   const [classNamesInput, setClassNamesInput] = useState([{ id: 1, name: '' }]);
   const [existingClasses, setExistingClasses] = useState<any[]>([]);
   const [newSectionName, setNewSectionName] = useState('');
-  const [sectionNamesInput, setSectionNamesInput] = useState([{ id: 1, name: '' }]);
 
   // ── DELETE CONFIRMATION STATE ──
   const [deleteConfirm, setDeleteConfirm] = useState<{
@@ -577,7 +576,7 @@ export default function TeacherClassManagement() {
       }));
       setTeachers(mappedTeachers);
 
-      const rawClasses: ClassSection[] = (classesRes.data || []).map((c: any) => ({
+      const mappedClasses: ClassSection[] = (classesRes.data || []).map((c: any) => ({
         id: c.classSectionId,
         classId: c.classId,
         name: c.name || 'Unknown Class',
@@ -586,15 +585,7 @@ export default function TeacherClassManagement() {
         staffedCount: c.staffedCount || 0,
         loadPercent: c.loadPercent || 0
       }));
-
-      // Deduplicate class sections by name
-      const uniqueClassMap = new Map<string, ClassSection>();
-      for (const cls of rawClasses) {
-        if (!uniqueClassMap.has(cls.name)) {
-          uniqueClassMap.set(cls.name, cls);
-        }
-      }
-      setClasses(Array.from(uniqueClassMap.values()));
+      setClasses(mappedClasses);
 
       const rawTimings = timingsRes.data || [];
       const sortedTimings = [...rawTimings].sort((a: any, b: any) => (a.periodNumber ?? a.num ?? 0) - (b.periodNumber ?? b.num ?? 0));
@@ -650,52 +641,9 @@ export default function TeacherClassManagement() {
     }
   }, []);
 
-  const handleAddTeacherSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newTeacher.firstName.trim()) {
-      showToast('Please enter teacher first name.', 'error');
-      return;
-    }
-    try {
-      setIsLoading(true);
-      const emailToUse = newTeacher.email.trim() || `teacher-${Date.now()}@school.local`;
-      await api.post('/teachers', {
-        name: `${newTeacher.firstName} ${newTeacher.lastName}`.trim(),
-        email: emailToUse,
-        phone: newTeacher.phone.trim(),
-        employeeId: 'TCH-' + Math.floor(100 + Math.random() * 900),
-        designation: newTeacher.qualification ? `Teacher (${newTeacher.qualification})` : 'Teacher',
-        basicSalary: Number(newTeacher.basicSalary || 30000),
-        allowances: Number(newTeacher.hra || 3600),
-        pfDeduction: Number(newTeacher.pf || 1500),
-        joiningDate: newTeacher.joiningDate || new Date().toISOString().slice(0, 10),
-        qualification: newTeacher.qualification,
-        subjectsTaught: newTeacher.skills.map(s => s.subjectId).filter(Boolean),
-        staffType: 'Teaching',
-        status: 'Active',
-      });
-
-      showToast('Teacher added successfully!', 'success');
-      setShowTeacherForm(false);
-      setNewTeacher({
-        firstName: '', lastName: '', email: '', phone: '', gender: '',
-        dob: '', qualification: '', joiningDate: '', address: '',
-        basicSalary: 30000, hra: 3600, da: 2400, pf: 1500,
-        accountNumber: '', ifsc: '',
-        skills: [{ subjectId: '', skillLevel: 'Expert', yearsOfExperience: 5 }]
-      });
-      dispatchSchoolSetupUpdated();
-      await loadWorkloadDashboard();
-    } catch (err: any) {
-      const msg = Array.isArray(err.response?.data?.message)
-        ? err.response.data.message.join(', ')
-        : (err.response?.data?.message || err.message || 'Failed to create teacher');
-      showToast(msg, 'error');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
+  useEffect(() => {
+    loadWorkloadDashboard();
+  }, [loadWorkloadDashboard]);
 
   // ── INLINE TEACHER DETAILS FETCHING ──
   const fetchTeacherDetail = useCallback(async (teacherId: string) => {
@@ -818,29 +766,25 @@ export default function TeacherClassManagement() {
     setClassDetailLoading(true);
     try {
       const [workloadRes, periodsRes] = await Promise.all([
-        api.get(`/timetable/workload/class-section/${classSectionId}`).catch(() => ({ data: {} })),
-        api.get(`/timetable/class/${classSectionId}/periods`).catch(() => ({ data: [] }))
+        api.get(`/timetable/workload/class-section/${classSectionId}`),
+        api.get(`/timetable/class/${classSectionId}/periods`)
       ]);
       
-      const workload = workloadRes.data || {};
+      const workload = workloadRes.data;
 
       // Group timetable periods daily
-      const rawPeriods = Array.isArray(periodsRes.data)
-        ? periodsRes.data
-        : (periodsRes.data && typeof periodsRes.data === 'object' ? Object.values(periodsRes.data) : []);
-
-      const todayPeriods = rawPeriods.filter((p: any) => p.day === TODAY_DAY_NAME || p.dayOfWeek === TODAY_DAY_NAME.toUpperCase());
-      const activePeriods = todayPeriods.length > 0 ? todayPeriods : rawPeriods.filter((p: any) => p.day === 'Monday' || p.dayOfWeek === 'MONDAY');
+      const todayPeriods = (periodsRes.data || []).filter((p: any) => p.day === TODAY_DAY_NAME);
+      const activePeriods = todayPeriods.length > 0 ? todayPeriods : (periodsRes.data || []).filter((p: any) => p.day === 'Monday');
       
       const dayMap: Record<string, any[]> = {};
       activePeriods.forEach((p: any) => {
-        const day = p.day || p.dayOfWeek || 'Monday';
+        const day = p.day || 'Monday';
         if (!dayMap[day]) dayMap[day] = [];
         
-        const isSub = p.isSubstitute === true || p.isOnLeave === true;
+        const isSub = p.isSubstitute === true;
         dayMap[day].push({
-          key: p.periodId || p.id || Math.random().toString(),
-          periodNumber: p.periodNumber || p.num || 1,
+          key: p.periodId,
+          periodNumber: p.periodNumber,
           subjectName: p.subjectName || '—',
           teacherName: isSub ? (p.substituteTeacherName || 'Sub TBD') : (p.teacherName || 'Unassigned'),
           classSectionId: p.classSectionId || '',
@@ -850,7 +794,7 @@ export default function TeacherClassManagement() {
           frequency: p.frequency || 'Weekly',
           isSubstitute: isSub,
           substituteTeacher: isSub ? p.substituteTeacherName : null,
-          originalTeacher: isSub ? p.originalTeacherName || p.onLeaveTeacherName : null
+          originalTeacher: isSub ? p.originalTeacherName : null
         });
       });
 
@@ -1116,24 +1060,14 @@ export default function TeacherClassManagement() {
         }
       }
 
-      // Fill backend scheduled periods (flat array mapping or key-value object map)
-      const rawRes = timetableRes.data;
-      const backendData: any[] = Array.isArray(rawRes)
-        ? rawRes
-        : (rawRes && typeof rawRes === 'object' ? Object.values(rawRes) : []);
-
+      // Fill backend scheduled periods (flat array mapping)
+      const backendData = Array.isArray(timetableRes.data) ? timetableRes.data : [];
       const cachedSubjectTeachers: Record<string, any[]> = {};
 
       for (const p of backendData) {
-        if (!p || typeof p !== 'object') continue;
-        const backDay = p.day || p.dayOfWeek || '';
-        const periodNum = Number(p.periodNumber || p.num || 0);
-
-        let frontDay = '';
-        if (backDay) {
-          const cleanDay = backDay.charAt(0).toUpperCase() + backDay.slice(1).toLowerCase();
-          frontDay = dayShortMap[cleanDay] || dayShortMap[backDay.toUpperCase()] || backDay.substring(0, 3).toUpperCase();
-        }
+        const backDay = p.day;
+        const periodNum = p.periodNumber;
+        const frontDay = dayShortMap[backDay] || backDay.substring(0, 3).toUpperCase();
 
         if (frontDay && periodNum) {
           const subId = p.subjectId || '';
@@ -1309,6 +1243,7 @@ export default function TeacherClassManagement() {
       await api.post('/timetable/teachers', payload);
       showToast('Teacher created successfully.', 'success');
       setShowTeacherForm(false);
+      dispatchSchoolSetupUpdated();
       setNewTeacher({
         firstName: '', lastName: '', email: '', phone: '', gender: '',
         dob: '', qualification: '', joiningDate: '', address: '',
@@ -1374,21 +1309,13 @@ export default function TeacherClassManagement() {
 
   const fetchExistingClasses = useCallback(async () => {
     try {
-      let res = await api.get('/academics/classes', {
+      // Use the academics endpoint to get the list of classes for the selected academic year
+      const res = await api.get('/academics/classes', {
         params: selectedAcademicYear ? { academicYearId: selectedAcademicYear } : undefined
       });
-      let list = res.data || [];
-      if (!Array.isArray(list) || list.length === 0) {
-        res = await api.get('/academics/classes');
-        list = res.data || [];
-      }
-      setExistingClasses(Array.isArray(list) ? list : []);
+      setExistingClasses(res.data || []);
     } catch (err) {
       console.error('Failed to fetch existing classes:', err);
-      try {
-        const fallback = await api.get('/academics/classes');
-        setExistingClasses(fallback.data || []);
-      } catch (e) {}
     }
   }, [selectedAcademicYear]);
 
@@ -1414,6 +1341,7 @@ export default function TeacherClassManagement() {
       setIsLoading(true);
       await api.delete(`/academics/classes/${classId}`);
       showToast('Class deleted successfully.', 'success');
+      dispatchSchoolSetupUpdated();
       await fetchExistingClasses();
       await loadWorkloadDashboard();
     } catch (err: any) {
@@ -1439,6 +1367,7 @@ export default function TeacherClassManagement() {
       showToast('Classes created successfully.', 'success');
       setShowCreateClass(false);
       setClassNamesInput([{ id: 1, name: '' }]);
+      dispatchSchoolSetupUpdated();
       await loadWorkloadDashboard();
       // Refresh class list after creating new classes
       await fetchExistingClasses();
@@ -1451,32 +1380,16 @@ export default function TeacherClassManagement() {
   }
 
   const handleSaveSection = async () => {
-    const valid = sectionNamesInput.filter(s => s.name.trim());
-    if (valid.length === 0 && !newSectionName.trim()) {
-      showToast('Please enter at least one section name.', 'error');
-      return;
-    }
-    const namesToSave = valid.map(s => s.name.trim());
-    if (newSectionName.trim() && !namesToSave.includes(newSectionName.trim())) {
-      namesToSave.push(newSectionName.trim());
-    }
-
+    if (!newSectionName.trim()) return;
     try {
       setIsLoading(true);
-      for (const name of namesToSave) {
-        await api.post('/timetable/sections', { name });
-      }
-      showToast(`${namesToSave.length > 1 ? 'Sections' : 'Section'} created successfully.`, 'success');
+      await api.post('/timetable/sections', { name: newSectionName.trim() });
+      showToast(`Section "${newSectionName}" created successfully.`, 'success');
       setShowCreateSection(false);
-      setSectionNamesInput([{ id: 1, name: '' }]);
       setNewSectionName('');
       await loadWorkloadDashboard();
-      try {
-        const secRes = await api.get('/timetable/sections');
-        setAvailableSections(secRes.data || []);
-      } catch (e) {}
     } catch (err: any) {
-      console.error('Error creating sections:', err);
+      console.error('Error creating section:', err);
       showToast(err.response?.data?.message || 'Failed to save section.', 'error');
     } finally {
       setIsLoading(false);
@@ -1813,7 +1726,7 @@ export default function TeacherClassManagement() {
                 <button onClick={() => setShowCreateClass(true)} className="action-pill action-pill-primary">
                   <Grid3X3 className="w-3.5 h-3.5 stroke-[2.5]" /> Create Class
                 </button>
-                <button onClick={() => { setSectionNamesInput([{ id: 1, name: '' }]); setNewSectionName(''); setShowCreateSection(true); }} className="action-pill action-pill-primary">
+                <button onClick={() => setShowCreateSection(true)} className="action-pill action-pill-primary">
                   <Layers className="w-3.5 h-3.5 stroke-[2.5]" /> Create Section
                 </button>
                 <button onClick={() => setIsManageTypesOpen(true)} className="action-pill action-pill-primary">
@@ -3589,36 +3502,26 @@ export default function TeacherClassManagement() {
               <button onClick={() => setShowCreateClass(false)} className="p-1 rounded-lg text-slate-400 hover:bg-slate-100"><X className="w-4 h-4" /></button>
             </div>
 
-            <div className="mb-4">
-              <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2 flex items-center justify-between">
-                <span>Existing Classes</span>
-                <span className="bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded-full text-[9px] font-extrabold">{existingClasses.length}</span>
-              </h4>
-              {existingClasses.length > 0 ? (
-                <div className="max-h-36 overflow-y-auto space-y-1.5 pr-1 scrollbar-thin">
+            {existingClasses.length > 0 && (
+              <div className="mb-4">
+                <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Existing Classes</h4>
+                <div className="max-h-32 overflow-y-auto space-y-1 pr-1 scrollbar-thin">
                   {existingClasses.map((cls) => (
-                    <div key={cls.id} className="flex items-center justify-between bg-slate-50 hover:bg-slate-100/80 border border-slate-200/80 rounded-xl px-3 py-2 text-xs text-slate-800 font-bold transition-all">
-                      <span className="flex items-center gap-1.5">
-                        <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
-                        {cls.name}
-                      </span>
+                    <div key={cls.id} className="flex items-center justify-between bg-slate-50 border border-slate-100 rounded-xl px-3 py-1.5 text-xs text-slate-700">
+                      <span>{cls.name}</span>
                       <button
                         type="button"
                         onClick={() => handleDeleteClass(cls.id)}
-                        className="p-1 text-rose-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                        className="p-1 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
                         title="Delete Class"
                       >
-                        <Trash2 className="w-4 h-4" />
+                        <Trash2 className="w-3.5 h-3.5" />
                       </button>
                     </div>
                   ))}
                 </div>
-              ) : (
-                <div className="bg-slate-50 border border-slate-100 rounded-xl p-2.5 text-center text-[11px] text-slate-400 italic">
-                  No existing classes created yet.
-                </div>
-              )}
-            </div>
+              </div>
+            )}
 
             <div className="space-y-2 mb-4">
               <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Add New Classes</h4>
@@ -3688,41 +3591,17 @@ export default function TeacherClassManagement() {
               </div>
             )}
 
-            <div className="space-y-2 mb-4">
+            <div className="mb-4">
               <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Add New Section</h4>
-              {sectionNamesInput.map((entry, idx) => (
-                <div key={entry.id} className="flex gap-2 items-center">
-                  <input
-                    value={entry.name}
-                    onChange={e => {
-                      const arr = [...sectionNamesInput];
-                      arr[idx] = { ...arr[idx], name: e.target.value };
-                      setSectionNamesInput(arr);
-                    }}
-                    className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-xs outline-none focus:border-blue-500"
-                    placeholder={`e.g. Section ${String.fromCharCode(65 + idx)}`}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setSectionNamesInput([...sectionNamesInput, { id: Date.now() + idx, name: '' }])}
-                    className="w-9 h-9 rounded-xl bg-blue-100 text-blue-600 flex items-center justify-center font-bold hover:bg-blue-200 shrink-0 cursor-pointer"
-                    title="Add another section field"
-                  >+</button>
-                  {sectionNamesInput.length > 1 && (
-                    <button
-                      type="button"
-                      onClick={() => setSectionNamesInput(sectionNamesInput.filter((_, i) => i !== idx))}
-                      className="w-9 h-9 rounded-xl bg-red-50 text-red-500 flex items-center justify-center hover:bg-red-100 shrink-0 cursor-pointer"
-                      title="Remove section field"
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
-                  )}
-                </div>
-              ))}
+              <input
+                value={newSectionName}
+                onChange={e => setNewSectionName(e.target.value)}
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-xs outline-none focus:border-blue-500"
+                placeholder="e.g. Section D"
+              />
             </div>
             <button onClick={handleSaveSection} className="w-full py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs">
-              ✓ Save Sections
+              Save Section
             </button>
           </div>
         </>
@@ -3847,117 +3726,6 @@ export default function TeacherClassManagement() {
         }}
         allSubjects={allSubjects}
       />
-
-      {/* ── ADD TEACHER MODAL ── */}
-      {showTeacherForm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs animate-in">
-          <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-6 shadow-xl max-w-lg w-full space-y-4 max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-700">
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center font-bold text-sm">
-                  📚
-                </div>
-                <h3 className="text-base font-bold text-slate-900 dark:text-white">Add New Teacher</h3>
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowTeacherForm(false)}
-                className="p-1 rounded-lg text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 cursor-pointer"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <form onSubmit={handleAddTeacherSubmit} className="space-y-4">
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">First Name *</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="e.g. Ramesh"
-                    value={newTeacher.firstName}
-                    onChange={(e) => setNewTeacher(prev => ({ ...prev, firstName: e.target.value }))}
-                    className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 dark:text-slate-100 outline-none focus:border-blue-600"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">Last Name</label>
-                  <input
-                    type="text"
-                    placeholder="e.g. Kumar"
-                    value={newTeacher.lastName}
-                    onChange={(e) => setNewTeacher(prev => ({ ...prev, lastName: e.target.value }))}
-                    className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 dark:text-slate-100 outline-none focus:border-blue-600"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">Email</label>
-                  <input
-                    type="email"
-                    placeholder="e.g. ramesh@school.com"
-                    value={newTeacher.email}
-                    onChange={(e) => setNewTeacher(prev => ({ ...prev, email: e.target.value }))}
-                    className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 dark:text-slate-100 outline-none focus:border-blue-600"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">Mobile Phone</label>
-                  <input
-                    type="tel"
-                    placeholder="e.g. 9876543210"
-                    value={newTeacher.phone}
-                    onChange={(e) => setNewTeacher(prev => ({ ...prev, phone: e.target.value }))}
-                    className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 dark:text-slate-100 outline-none focus:border-blue-600"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">Qualification</label>
-                  <input
-                    type="text"
-                    placeholder="e.g. M.Sc Mathematics"
-                    value={newTeacher.qualification}
-                    onChange={(e) => setNewTeacher(prev => ({ ...prev, qualification: e.target.value }))}
-                    className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 dark:text-slate-100 outline-none focus:border-blue-600"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">Monthly Salary (₹)</label>
-                  <input
-                    type="number"
-                    value={newTeacher.basicSalary}
-                    onChange={(e) => setNewTeacher(prev => ({ ...prev, basicSalary: Number(e.target.value) }))}
-                    className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 dark:text-slate-100 outline-none focus:border-blue-600"
-                  />
-                </div>
-              </div>
-
-              <div className="flex justify-end gap-2 pt-3 border-t border-slate-100 dark:border-slate-700">
-                <button
-                  type="button"
-                  onClick={() => setShowTeacherForm(false)}
-                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-200 rounded-xl text-xs font-bold cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={isLoading}
-                  className="px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white rounded-xl text-xs font-bold cursor-pointer flex items-center gap-1.5 shadow-xs"
-                >
-                  <Plus className="w-3.5 h-3.5" /> Save Teacher
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

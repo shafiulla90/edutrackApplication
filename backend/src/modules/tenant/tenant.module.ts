@@ -3,10 +3,12 @@ import { JwtModule } from '@nestjs/jwt';
 import { TenantService } from './tenant.service';
 import { TenantController } from './tenant.controller';
 import { DatabaseProviderModule } from '../../database/database-provider.module';
+import { DashboardModule } from '../dashboard/dashboard.module';
 
 @Module({
   imports: [
     DatabaseProviderModule,
+    DashboardModule,
     JwtModule.register({
       secret: process.env.JWT_SECRET || 'supersecretkey',
       signOptions: { expiresIn: '7d' },

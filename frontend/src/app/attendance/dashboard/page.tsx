@@ -212,22 +212,14 @@ function AttendanceDashboardContent() {
   const classOptions = useMemo(() => {
     return [
       { label: 'All Classes', value: 'all' },
-      ...classes.map(c => {
-        const clean = c.replace(/^Class\s*[-_]?\s*/i, '').trim();
-        const label = c.startsWith('Class') ? c : `Class-${clean}`;
-        return { label, value: label };
-      })
+      ...classes.map(c => ({ label: `Class ${c.replace(/^Class-?/i, '')}`, value: c.replace(/^Class-?/i, '').trim() }))
     ];
   }, [classes]);
 
   const sectionOptions = useMemo(() => {
     return [
       { label: 'All Sections', value: 'all' },
-      ...sections.map(s => {
-        const clean = s.replace(/^Section\s*[-_]?\s*/i, '').trim();
-        const label = s.startsWith('Section') ? s : `Section-${clean}`;
-        return { label, value: label };
-      })
+      ...sections.map(s => ({ label: `Section ${s.replace(/^Section\s+/i, '')}`, value: s.replace(/^Section\s+/i, '').trim() }))
     ];
   }, [sections]);
 
@@ -238,18 +230,8 @@ function AttendanceDashboardContent() {
         s.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
         s.rollNo.includes(searchTerm);
       
-      const cleanStudentClass = s.className.replace(/^Class\s*[-_]?\s*/i, '').trim();
-      const cleanSelectedClass = selectedClass.replace(/^Class\s*[-_]?\s*/i, '').trim();
-      const matchesClass = selectedClass === 'all' || 
-        s.className === selectedClass || 
-        s.classValue === selectedClass ||
-        cleanStudentClass === cleanSelectedClass;
-      
-      const cleanStudentSection = s.section.replace(/^Section\s*[-_]?\s*/i, '').trim();
-      const cleanSelectedSection = selectedSection.replace(/^Section\s*[-_]?\s*/i, '').trim();
-      const matchesSection = selectedSection === 'all' || 
-        s.section === selectedSection || 
-        cleanStudentSection === cleanSelectedSection;
+      const matchesClass = selectedClass === 'all' || s.className === selectedClass;
+      const matchesSection = selectedSection === 'all' || s.section === selectedSection;
 
       return matchesSearch && matchesClass && matchesSection;
     });
@@ -306,13 +288,8 @@ function AttendanceDashboardContent() {
   }, [currentDate]);
 
   // Header button labels
-  const classLabelText = selectedClass === 'all' 
-    ? 'All Classes' 
-    : (selectedClass.startsWith('Class') ? selectedClass : `Class-${selectedClass.replace(/^Class\s*[-_]?\s*/i, '').trim()}`);
-
-  const sectionLabelText = selectedSection === 'all' 
-    ? 'All Sections' 
-    : (selectedSection.startsWith('Section') ? selectedSection : `Section-${selectedSection.replace(/^Section\s*[-_]?\s*/i, '').trim()}`);
+  const classLabelText = selectedClass === 'all' ? 'All Classes' : `Class ${selectedClass}`;
+  const sectionLabelText = selectedSection === 'all' ? 'All Sections' : `Section ${selectedSection}`;
 
   // ─── DAILY REPORT VIEW STATISTICS ──────────────────────────────────────────────────
   const classSectionSummary = useMemo(() => {
@@ -324,17 +301,9 @@ function AttendanceDashboardContent() {
     // Group students by Class-Section
     const groups: Record<string, { classValue: string; className: string; section: string; studentsList: Student[] }> = {};
     
-    const cleanClass = (str: string) => String(str || '').replace(/^Class\s*[-_]?\s*/i, '').trim().toLowerCase();
-    const cleanSec = (str: string) => String(str || '').replace(/^Section\s*[-_]?\s*/i, '').trim().toLowerCase();
-
     students.forEach(s => {
-      const sC = cleanClass(s.className || s.classValue);
-      const selC = cleanClass(selectedClass);
-      const matchesClass = selectedClass === 'all' || sC === selC || s.className === selectedClass || s.classValue === selectedClass;
-
-      const sS = cleanSec(s.section);
-      const selS = cleanSec(selectedSection);
-      const matchesSection = selectedSection === 'all' || sS === selS || s.section === selectedSection;
+      const matchesClass = selectedClass === 'all' || s.className === selectedClass;
+      const matchesSection = selectedSection === 'all' || s.section === selectedSection;
 
       if (matchesClass && matchesSection) {
         const key = `${s.classValue}-${s.section}`;
@@ -375,7 +344,7 @@ function AttendanceDashboardContent() {
       const isSubmitted = submittedSessions && submittedSessions.has(sessionKey);
 
       const dailyAbsents = maps.attendanceMap.get(dateStr);
-      const absentees = group.studentsList.filter(s => dailyAbsents && String(dailyAbsents.get(s.id) || '').toLowerCase() === 'absent');
+      const absentees = group.studentsList.filter(s => dailyAbsents && dailyAbsents.get(s.id) === 'Absent');
 
       const presentCount = group.studentsList.length - absentees.length;
       const rate = isSubmitted && group.studentsList.length > 0
@@ -1013,7 +982,7 @@ function AttendanceDashboardContent() {
                 <div key={summary.key} className="att-card-light relative attendance-card bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 text-slate-700 dark:text-slate-200 p-5 rounded-xl transition-all hover:translate-y-[-2px] hover:z-50 shadow-sm">
                   <div className="flex justify-between items-start border-b border-gray-100 dark:border-slate-800 pb-3">
                     <div>
-                      <h3 className="att-card-title font-bold text-sm text-slate-900 dark:text-white">{summary.className || summary.classValue} - Section {summary.section}</h3>
+                      <h3 className="att-card-title font-bold text-sm text-slate-900 dark:text-white">{summary.classValue} - Section {summary.section}</h3>
                       <p className="text-[10px] text-indigo-600 dark:text-indigo-400 font-bold mt-0.5">{summary.attendanceRate}% Attendance</p>
                     </div>
                   </div>

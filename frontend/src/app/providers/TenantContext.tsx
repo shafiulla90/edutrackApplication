@@ -15,21 +15,9 @@ interface TenantContextType {
   currentUser: any;
   subscription: {
     plan: string;
-    planCode?: string;
-    planName?: string;
-    billingCycle?: string;
-    amount?: number;
     status: string;
-    storedStatus?: string;
-    startDate?: string;
     expiryDate: string;
-    daysRemaining?: number;
-    warningPeriodDays?: number;
-    isExpiringSoon?: boolean;
-    isGracePeriod?: boolean;
-    isExpired?: boolean;
-    isSubscriptionActive?: boolean;
-    features?: string[];
+    features: string[];
   } | null;
   isSubscriptionActive: boolean;
   showLockPopup: boolean;
@@ -57,37 +45,20 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [showLockPopup, setShowLockPopup] = useState(false);
 
-  // Client-side subscription active check — expiryDate is the source of truth.
-  // This prevents stale backend status (e.g. still showing 'ACTIVE') from incorrectly
-  // granting access when the actual expiry date has passed.
-  const isSubscriptionActive = !token || loading || !subscription || (() => {
-    const expiryDate = subscription?.expiryDate ? new Date(subscription.expiryDate) : null;
-    const isExpiredByDate = expiryDate ? expiryDate.getTime() <= Date.now() : false;
-    if (isExpiredByDate) return false;
-    if (subscription.status === 'EXPIRED') return false;
-    if (subscription.isExpired === true) return false;
-    if (subscription.isSubscriptionActive === false) return false;
-    return true;
-  })();
+  const isSubscriptionActive = !token || loading || !subscription || (
+    subscription.status === 'ACTIVE' ||
+    subscription.status === 'PAST_DUE' ||
+    new Date(subscription.expiryDate).getTime() + (3 * 24 * 60 * 60 * 1000) >= Date.now()
+  );
 
-  // Register Axios response interceptor to handle SUBSCRIPTION_EXPIRED write-block errors
+  // Register Axios response interceptor to handle 402 status codes globally
   useEffect(() => {
     const interceptor = api.interceptors.response.use(
       (response) => response,
       (error) => {
-        if (
-          error.response &&
-          (error.response.status === 402 ||
-           (error.response.status === 403 && (
-             error.response.data?.code === 'SUBSCRIPTION_EXPIRED' ||
-             error.response.data?.code === 'SUBSCRIPTION_EXPIRED_READ_ONLY'
-           )))
-        ) {
-          const currentPath = typeof window !== 'undefined' ? window.location.pathname : '';
-          if (!currentPath.includes('/settings/subscription') && !currentPath.includes('/register-school') && !currentPath.includes('/auth')) {
-            console.warn('Axios Interceptor: Subscription expired write-block detected.');
-            setShowLockPopup(true);
-          }
+        if (error.response && error.response.status === 402) {
+          console.warn('Axios Interceptor: 402 Payment Required detected. Triggering subscription renewal popup.');
+          setShowLockPopup(true);
         }
         return Promise.reject(error);
       }
@@ -196,14 +167,56 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
     }
   }, [pathname, token]);
 
-  // Automatically fetch profile when token changes or on startup
+  // Automatically fetch profile when the token state changes (login, logout, or startup)
   useEffect(() => {
     fetchTenantData();
   }, [token]);
 
-  // Event-driven revalidation replaces 5-second interval polling
-  useSchoolSetupUpdate(fetchTenantData);
+  // Background polling to sync data dynamically across multiple users
+  useEffect(() => {
+    if (!token) return;
 
+    let previousStats: any = null;
+
+    const interval = setInterval(async () => {
+      try {
+        const response = await api.get('/tenant/setup-status');
+        const data = response.data;
+        
+        // If stats changed, trigger a local custom event dispatch
+        // to update all listening pages automatically.
+        if (previousStats) {
+          const statsChanged = 
+            data.classesCount !== previousStats.classesCount ||
+            data.teachersCount !== previousStats.teachersCount ||
+            data.studentsCount !== previousStats.studentsCount ||
+            data.completionPercentage !== previousStats.completionPercentage ||
+            data.subscription?.status !== previousStats.subscription?.status ||
+            data.subscription?.plan !== previousStats.subscription?.plan;
+            
+          if (statsChanged) {
+            console.log('[TenantContext] Stats or subscription changed in DB, dispatching updates!');
+            setSetupStats(data);
+            setSubscription(data.subscription || null);
+            const { dispatchSchoolSetupUpdated } = await import('@/lib/events');
+            dispatchSchoolSetupUpdated();
+          }
+        } else {
+          // Initialize first comparison baseline
+          setSetupStats(data);
+          setSubscription(data.subscription || null);
+        }
+        previousStats = data;
+      } catch (err) {
+        console.error('Failed background sync of tenant data:', err);
+      }
+    }, 5000); // Check every 5 seconds
+
+    return () => clearInterval(interval);
+  }, [token]);
+
+  // Use the centralized school-setup-updated listener
+  useSchoolSetupUpdate(fetchTenantData);
 
   return (
     <TenantContext.Provider value={{

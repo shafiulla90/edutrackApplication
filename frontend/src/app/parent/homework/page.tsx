@@ -347,9 +347,7 @@ export default function HomeworkPage() {
                     <span className="text-[10px] text-[#2E5BFF] font-black uppercase tracking-wider bg-blue-50 border border-blue-100 px-2.5 py-1 rounded-lg">
                       {hw.subject}
                     </span>
-                    <span className="text-[10px] text-slate-500 font-medium block mt-2">
-                      Assigned by: <strong className="font-semibold text-slate-700">{hw.teacher || hw.teacherName || hw.createdByName || 'Sarah Jenkins'}</strong>
-                    </span>
+                    <span className="text-[10px] text-slate-500 font-medium block mt-2">Assigned by: {hw.teacher}</span>
                   </div>
                   
                   {hw.submitted ? (

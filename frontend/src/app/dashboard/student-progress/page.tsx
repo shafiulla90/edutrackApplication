@@ -372,13 +372,7 @@ export default function StudentProgressPage() {
               className="block w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 focus:outline-none focus:ring-1 focus:ring-[#2E5BFF] text-sm"
             >
               <option value="">Select...</option>
-              {classes.map((c, idx) => {
-                const id = c.classSectionId || c.id || `cs-${idx}`;
-                const name = typeof c.className === 'object' ? (c.className?.name || 'Class') : String(c.className || c.name || 'Class Section');
-                const secName = typeof c.sectionName === 'object' ? (c.sectionName?.name || '') : String(c.sectionName || '');
-                const label = secName ? `${name} - ${secName}` : name;
-                return <option key={String(id)} value={String(id)}>{label}</option>;
-              })}
+              {classes.map(c => <option key={c.classSectionId} value={c.classSectionId}>{c.className}</option>)}
             </select>
           </div>
           <div>
@@ -390,11 +384,7 @@ export default function StudentProgressPage() {
               disabled={!selectedClass}
             >
               <option value="">Select student...</option>
-              {students.map((s, idx) => {
-                const sId = s.id || s.studentId || `std-${idx}`;
-                const sName = s.name || s.user?.name || s.User?.name || `${s.firstName || ''} ${s.lastName || ''}`.trim() || 'Student';
-                return <option key={String(sId)} value={String(sId)}>{sName}</option>;
-              })}
+              {students.map(s => <option key={s.id} value={s.id}>{s.user.name}</option>)}
             </select>
           </div>
         </div>

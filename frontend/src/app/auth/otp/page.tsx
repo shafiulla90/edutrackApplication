@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { ArrowLeft, ArrowRight, Loader2, AlertCircle, ShieldCheck, ShieldAlert } from 'lucide-react';
+import { ArrowLeft, Loader2, AlertCircle, ShieldCheck } from 'lucide-react';
 import { api } from '@/lib/api';
 import { auth } from '@/lib/firebase';
 import { getConfirmationResult, setConfirmationResult } from '@/lib/firebaseAuthStore';
@@ -21,7 +21,6 @@ function OtpContent() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
-  const [notFoundInfo, setNotFoundInfo] = useState<{ isNotFound: boolean; message: string } | null>(null);
 
   const recaptchaVerifierRef = useRef<RecaptchaVerifier | null>(null);
 
@@ -45,9 +44,9 @@ function OtpContent() {
 
   useEffect(() => {
     if (!phone) {
-      router.push(`/auth/login?portal=${encodeURIComponent(portal)}`);
+      router.push('/auth/login');
     }
-  }, [phone, portal, router]);
+  }, [phone, router]);
 
   const handleChange = (index: number, value: string) => {
     // Only accept numeric inputs
@@ -81,25 +80,24 @@ function OtpContent() {
 
     setLoading(true);
     try {
-      let idToken = '';
+      let idToken = codeStr;
       const confirmationResult = getConfirmationResult();
       if (confirmationResult && typeof confirmationResult.confirm === 'function') {
         try {
           const credential = await confirmationResult.confirm(codeStr);
           idToken = await credential.user.getIdToken();
         } catch (fbErr) {
-          console.warn('Firebase client confirmation notice (delegating to backend verify-otp):', fbErr);
+          console.warn('Firebase confirmation failed, verifying directly with backend:', fbErr);
         }
       }
 
-      // Step 2: Send OTP Code / ID Token to backend for verification & application JWT generation
+      // Step 2: Send ID Token / OTP Code to backend for application JWT generation
       const tenant = searchParams.get('tenant') || '';
       const returnUrl = searchParams.get('returnUrl') || '';
       const response = await api.post('/auth/verify-otp', {
         phone,
         otp: codeStr,
-        otpCode: codeStr,
-        idToken: idToken || undefined,
+        otpCode: idToken,
         portal,
         generateCode: !!tenant
       });
@@ -118,10 +116,6 @@ function OtpContent() {
         setSuccessMsg('Authenticated! Loading profile...');
         const role = data.user.role;
         if (role === 'TEACHER' || role === 'STAFF' || role === 'DRIVER') {
-          // Clear stale admin or parent tokens so active role is cleanly set to teacher
-          localStorage.removeItem('admin_token');
-          localStorage.removeItem('parent_token');
-          
           localStorage.setItem('teacher_token', data.access_token);
           localStorage.setItem('teacher_tenantId', data.user.tenantId);
           if (data.user.phone) {
@@ -140,11 +134,7 @@ function OtpContent() {
               router.push('/dashboard');
             }, 500);
           }
-        } else if (role === 'PARENT' || role === 'STUDENT' || portal === 'parent' || portal === 'student') {
-          // Clear stale admin or teacher tokens
-          localStorage.removeItem('admin_token');
-          localStorage.removeItem('teacher_token');
-          
+        } else if (role === 'PARENT') {
           localStorage.setItem('parent_token', data.access_token);
           localStorage.setItem('parent_tenantId', data.user.tenantId);
           if (data.user.phone) {
@@ -156,11 +146,6 @@ function OtpContent() {
             router.push('/parent');
           }, 500);
         } else {
-          // Clear stale teacher or parent tokens
-          localStorage.removeItem('teacher_token');
-          localStorage.removeItem('parent_token');
-          sessionStorage.removeItem('dismissed_admin_expiry_warning');
-          
           localStorage.setItem('admin_token', data.access_token);
           localStorage.setItem('admin_tenantId', data.user.tenantId);
           if (data.user.phone) {
@@ -173,11 +158,14 @@ function OtpContent() {
           }, 500);
         }
       } else {
-        setNotFoundInfo({
-          isNotFound: true,
-          message: data.message || 'Account not found for this mobile number. Please register to continue.'
-        });
-        return;
+        if (portal !== 'admin') {
+          setError('Account not found for the selected portal. Please contact your School Administrator.');
+          return;
+        }
+        setSuccessMsg('Verification successful! Opening registration wizard...');
+        setTimeout(() => {
+          router.push(`/register-school?phone=${encodeURIComponent(phone)}`);
+        }, 800);
       }
     } catch (err: any) {
       console.error('Verify OTP error:', err);
@@ -186,12 +174,6 @@ function OtpContent() {
         userFriendlyMessage = 'Incorrect OTP code entered.';
       } else if (err.code === 'auth/code-expired') {
         userFriendlyMessage = 'OTP code has expired. Please resend a new OTP.';
-      } else if (err.response?.data?.notFound || err.response?.data?.message?.includes('not found') || err.response?.data?.message?.includes('register')) {
-        setNotFoundInfo({
-          isNotFound: true,
-          message: err.response?.data?.message || 'Account not found for this mobile number. Please register to continue.'
-        });
-        return;
       } else if (err.response?.data?.message) {
         userFriendlyMessage = err.response.data.message;
       } else if (err.message) {
@@ -255,50 +237,6 @@ function OtpContent() {
     }
   };
 
-  if (notFoundInfo?.isNotFound) {
-    return (
-      <main className="min-h-screen bg-slate-950 text-slate-100 flex flex-col justify-center items-center px-4 relative overflow-hidden">
-        <div className="absolute top-[20%] left-[10%] w-[300px] h-[300px] rounded-full bg-brand-500/10 blur-[100px] pointer-events-none" />
-        <div className="absolute bottom-[20%] right-[10%] w-[300px] h-[300px] rounded-full bg-indigo-500/10 blur-[100px] pointer-events-none" />
-
-        <div className="w-full max-w-md z-10">
-          <div className="glass-card p-8 rounded-3xl border border-slate-900/50 bg-slate-900/40 backdrop-blur-xl text-center space-y-6">
-            <div className="w-14 h-14 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-400 flex items-center justify-center mx-auto">
-              <ShieldAlert className="w-7 h-7" />
-            </div>
-            <div>
-              <h2 className="text-xl font-bold text-white">Account Not Found</h2>
-              <p className="text-slate-300 text-sm mt-3 leading-relaxed font-light">
-                {notFoundInfo.message}
-              </p>
-            </div>
-            <div className="space-y-3">
-              <button
-                onClick={() => {
-                  router.push(`/register-school?phone=${encodeURIComponent(phone)}`);
-                }}
-                className="w-full py-3 px-4 bg-gradient-to-r from-brand-600 to-indigo-600 text-white rounded-xl font-semibold text-sm hover:from-brand-500 hover:to-indigo-500 shadow-lg shadow-brand-500/15 transition-all flex items-center justify-center gap-2 cursor-pointer"
-              >
-                Register New School
-                <ArrowRight className="w-4 h-4" />
-              </button>
-              <button
-                onClick={() => {
-                  setNotFoundInfo(null);
-                  router.push(`/auth/login?portal=${encodeURIComponent(portal)}`);
-                }}
-                className="w-full py-2.5 px-4 bg-slate-800/80 hover:bg-slate-800 text-slate-300 rounded-xl font-medium text-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer"
-              >
-                <ArrowLeft className="w-4 h-4" />
-                Back to Login
-              </button>
-            </div>
-          </div>
-        </div>
-      </main>
-    );
-  }
-
   return (
     <main className="min-h-screen bg-slate-950 text-slate-100 flex flex-col justify-center items-center px-4 relative overflow-hidden">
       {/* Background Ornamentations */}
@@ -327,7 +265,7 @@ function OtpContent() {
 
         <div className="glass-card p-8 rounded-3xl border border-slate-900/50 bg-slate-900/40 backdrop-blur-xl relative">
           <button
-            onClick={() => router.push(`/auth/login?portal=${encodeURIComponent(portal)}`)}
+            onClick={() => router.push('/auth/login')}
             className="absolute top-6 left-6 text-slate-500 hover:text-slate-300 transition-colors flex items-center gap-1.5 text-xs font-semibold cursor-pointer"
           >
             <ArrowLeft className="w-4 h-4" />

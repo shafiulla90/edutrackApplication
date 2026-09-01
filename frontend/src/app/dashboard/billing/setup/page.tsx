@@ -71,20 +71,11 @@ export default function FeeSetupPage() {
         api.get('/academics/academic-years'),
         api.get('/billing/products'),
       ]);
-      let clsList = classesRes.data || [];
-      if (!Array.isArray(clsList) || clsList.length === 0) {
-        const fallbackRes = await api.get('/academics/classes');
-        clsList = fallbackRes.data || [];
-      }
-      setClassesList(Array.isArray(clsList) ? clsList : []);
+      setClassesList(classesRes.data || []);
       setYearsList(yearsRes.data || []);
       setAllProducts(productsRes.data || []);
     } catch (err) {
       console.error('Failed to load dropdown data:', err);
-      try {
-        const fallbackRes = await api.get('/academics/classes');
-        setClassesList(fallbackRes.data || []);
-      } catch (e) {}
     }
   }, []);
 
@@ -95,16 +86,19 @@ export default function FeeSetupPage() {
   useSchoolSetupUpdate(() => loadDropdownData(selectedYear || undefined));
 
   // When academic year changes in the price book tab, reload classes filtered by that year
+  // and clear the selected class to force re-selection
   useEffect(() => {
     if (selectedYear) {
       loadDropdownData(selectedYear);
+      setSelectedClass('');
     }
-  }, [selectedYear]);
+  }, [selectedYear, loadDropdownData]);
 
   // ── Auto-load pricebook when class + year are both selected ──────────────
 
   useEffect(() => {
     if (!selectedClass || !selectedYear) {
+      // Reset price items to the full product list with empty prices
       const items = allProducts.map((p) => ({
         productId: p.id,
         name: p.name,
@@ -121,17 +115,13 @@ export default function FeeSetupPage() {
         const res = await api.get('/billing/pricebook', {
           params: { classId: selectedClass, academicYearId: selectedYear },
         });
-        const existing = res.data;
+        const existing = res.data; // null or { entries: [...] }
 
         // Build items: merge saved entries with all products
         const savedMap: Record<string, number> = {};
-        if (Array.isArray(existing)) {
-          existing.forEach((e: any) => {
-            if (e.productId) savedMap[e.productId] = Number(e.price ?? e.unitPrice);
-          });
-        } else if (existing && existing.entries) {
+        if (existing && existing.entries) {
           existing.entries.forEach((e: any) => {
-            savedMap[e.productId] = Number(e.unitPrice ?? e.price);
+            savedMap[e.productId] = e.unitPrice;
           });
         }
 
@@ -243,36 +233,23 @@ export default function FeeSetupPage() {
       });
 
       showToast('Price Book saved successfully.', 'success');
+      dispatchSchoolSetupUpdated();
 
-      // Safely re-fetch to update state while keeping selectedClass active
-      try {
-        const res = await api.get('/billing/pricebook', {
-          params: { classId: selectedClass, academicYearId: selectedYear },
-        });
-        const existing = res.data;
+      // Re-fetch to confirm saved state
+      const res = await api.get('/billing/pricebook', {
+        params: { classId: selectedClass, academicYearId: selectedYear },
+      });
+      if (res.data && res.data.entries) {
         const savedMap: Record<string, number> = {};
-        if (Array.isArray(existing)) {
-          existing.forEach((e: any) => {
-            if (e.productId) savedMap[e.productId] = Number(e.price ?? e.unitPrice);
-          });
-        } else if (existing && existing.entries) {
-          existing.entries.forEach((e: any) => {
-            savedMap[e.productId] = Number(e.unitPrice ?? e.price);
-          });
-        }
-
+        res.data.entries.forEach((e: any) => { savedMap[e.productId] = e.unitPrice; });
         setPriceItems((prev) =>
           prev.map((p) => ({
             ...p,
             price: savedMap[p.productId] !== undefined ? String(savedMap[p.productId]) : p.price,
-            selected: savedMap[p.productId] !== undefined ? true : (p.selected && Number(p.price) > 0),
+            selected: savedMap[p.productId] !== undefined,
           })),
         );
-      } catch (refetchErr) {
-        console.warn('[handleSubmitPriceBook] Refetch notice:', refetchErr);
       }
-
-      dispatchSchoolSetupUpdated();
     } catch (err: any) {
       showToast(err.response?.data?.message || 'Failed to save price book.', 'error');
     } finally {

@@ -151,27 +151,30 @@ function LeaveMgmtContent() {
   // Load Leaves List & Stats
   async function loadLeaves() {
     try {
-      const params: any = {
-        page,
-        limit,
-        status: statusFilter,
-        applicantType: applicantTypeFilter,
-        leaveType: leaveTypeFilter,
-        academicYearId: academicYearFilter,
-        startDate: startDateFilter || undefined,
-        endDate: endDateFilter || undefined,
-        search: debouncedSearch || undefined,
-        sortBy,
-        sortOrder,
-      };
-      const [leavesRes, statsRes] = await Promise.all([
-        api.get('/leave-management', { params }),
-        api.get('/leave-management/stats')
-      ]);
-      setLeaves(leavesRes.data.data || leavesRes.data || []);
-      setTotalPages(leavesRes.data.totalPages || 1);
-      if (statsRes.data) {
+      if (isAdmin) {
+        const params: any = {
+          page,
+          limit,
+          status: statusFilter,
+          applicantType: applicantTypeFilter,
+          leaveType: leaveTypeFilter,
+          academicYearId: academicYearFilter,
+          startDate: startDateFilter || undefined,
+          endDate: endDateFilter || undefined,
+          search: debouncedSearch || undefined,
+          sortBy,
+          sortOrder,
+        };
+        const [leavesRes, statsRes] = await Promise.all([
+          api.get('/leave-management', { params }),
+          api.get('/leave-management/stats')
+        ]);
+        setLeaves(leavesRes.data.data || []);
+        setTotalPages(leavesRes.data.totalPages || 1);
         setStats(statsRes.data);
+      } else {
+        const res = await api.get('/teacher-portal/leave');
+        setLeaves(res.data || []);
       }
     } catch (err) {
       console.error('Failed to load leaves:', err);
@@ -193,6 +196,7 @@ function LeaveMgmtContent() {
     debouncedSearch,
     sortBy,
     sortOrder,
+    isAdmin
   ]);
 
   // Highlight URL ID
@@ -207,7 +211,7 @@ function LeaveMgmtContent() {
 
   // Fetch applicant history when modal is open
   useEffect(() => {
-    if (selectedLeave) {
+    if (selectedLeave && isAdmin) {
       const isStudent = selectedLeave.applicantType === 'STUDENT' || !!selectedLeave.student;
       const applicantId = isStudent ? selectedLeave.studentId : selectedLeave.teacherId;
       const applicantType = isStudent ? 'STUDENT' : 'TEACHER';
@@ -222,7 +226,7 @@ function LeaveMgmtContent() {
     } else {
       setApplicantHistory([]);
     }
-  }, [selectedLeave]);
+  }, [selectedLeave, isAdmin]);
 
   const openCreateModal = () => {
     setStartDate('');
@@ -236,7 +240,7 @@ function LeaveMgmtContent() {
     e.preventDefault();
     setSubmitting(true);
     try {
-      await api.post('/leave-management/apply-staff-leave', {
+      await api.post('/teacher-portal/leave', {
         startDate,
         endDate,
         leaveType,
@@ -255,7 +259,7 @@ function LeaveMgmtContent() {
   const handleDelete = async (id: string) => {
     if (!confirm('Are you sure you want to cancel this leave request?')) return;
     try {
-      await api.delete(`/leave-management/${id}`);
+      await api.delete(`/teacher-portal/leave/${id}`);
       await loadLeaves();
     } catch (err) {
       console.error('Failed to cancel leave:', err);
@@ -1275,10 +1279,7 @@ function LeaveMgmtContent() {
         )}
       </Modal>
 
-        </div>
-      )}
-
-      {/* Apply Leave Modal for Staff (teacher view & admin view) */}
+      {/* Apply Leave Modal for Staff (teacher view) */}
       <Drawer
         open={isModalOpen}
         onClose={() => setIsModalOpen(false)}
@@ -1305,12 +1306,7 @@ function LeaveMgmtContent() {
               <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">From Date</label>
               <DatePickerInput
                 value={startDate}
-                onChange={(val) => {
-                  setStartDate(val);
-                  if (!endDate || endDate < val) {
-                    setEndDate(val);
-                  }
-                }}
+                onChange={setStartDate}
                 required
               />
             </div>
@@ -1319,7 +1315,6 @@ function LeaveMgmtContent() {
               <DatePickerInput
                 value={endDate}
                 onChange={setEndDate}
-                min={startDate || undefined}
                 required
               />
             </div>
@@ -1346,6 +1341,8 @@ function LeaveMgmtContent() {
           </button>
         </form>
       </Drawer>
+        </div>
+      )}
 
       {/* In-App Leave Attachment Preview Modal */}
       <Modal

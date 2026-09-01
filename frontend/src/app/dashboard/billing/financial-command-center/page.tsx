@@ -1110,15 +1110,15 @@ export default function FinancialCommandCenter() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 font-semibold text-slate-650">
-                    {(data.activities?.latestExpenses || [])
-                      .filter((e: any) => (e.category || '').toLowerCase().includes(drilldownSearch.toLowerCase()) || (e.id || '').toLowerCase().includes(drilldownSearch.toLowerCase()))
+                    {data.insights?.expense?.recentExpenses
+                      ?.filter((e: any) => e.category?.toLowerCase().includes(drilldownSearch.toLowerCase()) || e.description?.toLowerCase().includes(drilldownSearch.toLowerCase()))
                       .map((e: any) => (
                         <tr key={e.id} className="hover:bg-slate-50/50">
                           <td className="py-3 font-mono font-bold text-slate-500">{e.id.slice(-8).toUpperCase()}</td>
                           <td className="py-3 font-black text-slate-800">{e.category}</td>
-                          <td className="py-3">{e.mode || 'Bank Transfer'}</td>
-                          <td className="py-3 text-right text-rose-600 font-bold font-mono">₹{e.amount?.toLocaleString()}</td>
-                          <td className="py-3 text-right">{e.date ? new Date(e.date).toLocaleDateString('en-IN') : 'N/A'}</td>
+                          <td className="py-3">{e.mode || 'CASH'}</td>
+                          <td className="py-3 text-right text-rose-600 font-bold font-mono">₹{e.amount.toLocaleString()}</td>
+                          <td className="py-3 text-right">{e.date}</td>
                         </tr>
                       ))}
                   </tbody>
@@ -1137,10 +1137,10 @@ export default function FinancialCommandCenter() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 font-semibold text-slate-650">
-                    {(data.insights?.topPendingStudents || [])
-                      .filter((s: any) => (s.studentName || '').toLowerCase().includes(drilldownSearch.toLowerCase()) || (s.className || '').toLowerCase().includes(drilldownSearch.toLowerCase()))
-                      .map((s: any, idx: number) => (
-                        <tr key={s.studentId || idx} className="hover:bg-slate-50/50">
+                    {data.insights?.topPendingStudents
+                      ?.filter((s: any) => s.studentName?.toLowerCase().includes(drilldownSearch.toLowerCase()) || s.className?.toLowerCase().includes(drilldownSearch.toLowerCase()))
+                      .map((s: any) => (
+                        <tr key={s.studentId} className="hover:bg-slate-50/50">
                           <td className="py-3 font-black text-slate-800">{s.studentName}</td>
                           <td className="py-3">{s.className} - {s.sectionName}</td>
                           <td className="py-3 text-right font-mono">₹{s.totalFee?.toLocaleString()}</td>
@@ -1153,36 +1153,17 @@ export default function FinancialCommandCenter() {
               )}
 
               {drilldownType === 'students' && (
-                <table className="w-full text-left border-collapse text-xs">
-                  <thead>
-                    <tr className="border-b border-slate-200 text-slate-400 font-bold uppercase pb-3">
-                      <th className="py-2.5">Student Name</th>
-                      <th className="py-2.5">Class / Section</th>
-                      <th className="py-2.5 text-right">Billed Fee (₹)</th>
-                      <th className="py-2.5 text-right">Paid (₹)</th>
-                      <th className="py-2.5 text-right">Current Ledger Balance</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100 font-semibold text-slate-650">
-                    {(data.insights?.topPendingStudents || [])
-                      .filter((s: any) => (s.studentName || '').toLowerCase().includes(drilldownSearch.toLowerCase()) || (s.className || '').toLowerCase().includes(drilldownSearch.toLowerCase()))
-                      .map((s: any, idx: number) => (
-                        <tr key={s.studentId || idx} className="hover:bg-slate-50/50">
-                          <td className="py-3 font-black text-slate-800">{s.studentName}</td>
-                          <td className="py-3">{s.className} - {s.sectionName}</td>
-                          <td className="py-3 text-right font-mono">₹{s.totalFee?.toLocaleString()}</td>
-                          <td className="py-3 text-right font-mono text-emerald-600">₹{s.paid?.toLocaleString()}</td>
-                          <td className="py-3 text-right text-slate-900 font-bold font-mono">
-                            {s.pending > 0 ? (
-                              <span className="text-rose-600 font-black">₹{s.pending?.toLocaleString()} (Dues)</span>
-                            ) : (
-                              <span className="text-emerald-600 font-black">₹0 (Paid)</span>
-                            )}
-                          </td>
-                        </tr>
-                      ))}
-                  </tbody>
-                </table>
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                  {data.activities?.latestAdmissions
+                    ?.filter((s: any) => s.name?.toLowerCase().includes(drilldownSearch.toLowerCase()) || s.class?.toLowerCase().includes(drilldownSearch.toLowerCase()))
+                    .map((s: any) => (
+                      <div key={s.id} className="p-4 border border-slate-200 rounded-2xl bg-slate-50/50">
+                        <strong className="block text-slate-800 text-sm">{s.name}</strong>
+                        <span className="text-[10px] text-slate-400 block mt-1">Class: {s.class}</span>
+                        <span className="text-[10px] text-slate-400 block">Admitted On: {s.date}</span>
+                      </div>
+                    ))}
+                </div>
               )}
             </div>
 

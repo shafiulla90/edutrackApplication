@@ -1,7 +1,6 @@
 import { Controller, Get, Post, Patch, Delete, Body, Param, Query, Request } from '@nestjs/common';
 import { BillingService } from './billing.service';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
-import { getTenantIdFromReq } from '../../common/utils/tenant.util';
 
 @ApiTags('Billing')
 @Controller('billing')
@@ -11,14 +10,14 @@ export class BillingController {
   @Get('products')
   @ApiOperation({ summary: 'Get all fee products' })
   async getProducts(@Request() req: any) {
-    const tenantId = getTenantIdFromReq(req);
+    const tenantId = req?.user?.tenantId || 'tenant-test-001';
     return this.billingService.getAllFeeProducts(tenantId);
   }
 
   @Post('products')
   @ApiOperation({ summary: 'Create fee products' })
   async createProducts(@Body() body: any, @Request() req: any) {
-    const tenantId = getTenantIdFromReq(req);
+    const tenantId = req?.user?.tenantId || 'tenant-test-001';
     let names: string[] = [];
     if (Array.isArray(body)) {
       names = body;
@@ -33,14 +32,14 @@ export class BillingController {
   @Patch('products/:id')
   @ApiOperation({ summary: 'Update fee product' })
   async updateProduct(@Param('id') id: string, @Body('name') name: string, @Request() req: any) {
-    const tenantId = getTenantIdFromReq(req);
+    const tenantId = req?.user?.tenantId || 'tenant-test-001';
     return this.billingService.updateFeeProduct(id, name, tenantId);
   }
 
   @Delete('products/:id')
   @ApiOperation({ summary: 'Delete fee product' })
   async deleteProduct(@Param('id') id: string, @Request() req: any) {
-    const tenantId = getTenantIdFromReq(req);
+    const tenantId = req?.user?.tenantId || 'tenant-test-001';
     return this.billingService.deleteFeeProduct(id, tenantId);
   }
 
@@ -51,7 +50,7 @@ export class BillingController {
     @Query('academicYearId') academicYearId: string,
     @Request() req: any,
   ) {
-    const tenantId = getTenantIdFromReq(req);
+    const tenantId = req?.user?.tenantId || 'tenant-test-001';
     return this.billingService.getPriceBook(classId, academicYearId, tenantId);
   }
 
@@ -63,7 +62,7 @@ export class BillingController {
     @Body('priceItems') priceItems: any[],
     @Request() req: any,
   ) {
-    const tenantId = getTenantIdFromReq(req);
+    const tenantId = req?.user?.tenantId || 'tenant-test-001';
     return this.billingService.savePriceBook(classId, academicYearId, priceItems || [], tenantId);
   }
 
@@ -74,7 +73,7 @@ export class BillingController {
     @Query('academicYearId') academicYearId?: string,
     @Request() req?: any,
   ) {
-    const tenantId = getTenantIdFromReq(req);
+    const tenantId = req?.user?.tenantId || 'tenant-test-001';
     return this.billingService.getActiveProducts(classId, academicYearId, tenantId);
   }
 
@@ -84,36 +83,15 @@ export class BillingController {
     @Body() body: any,
     @Request() req: any,
   ) {
-    const tenantId = getTenantIdFromReq(req);
+    const tenantId = req?.user?.tenantId || 'tenant-test-001';
     return this.billingService.createInvoice(body, body.items || [], tenantId);
   }
 
   @Get('invoices/recent')
   @ApiOperation({ summary: 'Get recent invoices' })
   async getRecentInvoices(@Query('studentId') studentId?: string, @Request() req?: any) {
-    const tenantId = getTenantIdFromReq(req);
+    const tenantId = req?.user?.tenantId || 'tenant-test-001';
     return this.billingService.getRecentInvoices(studentId, tenantId);
-  }
-
-  @Get('invoices/:id/pdf')
-  @ApiOperation({ summary: 'Get PDF metadata for invoice receipt' })
-  async getInvoicePDFData(@Param('id') id: string, @Request() req: any) {
-    const tenantId = getTenantIdFromReq(req);
-    return this.billingService.getInvoicePDFData(id, tenantId);
-  }
-
-  @Get('invoices/:id')
-  @ApiOperation({ summary: 'Get invoice details by ID' })
-  async getInvoiceDetails(@Param('id') id: string, @Request() req: any) {
-    const tenantId = getTenantIdFromReq(req);
-    return this.billingService.getInvoiceDetails(id, tenantId);
-  }
-
-  @Post('invoices/:id/void')
-  @ApiOperation({ summary: 'Void an invoice payment' })
-  async voidInvoice(@Param('id') id: string, @Request() req: any) {
-    const tenantId = getTenantIdFromReq(req);
-    return { success: true, id, message: 'Invoice voided successfully' };
   }
 
   @Post('admissions')
@@ -124,7 +102,7 @@ export class BillingController {
     @Body('concessionAmount') concessionAmount: number,
     @Request() req: any,
   ) {
-    const tenantId = getTenantIdFromReq(req);
+    const tenantId = req?.user?.tenantId || 'tenant-test-001';
     return this.billingService.createAdmission(studentData, selectedPricebookEntryIds || [], concessionAmount || 0, tenantId);
   }
 
@@ -141,56 +119,21 @@ export class BillingController {
   @Get('options/years')
   @ApiOperation({ summary: 'Get academic year options for admissions' })
   async getYearsOptions(@Request() req: any) {
-    const tenantId = getTenantIdFromReq(req);
+    const tenantId = req?.user?.tenantId || 'tenant-test-001';
     return this.billingService.getYearsOptions(tenantId);
   }
 
   @Get('options/classes')
   @ApiOperation({ summary: 'Get class options for admissions' })
   async getClassesOptions(@Request() req: any) {
-    const tenantId = getTenantIdFromReq(req);
+    const tenantId = req?.user?.tenantId || 'tenant-test-001';
     return this.billingService.getClassesOptions(tenantId);
   }
 
   @Get('options/sections')
   @ApiOperation({ summary: 'Get section options for admissions' })
   async getSectionsOptions(@Query('classId') classId: string, @Request() req: any) {
-    const tenantId = getTenantIdFromReq(req);
+    const tenantId = req?.user?.tenantId || 'tenant-test-001';
     return this.billingService.getSectionsOptions(classId, tenantId);
-  }
-
-  @Get('search')
-  @ApiOperation({ summary: 'Search students for fee payment' })
-  async searchStudents(@Query('searchTerm') searchTerm: string, @Request() req: any) {
-    const tenantId = getTenantIdFromReq(req);
-    return this.billingService.searchStudents(searchTerm, tenantId);
-  }
-
-  @Get('students/search')
-  @ApiOperation({ summary: 'Search students for fee payment (alias)' })
-  async searchStudentsAlias(@Query('searchTerm') searchTerm: string, @Request() req: any) {
-    const tenantId = getTenantIdFromReq(req);
-    return this.billingService.searchStudents(searchTerm, tenantId);
-  }
-
-  @Get('students/:id')
-  @ApiOperation({ summary: 'Get student billing account details' })
-  async getStudentBillingAccount(@Param('id') id: string, @Request() req: any) {
-    const tenantId = getTenantIdFromReq(req);
-    return this.billingService.getStudentBillingAccount(id, tenantId);
-  }
-
-  @Get('unpaid-fees/:oppId')
-  @ApiOperation({ summary: 'Get unpaid fee line items for opportunity' })
-  async getUnpaidFees(@Param('oppId') oppId: string, @Request() req: any) {
-    const tenantId = getTenantIdFromReq(req);
-    return this.billingService.getUnpaidFees(oppId, tenantId);
-  }
-
-  @Get('financial-command-center')
-  @ApiOperation({ summary: 'Get Financial Command Center analytics & cockpit data' })
-  async getFinancialCommandCenter(@Query() query: any, @Request() req: any) {
-    const tenantId = getTenantIdFromReq(req);
-    return this.billingService.getFinancialCommandCenter(tenantId, query);
   }
 }

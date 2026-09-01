@@ -456,8 +456,8 @@ export default function SchoolAdminTransportPage() {
                       <td className="p-3 font-bold text-slate-900">{b.busNumber}</td>
                       <td className="p-3 font-mono">{b.registrationNo}</td>
                       <td className="p-3">{b.vehicleModel} ({b.capacity} Seats)</td>
-                      <td className="p-3 font-bold text-blue-700">{b.driver?.user?.name || b.driverName || 'Unassigned'}</td>
-                      <td className="p-3 font-bold text-emerald-700">{b.route?.routeName || b.routeName || 'Unassigned'}</td>
+                      <td className="p-3 font-bold text-blue-700">{b.driver?.user?.name || 'Unassigned'}</td>
+                      <td className="p-3 font-bold text-emerald-700">{b.route?.routeName || 'Unassigned'}</td>
                       <td className="p-3 font-extrabold text-xs">
                         <span className={`px-2 py-0.5 rounded text-[10px] ${b.dutyStatus !== 'OFF_DUTY' ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-600'}`}>
                           {b.dutyStatus}
@@ -527,10 +527,10 @@ export default function SchoolAdminTransportPage() {
                 ) : (
                   drivers.map((d) => (
                     <tr key={d.id} className="hover:bg-slate-50">
-                      <td className="p-3 font-bold text-slate-900">{d.user?.name || d.name}</td>
+                      <td className="p-3 font-bold text-slate-900">{d.user?.name}</td>
                       <td className="p-3 font-mono">{d.employeeId}</td>
                       <td className="p-3 font-bold">{d.licenseNumber || 'Verified'}</td>
-                      <td className="p-3">{d.user?.phone || d.phone || 'N/A'}</td>
+                      <td className="p-3">{d.user?.phone || 'N/A'}</td>
                       <td className="p-3">{d.emergencyContact || 'N/A'}</td>
                       <td className="p-3 font-bold text-blue-600">{d.assignedBus?.busNumber || 'None'}</td>
                       <td className="p-3 text-right space-x-1 whitespace-nowrap">

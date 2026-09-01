@@ -1,6 +1,5 @@
 import { Controller, Get, Post, Patch, Delete, Param, Body, Request, Query } from '@nestjs/common';
 import { TimetableService } from './timetable.service';
-import { getTenantIdFromReq } from '../../common/utils/tenant.util';
 import {
   CreateClassDto,
   CreateSectionDto,
@@ -20,7 +19,7 @@ export class TimetableController {
   constructor(private readonly timetableService: TimetableService) {}
 
   private getTenantId(req: any): string {
-    return getTenantIdFromReq(req);
+    return req?.user?.tenantId || 'tenant-test-001';
   }
 
   @Get('academic-years')
@@ -119,19 +118,6 @@ export class TimetableController {
     return this.timetableService.bulkCreateTeachers(this.getTenantId(req), dto.teachers);
   }
 
-  @Get('teachers/subject-in-class')
-  getTeachersForSubjectInClass(
-    @Query('subjectId') subjectId: string,
-    @Query('classSectionId') classSectionId: string,
-    @Request() req
-  ) {
-    return this.timetableService.getTeachersForSubjectInClass(
-      this.getTenantId(req),
-      subjectId,
-      classSectionId
-    );
-  }
-
   @Get('workload/summary')
   getWorkloadSummary(@Query('academicYearId') academicYearId: string, @Request() req) {
     return this.timetableService.getWorkloadSummary(this.getTenantId(req), academicYearId);
@@ -189,11 +175,6 @@ export class TimetableController {
   @Get('teachers')
   getAllTeachers(@Request() req) {
     return this.timetableService.getAllTeachers(this.getTenantId(req));
-  }
-
-  @Get('teachers/:id/skills')
-  getTeacherSkills(@Param('id') id: string, @Request() req) {
-    return this.timetableService.getTeacherSkills(this.getTenantId(req), id);
   }
 
   @Get('class/:classSectionId/periods')

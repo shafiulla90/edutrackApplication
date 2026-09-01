@@ -34,8 +34,8 @@ export class AuthController {
 
   @Post('verify-otp')
   @ApiOperation({ summary: 'Verify OTP or ID token' })
-  verifyOtp(@Body() body: { phone: string; otp?: string; otpCode?: string; idToken?: string; portal?: string }) {
-    return this.authService.verifyOtp(body.phone, body.otp || body.otpCode, body.idToken, body.portal);
+  verifyOtp(@Body() body: { phone: string; otp?: string; idToken?: string; portal?: string }) {
+    return this.authService.verifyOtp(body.phone, body.otp, body.idToken, body.portal);
   }
 
   @Post('exchange-code')

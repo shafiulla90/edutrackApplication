@@ -1,212 +1,49 @@
-import { Injectable, Optional, Inject } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, Inject } from '@nestjs/common';
 import { ISubscriptionRepository } from '../../common/interfaces/subscription.repository.interface';
-import { FirebaseService } from '../../database/firebase.service';
-import { SUBSCRIPTION_PLANS } from './payment.service';
 
 @Injectable()
 export class SubscriptionService {
-  constructor(
-    @Inject('ISubscriptionRepository') private readonly subRepo: ISubscriptionRepository,
-    @Optional() private readonly firebaseService?: FirebaseService,
-  ) {}
+  constructor(@Inject('ISubscriptionRepository') private readonly subRepo: ISubscriptionRepository) {}
 
-  private get db() {
-    return this.firebaseService ? this.firebaseService.getFirestore() : null;
-  }
+  async assignFreePlanToNewTenant(tenantId: string) {
+    let freePlan = await this.subRepo.findPlanById('free-plan-001');
 
-  async assignFreePlanToNewTenant(tenantId: string, planChoice: string = 'FREE') {
+    if (!freePlan) {
+      const plans = await this.subRepo.findPlans();
+      freePlan = plans.find((p) => p.name === 'Free Plan') || null;
+    }
+
     const startDate = new Date();
-    const expiryDate = new Date(startDate);
-    
-    let plan = 'FREE';
-    let planCode = 'FREE_1_MONTH';
-    let planName = 'EduTrack Free Trial – 1 Month';
-    let durationMonths = 1;
-    let billingCycle = '1 Month';
-    let amount = 0;
-    let status = 'TRIALING';
+    const expiryDate = new Date();
+    expiryDate.setMonth(expiryDate.getMonth() + 6);
 
-    if (planChoice === 'BASIC') {
-      plan = 'BASIC';
-      planCode = 'BASIC_6_MONTH';
-      planName = 'EduTrack Basic – 6 Months';
-      durationMonths = 6;
-      billingCycle = '6 Months';
-      amount = 1999;
-      status = 'ACTIVE';
-      expiryDate.setMonth(expiryDate.getMonth() + 6);
-    } else if (planChoice === 'PREMIUM') {
-      plan = 'PREMIUM';
-      planCode = 'PREMIUM_12_MONTH';
-      planName = 'EduTrack Premium – 12 Months';
-      durationMonths = 12;
-      billingCycle = '12 Months';
-      amount = 4999;
-      status = 'ACTIVE';
-      expiryDate.setMonth(expiryDate.getMonth() + 12);
-    } else {
-      // FREE / TRIAL plan: 1 calendar month exact calculation
-      expiryDate.setMonth(expiryDate.getMonth() + 1);
-    }
-
-    const subscriptionData = {
+    return this.subRepo.createSubscription({
       tenantId,
-      plan,
-      planCode,
-      planName,
-      amount,
-      billingCycle,
-      durationMonths,
-      status,
-      trialStartDate: startDate.toISOString(),
-      trialEndDate: expiryDate.toISOString(),
-      startDate: startDate.toISOString(),
-      expiryDate: expiryDate.toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
-
-    if (this.db) {
-      await this.db.collection('tenants').doc(tenantId).collection('subscription').doc('current').set(subscriptionData, { merge: true }).catch(() => null);
-      await this.db.collection('subscriptions').doc(tenantId).set(subscriptionData, { merge: true }).catch(() => null);
-    }
-
-    return subscriptionData;
+      planId: freePlan ? freePlan.id : 'free-plan-001',
+      startDate,
+      expiryDate,
+      status: 'ACTIVE',
+    });
   }
 
   async checkSubscriptionStatus(tenantId: string) {
-    let subData: any = null;
-
-    if (this.db && tenantId) {
-      try {
-        const tenantDoc = await this.db.collection('tenants').doc(tenantId).collection('subscription').doc('current').get();
-        const rootDoc = await this.db.collection('subscriptions').doc(tenantId).get();
-
-        const tenantData = tenantDoc.exists ? tenantDoc.data() : null;
-        const rootData = rootDoc.exists ? rootDoc.data() : null;
-
-        if (tenantData && rootData) {
-          const tenantExpiry = tenantData.expiryDate || '';
-          const rootExpiry = rootData.expiryDate || '';
-
-          if (rootExpiry !== tenantExpiry) {
-            subData = rootData;
-            await this.db.collection('tenants').doc(tenantId).collection('subscription').doc('current').set(rootData, { merge: true }).catch(() => null);
-          } else {
-            subData = tenantData;
-          }
-        } else {
-          subData = tenantData || rootData;
-        }
-      } catch (err) {}
+    const sub = await this.subRepo.findActiveSubscription(tenantId);
+    if (!sub) {
+      return { status: 'EXPIRED', daysRemaining: 0 };
     }
-
-    if (!subData) {
-      // Default 1-month free trial for new tenants
-      const startDate = new Date();
-      const expiryDate = new Date(startDate);
-      expiryDate.setMonth(expiryDate.getMonth() + 1);
-      subData = {
-        tenantId,
-        plan: 'FREE',
-        planCode: 'FREE_1_MONTH',
-        planName: 'EduTrack Free Trial – 1 Month',
-        billingCycle: '1 Month',
-        amount: 0,
-        status: 'TRIALING',
-        trialStartDate: startDate.toISOString(),
-        trialEndDate: expiryDate.toISOString(),
-        startDate: startDate.toISOString(),
-        expiryDate: expiryDate.toISOString(),
-      };
-    }
-
-    const now = Date.now();
-    const expDate = subData.expiryDate ? new Date(subData.expiryDate) : new Date(now + 180 * 24 * 60 * 60 * 1000);
-    const expiryTime = expDate.getTime();
-    const warningPeriodDays = 4; // 3-4 day warning window per prompt specification
-
-    const msPerDay = 1000 * 60 * 60 * 24;
-    const daysRemaining = Math.ceil((expiryTime - now) / msPerDay);
-
-    let status: 'ACTIVE' | 'EXPIRING_SOON' | 'EXPIRED' = 'ACTIVE';
-    let isSubscriptionActive = true;
-
-    if (now >= expiryTime) {
-      status = 'EXPIRED';
-      isSubscriptionActive = false;
-
-      // Sync EXPIRED status back to Firestore if not already marked EXPIRED
-      if (this.db && subData.status !== 'EXPIRED') {
-        const expiredUpdate = { status: 'EXPIRED', updatedAt: new Date().toISOString() };
-        this.db.collection('tenants').doc(tenantId).collection('subscription').doc('current').set(expiredUpdate, { merge: true }).catch(() => null);
-        this.db.collection('subscriptions').doc(tenantId).set(expiredUpdate, { merge: true }).catch(() => null);
-      }
-    } else if (daysRemaining <= warningPeriodDays && daysRemaining > 0) {
-      status = 'EXPIRING_SOON';
-      isSubscriptionActive = true;
-    } else {
-      status = 'ACTIVE';
-      isSubscriptionActive = true;
-    }
-
-    return {
-      tenantId,
-      plan: subData.plan || 'BASIC',
-      planCode: subData.planCode || 'BASIC_6_MONTH',
-      planName: subData.planName || 'EduTrack Basic – 6 Months',
-      billingCycle: subData.billingCycle || '6 Months',
-      amount: subData.amount || 1,
-      status,
-      storedStatus: subData.status || 'ACTIVE',
-      startDate: subData.startDate,
-      expiryDate: subData.expiryDate,
-      daysRemaining: status === 'EXPIRED' ? 0 : Math.max(0, daysRemaining),
-      rawDaysRemaining: daysRemaining,
-      warningPeriodDays,
-      isExpiringSoon: status === 'EXPIRING_SOON',
-      isGracePeriod: false,
-      isExpired: status === 'EXPIRED',
-      isSubscriptionActive,
-      features: [
-        'Unlimited Students & Staff Profiles',
-        'Attendance, Fees & Timetable Management',
-        'Exams, Grading & Progress Reports',
-        'Parent Portal & In-App Notifications',
-        'Transport & Bus GPS Tracking',
-      ],
-    };
+    const daysRemaining = Math.max(0, Math.ceil((new Date(sub.expiryDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24)));
+    return { status: sub.status, daysRemaining };
   }
 
   async getAllPlans() {
-    return Object.values(SUBSCRIPTION_PLANS).map((p) => ({
-      id: p.code,
-      code: p.code,
-      name: p.name,
-      amount: p.amount,
-      price: p.amount,
-      duration: `${p.months} Months`,
-      months: p.months,
-      currency: 'INR',
-    }));
+    return this.subRepo.findPlans();
   }
 
   async getPaymentHistory(tenantId: string) {
-    if (!this.db || !tenantId) return [];
-
-    try {
-      const snap = await this.db.collection('tenants').doc(tenantId).collection('subscriptionPayments').get();
-      if (!snap.empty) {
-        return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-      }
-
-      const rootSnap = await this.db.collection('subscriptionPayments').where('tenantId', '==', tenantId).get();
-      return rootSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
-    } catch (err) {
-      return [];
-    }
+    return this.subRepo.findPlans();
   }
 
   async getInvoices(tenantId: string) {
-    return this.getPaymentHistory(tenantId);
+    return this.subRepo.findPlans();
   }
 }

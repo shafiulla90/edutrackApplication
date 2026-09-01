@@ -1,19 +1,10 @@
 import { Module } from '@nestjs/common';
-import { JwtModule } from '@nestjs/jwt';
 import { TeacherPortalService } from './teacher-portal.service';
 import { TeacherPortalController } from './teacher-portal.controller';
 import { DatabaseProviderModule } from '../../database/database-provider.module';
-import { FirebaseModule } from '../../database/firebase.module';
 
 @Module({
-  imports: [
-    DatabaseProviderModule, 
-    FirebaseModule,
-    JwtModule.register({
-      secret: process.env.JWT_SECRET || 'supersecretkey',
-      signOptions: { expiresIn: '7d' },
-    }),
-  ],
+  imports: [DatabaseProviderModule],
   controllers: [TeacherPortalController],
   providers: [TeacherPortalService],
   exports: [TeacherPortalService],

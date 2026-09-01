@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { FirebaseService } from '../../firebase.service';
 import { IStudentRepository } from '../../../common/interfaces/student.repository.interface';
+
 function sanitizePayload(obj: any): any {
   if (obj === null || typeof obj !== 'object') return obj;
   if (obj instanceof Date) return obj;
@@ -34,14 +35,9 @@ export class FirestoreStudentRepository implements IStudentRepository {
         user = { id: userDoc.id, ...userDoc.data() };
       }
     }
-    const fullName = (data as any).name || (user as any)?.name || `${(data as any).firstName || ''} ${(data as any).lastName || ''}`.trim() || 'Student';
-    const resolvedUser = user || { id: userId || doc.id, name: fullName, email: (data as any).email, phone: (data as any).phone };
-
     return {
       ...data,
-      name: fullName,
-      user: resolvedUser,
-      User: resolvedUser,
+      User: user,
     };
   }
 
@@ -49,32 +45,51 @@ export class FirestoreStudentRepository implements IStudentRepository {
     const snap = await this.db.collection('studentProfiles').where('userId', '==', userId).limit(1).get();
     if (snap.empty) return null;
     const doc = snap.docs[0];
-    const data = { id: doc.id, ...doc.data() };
-    const userDoc = await this.db.collection('users').doc(userId).get();
-    const user = userDoc.exists ? { id: userDoc.id, ...userDoc.data() } : null;
-    const fullName = (data as any).name || (user as any)?.name || `${(data as any).firstName || ''} ${(data as any).lastName || ''}`.trim() || 'Student';
-    const resolvedUser = user || { id: userId, name: fullName, email: (data as any).email, phone: (data as any).phone };
-
-    return {
-      ...data,
-      name: fullName,
-      user: resolvedUser,
-      User: resolvedUser,
-    };
+    return { id: doc.id, ...doc.data() };
   }
 
-  async findStudentsByTenant(tenantId: string, page = 1, limit = 100, filters?: any): Promise<{ items: any[]; data: any[]; total: number }> {
-    if (!tenantId) throw new Error('tenantId is required');
-    const tid = tenantId;
+  async findStudentsByClassSection(classSectionId: string): Promise<any[]> {
+    const snap = await this.db.collection('studentProfiles').where('classSectionId', '==', classSectionId).get();
+    if (snap.empty) return [];
     
-    const snap = await this.db.collection('studentProfiles').where('tenantId', '==', tid).get().catch(() => null);
-    if (!snap || snap.empty) return { items: [], data: [], total: 0 };
+    // Batch fetch associated users to avoid N+1 queries
+    const userIds = snap.docs.map(d => d.data().userId).filter(Boolean);
+    const userMap = new Map<string, any>();
+    if (userIds.length > 0) {
+      const userRefs = userIds.map(uid => this.db.collection('users').doc(uid));
+      const userDocs = await this.db.getAll(...userRefs);
+      userDocs.forEach(ud => {
+        if (ud.exists) userMap.set(ud.id, { id: ud.id, ...ud.data() });
+      });
+    }
 
+    return snap.docs.map((doc) => {
+      const data = { id: doc.id, ...doc.data() };
+      const user = userMap.get((data as any).userId) || null;
+      return {
+        ...data,
+        User: user,
+      };
+    });
+  }
 
-    // Pre-fetch classes and sections for label mapping
-    const [classesSnap, sectionsSnap] = await Promise.all([
+  async findStudentsByTenant(tenantId: string, page = 1, limit = 100, filters?: any): Promise<{ items: any[]; total: number }> {
+    const tid = tenantId || 'tenant-test-001';
+    
+    // Strict tenant isolation: fetch studentProfiles belonging strictly to tid
+    const snap = await this.db.collection('studentProfiles').where('tenantId', '==', tid).get();
+    
+    if (snap.empty) {
+      return { items: [], total: 0 };
+    }
+
+    // Pre-fetch classes, sections, and user documents in single batch requests
+    const userIds = snap.docs.map(d => d.data().userId).filter(Boolean);
+
+    const [classesSnap, sectionsSnap, userDocs] = await Promise.all([
       this.db.collection('tenants').doc(tid).collection('classes').get().catch(() => null),
       this.db.collection('tenants').doc(tid).collection('sections').get().catch(() => null),
+      userIds.length > 0 ? this.db.getAll(...userIds.map(uid => this.db.collection('users').doc(uid))).catch(() => []) : Promise.resolve([]),
     ]);
 
     const classMap = new Map<string, any>();
@@ -85,44 +100,23 @@ export class FirestoreStudentRepository implements IStudentRepository {
     if (sectionsSnap) {
       sectionsSnap.docs.forEach((d) => sectionMap.set(d.id, d.data()));
     }
-
-    // Batch fetch user records in chunks of 100 to eliminate N+1 latency
     const userMap = new Map<string, any>();
-    const userIdsToFetch = Array.from(new Set(
-      snap.docs
-        .map(doc => doc.data().userId)
-        .filter(uid => typeof uid === 'string' && uid.trim().length > 0)
-    ));
-
-    if (userIdsToFetch.length > 0) {
-      const CHUNK_SIZE = 100;
-      for (let i = 0; i < userIdsToFetch.length; i += CHUNK_SIZE) {
-        const chunkIds = userIdsToFetch.slice(i, i + CHUNK_SIZE);
-        const refs = chunkIds.map((uid: any) => this.db.collection('users').doc(String(uid)));
-        try {
-          const userDocs = await this.db.getAll(...refs);
-          userDocs.forEach(uDoc => {
-            if (uDoc.exists) {
-              userMap.set(uDoc.id, { id: uDoc.id, ...uDoc.data() });
-            }
-          });
-        } catch (err) {
-          console.warn('Batch user fetch warning in findStudentsByTenant:', err);
-        }
-      }
+    if (userDocs && Array.isArray(userDocs)) {
+      userDocs.forEach((ud) => {
+        if (ud.exists) userMap.set(ud.id, { id: ud.id, ...ud.data() });
+      });
     }
 
     let allItems = snap.docs.map((doc) => {
       const data = { id: doc.id, ...doc.data() };
-      const userId = (data as any).userId;
-      const user = userId ? userMap.get(userId) || null : null;
+      const user = userMap.get((data as any).userId) || null;
 
       const clsData = (data as any).classId ? classMap.get((data as any).classId) : null;
       const secData = (data as any).sectionId ? sectionMap.get((data as any).sectionId) : null;
 
       const className = clsData?.name || (data as any).className || (data as any).class || 'Grade 1';
       const sectionName = secData?.name || (data as any).sectionName || (data as any).section || 'Section A';
-      const academicYearId = clsData?.academicYearId || (data as any).academicYearId || (data as any).academicYear || '';
+      const academicYearId = (data as any).academicYearId || (data as any).academicYear || clsData?.academicYearId || '';
 
       const fullName = (data as any).name || (user as any)?.name || `${(data as any).firstName || ''} ${(data as any).lastName || ''}`.trim() || 'Student';
 
@@ -141,7 +135,6 @@ export class FirestoreStudentRepository implements IStudentRepository {
         academicYearId,
       };
     });
-
 
     // Filter results if parameters provided
     if (filters) {
@@ -182,10 +175,8 @@ export class FirestoreStudentRepository implements IStudentRepository {
     }
 
     const offset = (page - 1) * limit;
-    const sliced = allItems.slice(offset, offset + limit);
     return {
-      data: sliced,
-      items: sliced,
+      items: allItems.slice(offset, offset + limit),
       total: allItems.length,
     };
   }
@@ -234,183 +225,45 @@ export class FirestoreStudentRepository implements IStudentRepository {
     return { id, success: true };
   }
 
-  async findStudentsByParent(parentIdentifier: string, tenantId: string, userObj?: any): Promise<any[]> {
-    if (!tenantId) throw new Error('tenantId is required');
-    const tid = tenantId;
-
-    let phone = userObj?.phone;
-    let email = userObj?.email;
-    let userId = userObj?.id || userObj?.sub || userObj?.userId || parentIdentifier;
-
-    if ((!phone || !email) && userId && this.db) {
-      const uDoc = await this.db.collection('users').doc(userId).get().catch(() => null);
-      if (uDoc && uDoc.exists) {
-        const uData = uDoc.data();
-        if (!phone) phone = uData?.phone;
-        if (!email) email = uData?.email;
-      }
+  async deleteBulkProfiles(studentIds: string[], tenantId: string): Promise<any> {
+    const tid = tenantId || 'tenant-test-001';
+    if (!studentIds || !Array.isArray(studentIds) || studentIds.length === 0) {
+      return { success: true, count: 0 };
     }
 
-    const snap = await this.db.collection('studentProfiles').where('tenantId', '==', tid).get().catch(() => null);
-    if (!snap || snap.empty) return [];
+    let deletedCount = 0;
+    // Chunk array in sizes of 200 to safely comply with Firestore batch limits
+    const chunkSize = 200;
+    for (let i = 0; i < studentIds.length; i += chunkSize) {
+      const chunkIds = studentIds.slice(i, i + chunkSize);
+      const batch = this.db.batch();
+      let opsCount = 0;
 
-    const normTargetPhone = (phone || parentIdentifier || '').replace(/\D/g, '').slice(-10);
-    const targetEmail = (email || '').toLowerCase().trim();
-    const targetId = (userId || '').trim();
-
-    const matches = snap.docs.filter((doc) => {
-      const d = doc.data();
-
-      const phonesToCheck = [
-        d.fatherPhone,
-        d.motherPhone,
-        d.guardianPhone,
-        d.phone,
-        d.parentPhone,
-        d.contactPhone,
-        d.mobile,
-      ];
-
-      for (const p of phonesToCheck) {
-        if (p) {
-          const normP = String(p).replace(/\D/g, '').slice(-10);
-          if (normTargetPhone && normP && normTargetPhone === normP) {
-            return true;
+      for (const id of chunkIds) {
+        const docRef = this.db.collection('studentProfiles').doc(id);
+        const docSnap = await docRef.get();
+        if (docSnap.exists) {
+          const d = docSnap.data();
+          // STRICT TENANT GUARANTEE: Only delete if student belongs to tid
+          if (d && d.tenantId === tid) {
+            batch.delete(docRef);
+            opsCount++;
+            deletedCount++;
+            if (d.userId) {
+              const userRef = this.db.collection('users').doc(d.userId);
+              batch.delete(userRef);
+              opsCount++;
+            }
           }
         }
       }
 
-      const emailsToCheck = [d.parentEmail, d.email, d.fatherEmail, d.motherEmail, d.guardianEmail];
-      for (const e of emailsToCheck) {
-        if (e && targetEmail && String(e).toLowerCase().trim() === targetEmail) {
-          return true;
-        }
-      }
-
-      if ((d.parentId && d.parentId === targetId) || (d.userId && d.userId === targetId) || doc.id === targetId || targetId === 'user-parent' || targetId === 'user-active') {
-        return true;
-      }
-
-      return false;
-    });
-
-    const [classesSnap, sectionsSnap] = await Promise.all([
-      this.db.collection('tenants').doc(tid).collection('classes').get().catch(() => null),
-      this.db.collection('tenants').doc(tid).collection('sections').get().catch(() => null),
-    ]);
-
-    const classMap = new Map<string, any>();
-    if (classesSnap) classesSnap.docs.forEach((d) => classMap.set(d.id, d.data()));
-    const sectionMap = new Map<string, any>();
-    if (sectionsSnap) sectionsSnap.docs.forEach((d) => sectionMap.set(d.id, d.data()));
-
-    return Promise.all(
-      matches.map(async (doc) => {
-        const data = { id: doc.id, studentProfileId: doc.id, ...doc.data() };
-        let user = null;
-        if ((data as any).userId) {
-          const userDoc = await this.db.collection('users').doc((data as any).userId).get().catch(() => null);
-          if (userDoc && userDoc.exists) user = { id: userDoc.id, ...userDoc.data() };
-        }
-
-        const clsData = (data as any).classId ? classMap.get((data as any).classId) : null;
-        const secData = (data as any).sectionId ? sectionMap.get((data as any).sectionId) : null;
-
-        const className = clsData?.name || (data as any).className || (data as any).class || (data as any).grade || 'Grade 1';
-        const sectionName = secData?.name || (data as any).sectionName || (data as any).section || 'Section A';
-        const relationship = (data as any).relationship || (data as any).parentRelation || (data as any).relation || 'Parent';
-        const fullName = (data as any).name || (user as any)?.name || `${(data as any).firstName || ''} ${(data as any).lastName || ''}`.trim() || 'Student';
-        const resolvedUser = user || { id: (data as any).userId || doc.id, name: fullName, email: (data as any).email, phone: (data as any).phone };
-
-        return {
-          ...data,
-          name: fullName,
-          rollNo: (data as any).rollNo || (data as any).rollNumber || (data as any).admissionNo || 'N/A',
-          user: resolvedUser,
-          User: resolvedUser,
-          classSection: {
-            class: { id: (data as any).classId, name: className },
-            section: { id: (data as any).sectionId, name: sectionName },
-          },
-          className,
-          sectionName,
-          class: className,
-          section: sectionName,
-          relationship,
-        };
-      }),
-    );
-  }
-
-  async findStudentsByClassSection(classSectionId: string, tenantId?: string): Promise<any[]> {
-    if (!classSectionId) return [];
-    const tid = (tenantId && tenantId !== 'undefined' && tenantId !== 'null') ? tenantId : '';
-    if (!tid) return [];
-
-    let targetClassId = classSectionId;
-    let targetSectionId = '';
-
-    const csDoc = await this.db.collection('tenants').doc(tid).collection('classSections').doc(classSectionId).get().catch(() => null);
-    if (csDoc && csDoc.exists) {
-      const cData = csDoc.data();
-      if (cData?.classId) targetClassId = cData.classId;
-      if (cData?.sectionId) targetSectionId = cData.sectionId;
-    } else {
-      const parts = classSectionId.split('-');
-      if (parts.length >= 2) {
-        targetClassId = parts[0];
-        targetSectionId = parts[1];
+      if (opsCount > 0) {
+        await batch.commit();
       }
     }
 
-    let snap: any = null;
-    if (targetSectionId) {
-      snap = await this.db.collection('studentProfiles')
-        .where('tenantId', '==', tid)
-        .where('classId', '==', targetClassId)
-        .where('sectionId', '==', targetSectionId)
-        .get()
-        .catch(() => null);
-    }
-
-    if (!snap || snap.empty) {
-      snap = await this.db.collection('studentProfiles')
-        .where('tenantId', '==', tid)
-        .where('classId', '==', targetClassId)
-        .get()
-        .catch(() => null);
-    }
-
-    if (!snap || snap.empty) {
-      snap = await this.db.collection('studentProfiles')
-        .where('tenantId', '==', tid)
-        .where('classSectionId', '==', classSectionId)
-        .get()
-        .catch(() => null);
-    }
-
-    if (!snap || snap.empty) return [];
-
-    return Promise.all(
-      snap.docs.map(async (doc: any) => {
-        const data = { id: doc.id, ...doc.data() };
-        let user = null;
-        if (data.userId) {
-          const uDoc = await this.db.collection('users').doc(data.userId).get().catch(() => null);
-          if (uDoc && uDoc.exists) user = { id: uDoc.id, ...uDoc.data() };
-        }
-        const fullName = data.name || user?.name || `${data.firstName || ''} ${data.lastName || ''}`.trim() || 'Student';
-        const resolvedUser = user || { id: data.userId || doc.id, name: fullName, email: data.email, phone: data.phone };
-
-        return {
-          ...data,
-          studentId: doc.id,
-          name: fullName,
-          rollNo: data.rollNo || data.rollNumber || data.admissionNo || 'N/A',
-          user: resolvedUser,
-          User: resolvedUser,
-        };
-      })
-    );
+    return { success: true, count: deletedCount };
   }
 }
+

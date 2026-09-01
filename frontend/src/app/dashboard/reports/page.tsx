@@ -50,38 +50,8 @@ export default function ReportsAnalyticsPage() {
       const res = await api.get('/dashboard/reports');
       setReportsData(res.data);
     } catch (err) {
-      console.warn('Primary reports API failed, attempting summary fallback:', err);
-      try {
-        const sumRes = await api.get('/dashboard/summary');
-        const s = sumRes.data;
-        setReportsData({
-          demographics: {
-            totalStudents: s.stats?.studentsCount || 6,
-            classDistribution: { 'Grade 1': 3, 'Grade 2': 1, 'Grade 10': 2 },
-            timeline: [{ date: new Date().toISOString().split('T')[0], count: s.stats?.studentsCount || 6 }],
-          },
-          financials: {
-            totalRevenue: s.stats?.totalRevenue || 15001,
-            outstandingReceivables: 35000,
-            totalExpenses: 0,
-            netCashflow: s.stats?.totalRevenue || 15001,
-          },
-          grading: {
-            averageScore: 85.6,
-            passRate: 96.5,
-            distribution: {
-              failed: 2,
-              belowAverage: 5,
-              average: 20,
-              firstDivision: 35,
-              highDistinction: 12,
-            },
-          },
-        });
-      } catch (sumErr) {
-        console.error('Error loading reports details:', err);
-        setError('Failed to fetch real-time reports analytics');
-      }
+      console.error('Error loading reports details:', err);
+      setError('Failed to fetch real-time reports analytics');
     } finally {
       setIsLoading(false);
     }
@@ -95,16 +65,8 @@ export default function ReportsAnalyticsPage() {
     if (isExporting) return;
     setIsExporting(true);
     try {
-      let data: any[] = [];
-      try {
-        const res = await api.get(`/dashboard/reports/${type}`);
-        data = res.data;
-      } catch (err) {
-        const sumRes = await api.get('/dashboard/summary');
-        data = sumRes.data?.recentPayments || [
-          { 'Receipt No': 'REC-018435', 'Student Name': 'don don', 'Amount Paid': 2500, 'Payment Date': '2026-08-19', 'Payment Method': 'CASH', 'Status': 'SUCCESS' }
-        ];
-      }
+      const res = await api.get(`/dashboard/reports/${type}`);
+      const data = res.data;
 
       if (!data || data.length === 0) {
         alert('No records available to export.');

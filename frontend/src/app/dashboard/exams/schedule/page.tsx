@@ -136,7 +136,7 @@ export default function ExamSchedulePage() {
       const [classRes, subRes, yearsRes] = await Promise.all([
         api.get('/exams/classes'),
         api.get('/exams/subjects'),
-        api.get('/exams/academic-years')
+        api.get('/complaint-box/academic-years')
       ]);
       setClasses(classRes.data || []);
       setSubjects(subRes.data || []);
@@ -844,13 +844,9 @@ export default function ExamSchedulePage() {
                   onChange={(e) => setFormClassSectionId(e.target.value)}
                   className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2.5 text-xs font-bold text-slate-700 dark:text-slate-200 outline-none focus:border-blue-500 focus:bg-white"
                 >
-                  {classes.length === 0 ? (
-                    <option value="">No class sections available for this school. Please create a class section first.</option>
-                  ) : (
-                    classes.map(cls => (
-                      <option key={cls.value} value={cls.value} className="dark:bg-slate-800">{cls.label}</option>
-                    ))
-                  )}
+                  {classes.map(cls => (
+                    <option key={cls.value} value={cls.value} className="dark:bg-slate-800">{cls.label}</option>
+                  ))}
                 </select>
               </div>
 
@@ -861,15 +857,9 @@ export default function ExamSchedulePage() {
                   onChange={(e) => setFormAcademicYearId(e.target.value)}
                   className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2.5 text-xs font-bold text-slate-700 dark:text-slate-200 outline-none focus:border-blue-500 focus:bg-white"
                 >
-                  {academicYears.length === 0 ? (
-                    <option value="">No academic years configured</option>
-                  ) : (
-                    academicYears.map(yr => (
-                      <option key={yr.id} value={yr.id} className="dark:bg-slate-800">
-                        {yr.name}{yr.isActive ? ' (Active)' : ''}
-                      </option>
-                    ))
-                  )}
+                  {academicYears.map(yr => (
+                    <option key={yr.id} value={yr.id} className="dark:bg-slate-800">{yr.name}</option>
+                  ))}
                 </select>
               </div>
             </div>
