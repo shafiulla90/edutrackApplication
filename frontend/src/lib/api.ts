@@ -5,7 +5,8 @@ import axios from 'axios';
 const envApiUrl = process.env.NEXT_PUBLIC_API_URL;
 const BACKEND_URL = (envApiUrl && envApiUrl.startsWith('http') && !envApiUrl.includes('/backend') && !envApiUrl.includes('[SENSITIVE]'))
   ? envApiUrl
-  : 'https://api-edutrack.covenantsynergy.in';
+  : 'https://edutrack-backend-api.vercel.app';
+
 
 export function getActiveRole(): 'TEACHER' | 'SCHOOL_ADMIN' | 'PARENT' | 'DRIVER' {
   if (typeof window === 'undefined') return 'SCHOOL_ADMIN';
@@ -93,11 +94,9 @@ export function getTenantFromHostname(): string {
       return sub;
     }
   } else if (hostname.endsWith('.vercel.app')) {
-    const parts = hostname.replace('.vercel.app', '').split('.');
-    if (parts.length > 1 && parts[0] !== 'www') {
-      return parts[0];
-    }
+    return '';
   } else {
+
     const parts = hostname.split('.');
     if (parts.length > 1 && parts[0] !== 'localhost' && parts[0] !== 'www' && isNaN(Number(parts[0]))) {
       return parts[0];
