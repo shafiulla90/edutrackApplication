@@ -4,9 +4,8 @@ import React, { useState, useEffect, useRef, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { ArrowLeft, Loader2, AlertCircle, ShieldCheck } from 'lucide-react';
 import { api } from '@/lib/api';
-import { auth } from '@/lib/firebase';
 import { getConfirmationResult, setConfirmationResult } from '@/lib/firebaseAuthStore';
-import { RecaptchaVerifier, signInWithPhoneNumber } from 'firebase/auth';
+
 
 function OtpContent() {
   const router = useRouter();
@@ -22,22 +21,15 @@ function OtpContent() {
   const [error, setError] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
 
-  const recaptchaVerifierRef = useRef<RecaptchaVerifier | null>(null);
+
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
       setSchoolName(sessionStorage.getItem('otp_schoolName') || searchParams.get('schoolName') || '');
       setLogoUrl(sessionStorage.getItem('otp_logoUrl') || searchParams.get('logoUrl') || '');
     }
-    return () => {
-      if (recaptchaVerifierRef.current) {
-        try {
-          recaptchaVerifierRef.current.clear();
-        } catch (e) {}
-        recaptchaVerifierRef.current = null;
-      }
-    };
   }, [searchParams]);
+
 
   // Refs for auto-focusing next input
   const inputRefs = useRef<HTMLInputElement[]>([]);
@@ -200,33 +192,25 @@ function OtpContent() {
     setSuccessMsg('Resending OTP...');
     setLoading(true);
     try {
-      // Step 1: Validate with backend to register cooldown & rate limits
+      // Call backend to resend OTP (backend sends the real SMS)
       await api.post('/auth/send-otp', { phone, portal });
 
-      // Step 2: Trigger Firebase signInWithPhoneNumber
-      if (!recaptchaVerifierRef.current) {
-        throw new Error('reCAPTCHA has not been initialized. Please refresh the page.');
-      }
-
-      let formattedPhone = phone;
-      if (!formattedPhone.startsWith('+')) {
-        formattedPhone = `+91${formattedPhone}`;
-      }
-
-      const newConfirmationResult = await signInWithPhoneNumber(auth, formattedPhone, recaptchaVerifierRef.current);
-      setConfirmationResult(newConfirmationResult);
+      // Reset confirmation result for backend-only verification
+      setConfirmationResult({
+        confirm: async (code: string) => {
+          return {
+            user: {
+              getIdToken: async () => code
+            }
+          } as any;
+        }
+      } as any);
 
       setSuccessMsg('OTP resent successfully.');
     } catch (err: any) {
       console.error('Resend OTP error:', err);
       let userFriendlyMessage = 'Failed to resend OTP. Please try again.';
-      if (err.code === 'auth/invalid-phone-number') {
-        userFriendlyMessage = 'Invalid mobile number format.';
-      } else if (err.code === 'auth/quota-exceeded') {
-        userFriendlyMessage = 'SMS quota exceeded. Please try again tomorrow.';
-      } else if (err.code === 'auth/too-many-requests') {
-        userFriendlyMessage = 'Too many requests. Please wait a few minutes.';
-      } else if (err.response?.data?.message) {
+      if (err.response?.data?.message) {
         userFriendlyMessage = err.response.data.message;
       } else if (err.message) {
         userFriendlyMessage = err.message;
@@ -236,6 +220,7 @@ function OtpContent() {
       setLoading(false);
     }
   };
+
 
   return (
     <main className="min-h-screen bg-slate-950 text-slate-100 flex flex-col justify-center items-center px-4 relative overflow-hidden">

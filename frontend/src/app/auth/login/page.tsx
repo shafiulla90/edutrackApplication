@@ -6,9 +6,8 @@ import { Phone, ArrowRight, Loader2, AlertCircle, ArrowLeft, ShieldAlert } from 
 import Link from 'next/link';
 import { api } from '@/lib/api';
 import { useTenant } from '../../providers/TenantContext';
-import { auth } from '@/lib/firebase';
-import { signInWithPhoneNumber, RecaptchaVerifier } from 'firebase/auth';
-import { setConfirmationResult, setSavedPhone } from '@/lib/firebaseAuthStore';
+import { setSavedPhone, setConfirmationResult } from '@/lib/firebaseAuthStore';
+
 
 function LoginContent() {
   const router = useRouter();
@@ -52,31 +51,6 @@ if (isSchoolSubdomain) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [notFoundInfo, setNotFoundInfo] = useState<{ isNotFound: boolean; portal: string; message: string } | null>(null);
-
-  const recaptchaVerifierRef = useRef<RecaptchaVerifier | null>(null);
-
-  useEffect(() => {
-    if (typeof window !== 'undefined' && !recaptchaVerifierRef.current) {
-      try {
-        recaptchaVerifierRef.current = new RecaptchaVerifier(auth, 'recaptcha-container', {
-          size: 'invisible',
-          callback: () => {
-            // reCAPTCHA solved
-          }
-        });
-      } catch (err) {
-        console.error('Failed to initialize RecaptchaVerifier:', err);
-      }
-    }
-    return () => {
-      if (recaptchaVerifierRef.current) {
-        try {
-          recaptchaVerifierRef.current.clear();
-        } catch (e) {}
-        recaptchaVerifierRef.current = null;
-      }
-    };
-  }, []);
 
   const portalTitle = 
     portal === 'teacher' ? 'Teacher Portal' :
@@ -202,43 +176,17 @@ if (isSchoolSubdomain) {
       sessionStorage.setItem('otp_schoolName', schoolName);
       sessionStorage.setItem('otp_logoUrl', logoUrl);
 
-      // Step 2: Trigger Firebase Phone Authentication (Sends real SMS OTP to user phone)
-
-      if (recaptchaVerifierRef.current) {
-        try {
-          recaptchaVerifierRef.current.clear();
-        } catch (e) {}
-        recaptchaVerifierRef.current = null;
-      }
-
-      try {
-        recaptchaVerifierRef.current = new RecaptchaVerifier(auth, 'recaptcha-container', {
-          size: 'invisible',
-        });
-      } catch (err) {
-        console.error('Failed to instantiate RecaptchaVerifier:', err);
-      }
-
-      let formattedPhone = cleanedPhone;
-      if (!formattedPhone.startsWith('+')) {
-        formattedPhone = `+91${formattedPhone}`;
-      }
-
-      try {
-        const confirmationResult = await signInWithPhoneNumber(auth, formattedPhone, recaptchaVerifierRef.current!);
-        setConfirmationResult(confirmationResult);
-      } catch (fbErr: any) {
-        console.warn('Firebase Phone Auth client SDK returned error (proceeding with backend OTP):', fbErr);
-        setConfirmationResult({
-          confirm: async (code: string) => {
-            return {
-              user: {
-                getIdToken: async () => code
-              }
-            } as any;
-          }
-        } as any);
-      }
+      // Backend already sent the SMS OTP via Twilio/Firebase Admin SDK.
+      // Set a backend-only confirmation result — no Firebase client phone auth needed.
+      setConfirmationResult({
+        confirm: async (code: string) => {
+          return {
+            user: {
+              getIdToken: async () => code
+            }
+          } as any;
+        }
+      } as any);
       setSavedPhone(cleanedPhone);
 
       const tenant = searchParams.get('tenant') || '';
@@ -249,12 +197,6 @@ if (isSchoolSubdomain) {
       router.push(otpUrl);
     } catch (err: any) {
       console.error('Send OTP error:', err);
-      if (recaptchaVerifierRef.current) {
-        try {
-          recaptchaVerifierRef.current.clear();
-        } catch (e) {}
-        recaptchaVerifierRef.current = null;
-      }
       let userFriendlyMessage = 'Failed to send OTP. Please try again.';
       if (err.code === 'auth/invalid-phone-number') {
         userFriendlyMessage = 'Invalid mobile number format.';
