@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 // Backend URL - reads from env var on Vercel, falls back to live production backend
-const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || process.env.BACKEND_INTERNAL_URL || 'https://edutrack-backend-api.vercel.app';
+const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || process.env.BACKEND_INTERNAL_URL || 'https://edutrack-backend-api-git-master-shafiulla90s-projects.vercel.app';
 
 export async function GET(request: NextRequest, { params }: { params: { path: string[] } }) {
   return proxyRequest(request, params.path, 'GET');
