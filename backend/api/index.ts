@@ -15,7 +15,13 @@ async function bootstrap() {
     });
 
     app.enableCors({
-      origin: (origin: any, callback: any) => callback(null, true),
+      origin: (origin: string | undefined, callback: (err: Error | null, allow?: any) => void) => {
+        if (origin) {
+          callback(null, origin);
+        } else {
+          callback(null, true);
+        }
+      },
       methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE', 'OPTIONS'],
       allowedHeaders: [
         'Content-Type',
@@ -63,15 +69,13 @@ function normalizeUrl(url: string): string {
 }
 
 export default async function handler(req: any, res: any) {
-  // Extract and format request origin for strict W3C CORS compliance
-  const rawOrigin = req.headers?.origin || req.headers?.referer;
+  const reqOrigin = req.headers?.origin || req.headers?.referer || '';
   let origin = '';
-  if (rawOrigin) {
+  if (reqOrigin) {
     try {
-      const parsed = new URL(rawOrigin);
-      origin = parsed.origin;
+      origin = new URL(reqOrigin).origin;
     } catch {
-      origin = String(rawOrigin).trim().replace(/\/$/, '');
+      origin = String(reqOrigin).trim().replace(/\/$/, '');
     }
   }
 
@@ -89,7 +93,6 @@ export default async function handler(req: any, res: any) {
   );
   res.setHeader('Access-Control-Max-Age', '86400');
 
-  // Handle OPTIONS preflight requests immediately before any route handling or auth checks
   if (req.method === 'OPTIONS') {
     res.statusCode = 204;
     return res.end();
