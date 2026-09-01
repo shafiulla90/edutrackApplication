@@ -140,25 +140,28 @@ export class FirestoreTeacherRepository implements ITeacherRepository {
     const tid = tenantId || 'tenant-test-001';
 
     // 1. Query staffProfiles directly by tenantId
-    const staffProfilesSnap = await this.db.collection('staffProfiles').where('tenantId', '==', tid).get();
+    const staffProfilesSnap = await this.db.collection('staffProfiles').where('tenantId', '==', tid).get().catch(() => null);
+    const staffDocs = staffProfilesSnap ? staffProfilesSnap.docs : [];
     
-    // 2. Query users with role TEACHER, STAFF, DRIVER for this tenant
-    const [teacherSnap, staffSnap, driverSnap] = await Promise.all([
-      this.db.collection('users').where('tenantId', '==', tid).where('role', '==', 'TEACHER').get(),
-      this.db.collection('users').where('tenantId', '==', tid).where('role', '==', 'STAFF').get(),
-      this.db.collection('users').where('tenantId', '==', tid).where('role', '==', 'DRIVER').get(),
-    ]);
+    // 2. Query users for this tenant using single-field index for max reliability
+    const usersSnap = await this.db.collection('users').where('tenantId', '==', tid).get().catch(() => null);
+    const userDocs = usersSnap ? usersSnap.docs : [];
 
-    const allUserDocs = [...teacherSnap.docs, ...staffSnap.docs, ...driverSnap.docs];
     const userMap = new Map<string, any>();
-    allUserDocs.forEach((uDoc) => {
-      userMap.set(uDoc.id, { id: uDoc.id, ...uDoc.data() });
+    const allUserDocs: any[] = [];
+
+    userDocs.forEach((uDoc) => {
+      const uData = { id: uDoc.id, ...uDoc.data() } as any;
+      userMap.set(uDoc.id, uData);
+      if (['TEACHER', 'STAFF', 'DRIVER', 'SCHOOL_ADMIN'].includes(uData.role)) {
+        allUserDocs.push(uDoc);
+      }
     });
 
     const profilesByUserId = new Map<string, any>();
     const resultProfiles: any[] = [];
 
-    staffProfilesSnap.docs.forEach((doc) => {
+    staffDocs.forEach((doc) => {
       const data = { id: doc.id, ...doc.data() };
       const userData = userMap.get((data as any).userId) || null;
       const fullProfile = {
