@@ -143,7 +143,10 @@ api.interceptors.response.use(
         // Prevent redirect loop if already on root page, auth pages, or public registration
         const path = window.location.pathname;
         const isPublicPath = path === '/' || path.startsWith('/auth/') || path.startsWith('/register-school');
-        if (!isPublicPath) {
+        // Do NOT redirect for background tenant polling calls - TenantContext handles those
+        const url = error.config?.url || '';
+        const isTenantPolling = url.includes('/tenant/setup-status') || url.includes('/tenant/public-branding');
+        if (!isPublicPath && !isTenantPolling) {
           clearStoredAuth();
           window.location.href = '/auth/login';
         }
@@ -152,4 +155,5 @@ api.interceptors.response.use(
     return Promise.reject(error);
   }
 );
+
 export const updateStudent = (id: string, data: Partial<any>) => api.patch(`/students/${id}`, data);

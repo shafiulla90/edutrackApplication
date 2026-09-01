@@ -144,14 +144,21 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
         setAdminName("");
         setLogoUrl(null);
       }
-    } catch (err) {
-      console.error('Failed to fetch tenant setup status:', err);
-      setSchoolName("");
-      setSchoolType("");
-      setAdminName("");
-      setLogoUrl(null);
-      setCurrentUser(null);
-      setSubscription(null);
+    } catch (err: any) {
+      console.warn('Failed to fetch tenant setup status (non-fatal):', err?.response?.status, err?.message);
+      // On 401: token expired — clear auth and redirect
+      if (err?.response?.status === 401) {
+        setCurrentUser(null);
+        setSubscription(null);
+        if (typeof window !== 'undefined') {
+          localStorage.removeItem('admin_token');
+          localStorage.removeItem('teacher_token');
+          localStorage.removeItem('parent_token');
+          sessionStorage.removeItem('active_role');
+          window.location.href = '/auth/login';
+        }
+      }
+      // On other errors (network, 500, etc.) — keep current state, do NOT log out
     } finally {
       setLoading(false);
     }
@@ -210,7 +217,7 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
       } catch (err) {
         console.error('Failed background sync of tenant data:', err);
       }
-    }, 5000); // Check every 5 seconds
+    }, 30000); // Check every 30 seconds (reduced from 5s to avoid excessive polling)
 
     return () => clearInterval(interval);
   }, [token]);
