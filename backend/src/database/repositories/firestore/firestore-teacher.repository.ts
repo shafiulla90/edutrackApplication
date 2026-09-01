@@ -175,7 +175,7 @@ export class FirestoreTeacherRepository implements ITeacherRepository {
     // 3. For any user with role TEACHER, STAFF, or DRIVER in this tenant that doesn't have a staffProfile record yet,
     // synthesize a profile object in-memory so read operation is complete without missing staff members.
     allUserDocs.forEach((uDoc) => {
-      const userData = { id: uDoc.id, ...uDoc.data() };
+      const userData: any = { id: uDoc.id, ...uDoc.data() };
       if (!profilesByUserId.has(userData.id)) {
         const isTeaching = userData.role === 'TEACHER';
         const designation = isTeaching ? 'Teacher' : userData.role === 'DRIVER' ? 'Transport Driver' : 'Staff Member';
