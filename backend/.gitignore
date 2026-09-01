@@ -5,3 +5,7 @@ firebase-service-account.json
 *.key.json
 .vercel
 .env*
+api/*.js
+api/*.js.map
+api/*.d.ts
+

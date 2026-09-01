@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-// Backend URL - reads from env var on Vercel, falls back to live production backend
-const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || process.env.BACKEND_INTERNAL_URL || 'https://edutrack-backend-api-git-master-shafiulla90s-projects.vercel.app';
+const envUrl = process.env.NEXT_PUBLIC_API_URL || process.env.BACKEND_INTERNAL_URL;
+const BACKEND_URL = (envUrl && envUrl.startsWith('http') && !envUrl.includes('/backend') && !envUrl.endsWith('edutrack-backend-api.vercel.app'))
+  ? envUrl
+  : 'https://edutrack-backend-api-git-master-shafiulla90s-projects.vercel.app';
 
 export async function GET(request: NextRequest, { params }: { params: { path: string[] } }) {
   return proxyRequest(request, params.path, 'GET');
@@ -32,7 +34,6 @@ async function proxyRequest(request: NextRequest, pathSegments: string[], method
     'Content-Type': 'application/json',
   };
 
-  // Forward auth and tenant headers from the original request
   const authHeader = request.headers.get('Authorization');
   if (authHeader) headers['Authorization'] = authHeader;
 
@@ -44,7 +45,6 @@ async function proxyRequest(request: NextRequest, pathSegments: string[], method
     headers,
   };
 
-  // Forward body for non-GET requests
   if (method !== 'GET' && method !== 'DELETE') {
     try {
       const body = await request.text();
