@@ -81,8 +81,17 @@ function OtpContent() {
         try {
           const credential = await confirmationResult.confirm(codeStr);
           idToken = await credential.user.getIdToken();
-        } catch (fbErr) {
-          console.warn('Firebase confirmation failed, verifying directly with backend:', fbErr);
+        } catch (fbErr: any) {
+          console.error('Firebase OTP verification failed:', fbErr);
+          let errMessage = 'Invalid 6-digit OTP code. Please enter the exact OTP sent to your phone.';
+          if (fbErr?.code === 'auth/invalid-verification-code') {
+            errMessage = 'Incorrect OTP code. Please check your SMS and try again.';
+          } else if (fbErr?.message) {
+            errMessage = fbErr.message;
+          }
+          setError(errMessage);
+          setLoading(false);
+          return;
         }
       }
 
