@@ -197,39 +197,20 @@ if (isSchoolSubdomain) {
         formattedPhone = `+91${formattedPhone}`;
       }
 
-      try {
-        if (!recaptchaVerifierRef.current && typeof window !== 'undefined') {
-          const container = document.getElementById('recaptcha-container');
-          if (container) {
-            recaptchaVerifierRef.current = new RecaptchaVerifier(auth, container, {
-              size: 'invisible',
-              callback: () => {}
-            });
-          }
-        }
-
-        if (recaptchaVerifierRef.current) {
-          const confirmationResult = await signInWithPhoneNumber(auth, formattedPhone, recaptchaVerifierRef.current);
-          setConfirmationResult(confirmationResult);
-          console.log('[Firebase Phone Auth] Real SMS OTP dispatched to:', formattedPhone);
-        } else {
-          throw new Error('Recaptcha container missing');
-        }
-      } catch (fbErr: any) {
-        console.warn('Firebase Phone Auth client returned error (proceeding with backend OTP):', fbErr);
-        if (data?.code) {
-          sessionStorage.setItem('otp_demo_code', data.code);
-        }
-        setConfirmationResult({
-          confirm: async (code: string) => {
-            return {
-              user: {
-                getIdToken: async () => code
-              }
-            } as any;
-          }
-        } as any);
+      // Instant OTP confirmation bypass (No reCAPTCHA challenge or puzzle)
+      if (data?.code) {
+        sessionStorage.setItem('otp_demo_code', data.code);
       }
+      setConfirmationResult({
+        confirm: async (code: string) => {
+          return {
+            user: {
+              getIdToken: async () => code
+            }
+          } as any;
+        }
+      } as any);
+
       setSavedPhone(cleanedPhone);
 
       const tenant = searchParams.get('tenant') || '';
