@@ -14,11 +14,17 @@ async function bootstrap() {
       logger: ['error', 'warn', 'log'],
     });
 
-    // Allow ALL origins dynamically - required for Vercel serverless + browser CORS
     app.enableCors({
       origin: (origin: any, callback: any) => callback(null, true),
       methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE', 'OPTIONS'],
-      allowedHeaders: ['Content-Type', 'Accept', 'Authorization', 'X-Tenant-ID', 'X-Requested-With'],
+      allowedHeaders: [
+        'Content-Type',
+        'Accept',
+        'Authorization',
+        'X-Tenant-ID',
+        'X-Requested-With',
+        'X-Academic-Year-ID',
+      ],
       credentials: true,
       optionsSuccessStatus: 204,
     });
@@ -57,15 +63,33 @@ function normalizeUrl(url: string): string {
 }
 
 export default async function handler(req: any, res: any) {
-  // Always set CORS headers on EVERY response — before any processing
-  const origin = req.headers?.origin || '*';
-  res.setHeader('Access-Control-Allow-Origin', origin);
+  // Extract and format request origin for strict W3C CORS compliance
+  const rawOrigin = req.headers?.origin || req.headers?.referer;
+  let origin = '';
+  if (rawOrigin) {
+    try {
+      const parsed = new URL(rawOrigin);
+      origin = parsed.origin;
+    } catch {
+      origin = String(rawOrigin).trim().replace(/\/$/, '');
+    }
+  }
+
+  if (origin) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+  } else {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+  }
+
   res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, PUT, PATCH, POST, DELETE, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Accept, Authorization, X-Tenant-ID, X-Requested-With');
-  res.setHeader('Access-Control-Allow-Credentials', 'true');
+  res.setHeader(
+    'Access-Control-Allow-Headers',
+    'Content-Type, Accept, Authorization, X-Tenant-ID, X-Requested-With, X-Academic-Year-ID'
+  );
   res.setHeader('Access-Control-Max-Age', '86400');
 
-  // Handle OPTIONS preflight immediately - never let it reach NestJS
+  // Handle OPTIONS preflight requests immediately before any route handling or auth checks
   if (req.method === 'OPTIONS') {
     res.statusCode = 204;
     return res.end();
@@ -79,13 +103,20 @@ export default async function handler(req: any, res: any) {
     server(req, res);
   } catch (error: any) {
     console.error('CRITICAL SERVERLESS BOOTSTRAP ERROR:', error);
-    res.setHeader('Access-Control-Allow-Origin', origin);
+    if (origin) {
+      res.setHeader('Access-Control-Allow-Origin', origin);
+      res.setHeader('Access-Control-Allow-Credentials', 'true');
+    } else {
+      res.setHeader('Access-Control-Allow-Origin', '*');
+    }
     res.statusCode = 500;
     res.setHeader('Content-Type', 'application/json');
-    res.end(JSON.stringify({
-      error: 'Serverless Bootstrap Failed',
-      message: error?.message || String(error),
-    }));
+    res.end(
+      JSON.stringify({
+        error: 'Serverless Bootstrap Failed',
+        message: error?.message || String(error),
+      })
+    );
   }
 }
 

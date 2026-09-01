@@ -606,8 +606,7 @@ export default function DashboardLayout({
             onClick={() => {
               sessionStorage.removeItem('impersonating_from_platform');
               sessionStorage.removeItem('impersonated_school_name');
-              const isVercel = window.location.hostname.includes('vercel.app');
-              window.location.href = isVercel ? 'https://edutrack-platform-lac.vercel.app/dashboard' : 'http://localhost:3002/dashboard';
+              window.location.href = window.location.origin + '/dashboard';
             }}
             className="px-3 py-1 bg-black/30 hover:bg-black/50 text-white rounded-lg text-[11px] font-extrabold uppercase transition-all cursor-pointer"
           >
