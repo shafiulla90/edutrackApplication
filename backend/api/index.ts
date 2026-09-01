@@ -15,13 +15,7 @@ async function bootstrap() {
     });
 
     app.enableCors({
-      origin: (origin: string | undefined, callback: (err: Error | null, allow?: any) => void) => {
-        if (origin) {
-          callback(null, origin);
-        } else {
-          callback(null, true);
-        }
-      },
+      origin: true,
       methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE', 'OPTIONS'],
       allowedHeaders: [
         'Content-Type',
@@ -79,13 +73,10 @@ export default async function handler(req: any, res: any) {
     }
   }
 
-  if (origin) {
-    res.setHeader('Access-Control-Allow-Origin', origin);
-    res.setHeader('Access-Control-Allow-Credentials', 'true');
-  } else {
-    res.setHeader('Access-Control-Allow-Origin', '*');
-  }
+  const effectiveOrigin = origin || 'https://edutrack-applicationn-git-main-shafiulla90s-projects.vercel.app';
 
+  res.setHeader('Access-Control-Allow-Origin', effectiveOrigin);
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
   res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, PUT, PATCH, POST, DELETE, OPTIONS');
   res.setHeader(
     'Access-Control-Allow-Headers',
@@ -106,12 +97,8 @@ export default async function handler(req: any, res: any) {
     server(req, res);
   } catch (error: any) {
     console.error('CRITICAL SERVERLESS BOOTSTRAP ERROR:', error);
-    if (origin) {
-      res.setHeader('Access-Control-Allow-Origin', origin);
-      res.setHeader('Access-Control-Allow-Credentials', 'true');
-    } else {
-      res.setHeader('Access-Control-Allow-Origin', '*');
-    }
+    res.setHeader('Access-Control-Allow-Origin', effectiveOrigin);
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
     res.statusCode = 500;
     res.setHeader('Content-Type', 'application/json');
     res.end(
