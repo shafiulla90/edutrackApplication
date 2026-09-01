@@ -25,43 +25,39 @@ export class DashboardStatsService {
     const tid = tenantId && tenantId !== 'undefined' && tenantId !== 'null' ? tenantId : 'tenant-test-001';
 
     // Run tenant-scoped queries in parallel using Promise.all
-    const [studentsSnap, staffSnap, usersSnap, classesSnap, tenantDoc] = await Promise.all([
+    const [studentsSnap, staffSnap, usersSnap, subClassesSnap, rootClassesSnap, tenantDoc] = await Promise.all([
       // 1. Students count for current tenant
-      this.db.collection('studentProfiles').where('tenantId', '==', tid).count().get().catch(async () => {
-        const snap = await this.db.collection('studentProfiles').where('tenantId', '==', tid).get();
-        return { data: () => ({ count: snap.size }) };
-      }),
+      this.db.collection('studentProfiles').where('tenantId', '==', tid).get().catch(() => null),
 
       // 2. Staff profiles count for current tenant
-      this.db.collection('staffProfiles').where('tenantId', '==', tid).count().get().catch(async () => {
-        const snap = await this.db.collection('staffProfiles').where('tenantId', '==', tid).get();
-        return { data: () => ({ count: snap.size }) };
-      }),
+      this.db.collection('staffProfiles').where('tenantId', '==', tid).get().catch(() => null),
 
-      // 3. Fallback/supplemental teacher users count if staffProfiles count is 0
-      this.db.collection('users').where('tenantId', '==', tid).where('role', '==', 'TEACHER').count().get().catch(async () => {
-        const snap = await this.db.collection('users').where('tenantId', '==', tid).where('role', '==', 'TEACHER').get();
-        return { data: () => ({ count: snap.size }) };
-      }),
+      // 3. Users count for current tenant (single-field for max reliability)
+      this.db.collection('users').where('tenantId', '==', tid).get().catch(() => null),
 
-      // 4. Classes count for current tenant
-      this.db.collection('tenants').doc(tid).collection('classes').count().get().catch(async () => {
-        const snap = await this.db.collection('tenants').doc(tid).collection('classes').get();
-        return { data: () => ({ count: snap.size }) };
-      }),
+      // 4. Subcollection classes count
+      this.db.collection('tenants').doc(tid).collection('classes').get().catch(() => null),
 
-      // 5. Tenant profile document for setup status
+      // 5. Root collection classes count
+      this.db.collection('classes').where('tenantId', '==', tid).get().catch(() => null),
+
+      // 6. Tenant profile document
       this.db.collection('tenants').doc(tid).get().catch(() => null),
     ]);
 
-    const studentsCount = (studentsSnap as any).data().count || 0;
-    
-    // Teachers count: use staffProfiles count, or teacher users count if staffProfiles is smaller
-    const staffProfilesCount = (staffSnap as any).data().count || 0;
-    const teacherUsersCount = (usersSnap as any).data().count || 0;
+    const studentsCount = studentsSnap ? studentsSnap.size : 0;
+    const staffProfilesCount = staffSnap ? staffSnap.size : 0;
+
+    let teacherUsersCount = 0;
+    if (usersSnap && !usersSnap.empty) {
+      teacherUsersCount = usersSnap.docs.filter(d => d.data()?.role === 'TEACHER').length;
+    }
+
     const teachersCount = Math.max(staffProfilesCount, teacherUsersCount);
 
-    const classesCount = (classesSnap as any).data().count || 0;
+    const subClassesCount = subClassesSnap ? subClassesSnap.size : 0;
+    const rootClassesCount = rootClassesSnap ? rootClassesSnap.size : 0;
+    const classesCount = Math.max(subClassesCount, rootClassesCount);
 
     // Calculate Profile Completion Percentage
     const tenantData = tenantDoc && tenantDoc.exists ? tenantDoc.data() : {};
