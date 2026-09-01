@@ -6,7 +6,9 @@ import { Phone, ArrowRight, Loader2, AlertCircle, ArrowLeft, ShieldAlert } from 
 import Link from 'next/link';
 import { api } from '@/lib/api';
 import { useTenant } from '../../providers/TenantContext';
-import { setSavedPhone, setConfirmationResult } from '@/lib/firebaseAuthStore';
+import { auth } from '@/lib/firebase';
+import { signInWithPhoneNumber, RecaptchaVerifier } from 'firebase/auth';
+import { setConfirmationResult, setSavedPhone } from '@/lib/firebaseAuthStore';
 
 
 function LoginContent() {
@@ -51,6 +53,19 @@ if (isSchoolSubdomain) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [notFoundInfo, setNotFoundInfo] = useState<{ isNotFound: boolean; portal: string; message: string } | null>(null);
+
+  const recaptchaVerifierRef = useRef<RecaptchaVerifier | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (recaptchaVerifierRef.current) {
+        try {
+          recaptchaVerifierRef.current.clear();
+        } catch (e) {}
+        recaptchaVerifierRef.current = null;
+      }
+    };
+  }, []);
 
   const portalTitle = 
     portal === 'teacher' ? 'Teacher Portal' :
@@ -175,23 +190,46 @@ if (isSchoolSubdomain) {
 
       sessionStorage.setItem('otp_schoolName', schoolName);
       sessionStorage.setItem('otp_logoUrl', logoUrl);
-      if (data?.code) {
-        sessionStorage.setItem('otp_demo_code', data.code);
-      } else {
-        sessionStorage.removeItem('otp_demo_code');
+
+      // Step 2: Firebase Phone Authentication (sends REAL SMS OTP to user phone)
+      let formattedPhone = cleanedPhone;
+      if (!formattedPhone.startsWith('+')) {
+        formattedPhone = `+91${formattedPhone}`;
       }
 
-      // Backend already sent the SMS OTP via Twilio/Firebase Admin SDK.
-      // Set a backend-only confirmation result — no Firebase client phone auth needed.
-      setConfirmationResult({
-        confirm: async (code: string) => {
-          return {
-            user: {
-              getIdToken: async () => code
-            }
-          } as any;
+      try {
+        if (!recaptchaVerifierRef.current && typeof window !== 'undefined') {
+          const container = document.getElementById('recaptcha-container');
+          if (container) {
+            recaptchaVerifierRef.current = new RecaptchaVerifier(auth, container, {
+              size: 'invisible',
+              callback: () => {}
+            });
+          }
         }
-      } as any);
+
+        if (recaptchaVerifierRef.current) {
+          const confirmationResult = await signInWithPhoneNumber(auth, formattedPhone, recaptchaVerifierRef.current);
+          setConfirmationResult(confirmationResult);
+          console.log('[Firebase Phone Auth] Real SMS OTP dispatched to:', formattedPhone);
+        } else {
+          throw new Error('Recaptcha container missing');
+        }
+      } catch (fbErr: any) {
+        console.warn('Firebase Phone Auth client returned error (proceeding with backend OTP):', fbErr);
+        if (data?.code) {
+          sessionStorage.setItem('otp_demo_code', data.code);
+        }
+        setConfirmationResult({
+          confirm: async (code: string) => {
+            return {
+              user: {
+                getIdToken: async () => code
+              }
+            } as any;
+          }
+        } as any);
+      }
       setSavedPhone(cleanedPhone);
 
       const tenant = searchParams.get('tenant') || '';
