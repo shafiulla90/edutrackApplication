@@ -3,14 +3,24 @@ import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 const express = require('express');
 import { ExpressAdapter } from '@nestjs/platform-express';
-import { AppModule } from '../src/app.module';
+
+let appModuleRef: any;
+try {
+  appModuleRef = require('../dist/src/app.module').AppModule;
+} catch (e1) {
+  try {
+    appModuleRef = require('../src/app.module').AppModule;
+  } catch (e2) {
+    appModuleRef = require('./src/app.module').AppModule;
+  }
+}
 
 const server = express();
 let cachedApp: any;
 
 async function bootstrap() {
   if (!cachedApp) {
-    const app = await NestFactory.create(AppModule, new ExpressAdapter(server), {
+    const app = await NestFactory.create(appModuleRef, new ExpressAdapter(server), {
       logger: ['error', 'warn', 'log'],
     });
     app.enableCors({
@@ -35,6 +45,8 @@ function normalizeUrl(url: string): string {
   }
 
   if (path.startsWith('/api/index.ts')) {
+    path = path.substring(13);
+  } else if (path.startsWith('/api/index.js')) {
     path = path.substring(13);
   } else if (path.startsWith('/api/index')) {
     path = path.substring(10);

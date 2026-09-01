@@ -6,7 +6,18 @@ const core_1 = require("@nestjs/core");
 const common_1 = require("@nestjs/common");
 const express = require("express");
 const platform_express_1 = require("@nestjs/platform-express");
-const app_module_1 = require("../src/app.module");
+
+let app_module_1;
+try {
+    app_module_1 = require("../dist/src/app.module");
+} catch (e1) {
+    try {
+        app_module_1 = require("../src/app.module");
+    } catch (e2) {
+        app_module_1 = require("./dist/src/app.module");
+    }
+}
+
 const server = express();
 let cachedApp;
 async function bootstrap() {
@@ -35,6 +46,9 @@ function normalizeUrl(url) {
         query = url.substring(queryIndex);
     }
     if (path.startsWith('/api/index.ts')) {
+        path = path.substring(13);
+    }
+    else if (path.startsWith('/api/index.js')) {
         path = path.substring(13);
     }
     else if (path.startsWith('/api/index')) {
