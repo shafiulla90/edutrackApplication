@@ -88,7 +88,21 @@ export default function SchoolStaffPage() {
   const [search, setSearch] = useState('');
   const [deptFilter, setDeptFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
-  const [selectedPayrollMonth, setSelectedPayrollMonth] = useState('Jun 2026');
+
+  // Generate dynamic payroll months: current month going back 24 months
+  const generatePayrollMonths = (): string[] => {
+    const months: string[] = [];
+    const now = new Date();
+    for (let i = 0; i < 24; i++) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const label = d.toLocaleString('en-IN', { month: 'short', year: 'numeric' });
+      months.push(label);
+    }
+    return months;
+  };
+  const payrollMonths = generatePayrollMonths();
+  const currentMonthLabel = payrollMonths[0];
+  const [selectedPayrollMonth, setSelectedPayrollMonth] = useState(currentMonthLabel);
 
   const [showAddModal, setShowAddModal] = useState(false);
   const [selectedStaff, setSelectedStaff] = useState<StaffMember | null>(null);
@@ -666,8 +680,10 @@ export default function SchoolStaffPage() {
                 value={selectedPayrollMonth}
                 onChange={e => setSelectedPayrollMonth(e.target.value)}
                 className="border border-slate-200 rounded-lg px-3 py-1.5 text-xs outline-none bg-white"
+                style={{ maxHeight: '200px', overflowY: 'auto' }}
+                size={1}
               >
-                {['Jun 2026','May 2026','Apr 2026','Mar 2026'].map(m => <option key={m}>{m}</option>)}
+                {payrollMonths.map(m => <option key={m} value={m}>{m}</option>)}
               </select>
             </div>
           </div>
