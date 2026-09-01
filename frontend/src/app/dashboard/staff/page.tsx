@@ -206,7 +206,14 @@ export default function SchoolStaffPage() {
           hra: Number(t.allowances) || 0,
           da: 0,
           pf: Number(t.pfDeduction) || 0,
-          joiningDate: t.joiningDate ? new Date(t.joiningDate).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+          joiningDate: (() => {
+            try {
+              const d = t.joiningDate ? new Date(t.joiningDate) : new Date();
+              return isNaN(d.getTime()) ? new Date().toISOString().split('T')[0] : d.toISOString().split('T')[0];
+            } catch {
+              return new Date().toISOString().split('T')[0];
+            }
+          })(),
           qualification: t.qualification || '',
           gender: 'General',
           dob: '',

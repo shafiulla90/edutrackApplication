@@ -132,26 +132,36 @@ export class TimetableService {
 
   // PERIOD TIMINGS
   async getPeriodTimings(tenantId: string) {
+    const defaultTimings = [
+      { id: 'pt-1', num: 1, periodNumber: 1, label: 'Period 1', startTime: '09:00 AM', endTime: '09:45 AM', timeLabel: '09:00 AM – 09:45 AM' },
+      { id: 'pt-2', num: 2, periodNumber: 2, label: 'Period 2', startTime: '09:45 AM', endTime: '10:30 AM', timeLabel: '09:45 AM – 10:30 AM' },
+      { id: 'pt-3', num: 3, periodNumber: 3, label: 'Period 3', startTime: '10:45 AM', endTime: '11:30 AM', timeLabel: '10:45 AM – 11:30 AM' },
+      { id: 'pt-4', num: 4, periodNumber: 4, label: 'Period 4', startTime: '11:30 AM', endTime: '12:15 PM', timeLabel: '11:30 AM – 12:15 PM' },
+    ];
+
     if (process.env.DB_PROVIDER === 'firebase') {
       try {
         const db = this.firebase?.getFirestore();
-        if (!db) return [];
-        const snap = await db.collection('tenants').doc(tenantId).collection('periodTimings').orderBy('periodNumber', 'asc').get();
-        return snap.docs.map((doc) => {
+        if (!db) return defaultTimings;
+        const snap = await db.collection('tenants').doc(tenantId).collection('periodTimings').get().catch(() => null);
+        if (!snap || snap.empty) return defaultTimings;
+        const list = snap.docs.map((doc) => {
           const pt: any = { id: doc.id, ...doc.data() };
           return {
             id: pt.id,
-            num: pt.periodNumber,
-            periodNumber: pt.periodNumber,
-            label: `Period ${pt.periodNumber}`,
-            startTime: pt.startTime,
-            endTime: pt.endTime,
-            timeLabel: `${pt.startTime}${pt.endTime ? ' – ' + pt.endTime : ''}`,
+            num: pt.periodNumber || 1,
+            periodNumber: pt.periodNumber || 1,
+            label: `Period ${pt.periodNumber || 1}`,
+            startTime: pt.startTime || '09:00 AM',
+            endTime: pt.endTime || '09:45 AM',
+            timeLabel: `${pt.startTime || '09:00 AM'}${pt.endTime ? ' – ' + pt.endTime : ''}`,
           };
         });
+        list.sort((a, b) => (a.num || 0) - (b.num || 0));
+        return list.length > 0 ? list : defaultTimings;
       } catch (err) {
         console.error('Firebase getPeriodTimings error:', err);
-        return [];
+        return defaultTimings;
       }
     }
     const list = await this.prisma.periodTiming.findMany({
