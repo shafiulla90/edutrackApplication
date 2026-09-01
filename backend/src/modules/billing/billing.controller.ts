@@ -144,4 +144,25 @@ export class BillingController {
     const tenantId = getTenantIdFromReq(req);
     return this.billingService.getFinancialCommandCenter(tenantId, query);
   }
+
+  @Get('students/search')
+  @ApiOperation({ summary: 'Search students for billing' })
+  async searchStudents(@Query('searchTerm') searchTerm: string, @Request() req: any) {
+    const tenantId = getTenantIdFromReq(req);
+    return this.billingService.searchStudentsForBilling(searchTerm, tenantId);
+  }
+
+  @Get('students/:id')
+  @ApiOperation({ summary: 'Get student billing profile' })
+  async getStudentProfile(@Param('id') id: string, @Request() req: any) {
+    const tenantId = getTenantIdFromReq(req);
+    return this.billingService.getStudentBillingProfile(id, tenantId);
+  }
+
+  @Get('unpaid-fees/:oppId')
+  @ApiOperation({ summary: 'Get unpaid fee line items for opportunity' })
+  async getUnpaidFees(@Param('oppId') oppId: string, @Request() req: any) {
+    const tenantId = getTenantIdFromReq(req);
+    return this.billingService.getUnpaidFeesForOpportunity(oppId, tenantId);
+  }
 }
