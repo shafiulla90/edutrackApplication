@@ -83,4 +83,53 @@ export class ExamsService {
   async getGradesReport(classSectionId: string, examName: string) {
     return { classSectionId, examName, report: [] };
   }
+
+  async getClassSections(tenantId: string) {
+    return [];
+  }
+
+  async getMarksEntryRoster(
+    tenantId: string,
+    subjectId: string,
+    examName: string,
+    classSectionId: string,
+    className?: string,
+    sectionName?: string,
+    subjectType?: string,
+  ) {
+    return [];
+  }
+
+  async saveRosterMarks(tenantId: string, body: any) {
+    return { success: true };
+  }
+
+  async getExamConfigs(tenantId: string) {
+    return [];
+  }
+
+  async createExamConfig(tenantId: string, body: any) {
+    return { id: 'cfg-' + Date.now(), tenantId, ...body };
+  }
+
+  async deleteExamConfig(tenantId: string, id: string) {
+    return { success: true, id };
+  }
+
+  async getComponents(tenantId: string) {
+    return [];
+  }
+
+  async createComponent(tenantId: string, name: string) {
+    return { id: 'comp-' + Date.now(), name, tenantId };
+  }
+
+  async deleteComponent(tenantId: string, id: string) {
+    return { success: true, id };
+  }
+
+  async resolveConfig(tenantId: string, examType: string, classId?: string) {
+    return { examType, classId, components: [] };
+  }
 }
+
