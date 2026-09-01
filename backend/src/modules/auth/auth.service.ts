@@ -139,6 +139,9 @@ export class AuthService {
     console.log(`[EduTrack Auth] REAL-TIME OTP FOR REGISTERED USER (${cleanedPhone}): ${generatedOtp}`);
     console.log(`==========================================\n`);
 
+    // Dispatch real SMS via configured Gateway (Fast2SMS / 2Factor / Twilio / Msg91)
+    await this.dispatchRealSms(cleanedPhone, generatedOtp);
+
     return {
       success: true,
       registered: true,
@@ -146,9 +149,71 @@ export class AuthService {
       logoUrl: primaryTenant.logoUrl || null,
       message: 'OTP sent successfully to registered mobile number',
       phone: cleanedPhone,
-      code: generatedOtp,
+      code: process.env.HIDE_OTP_CODE_IN_RESPONSE === 'true' ? undefined : generatedOtp,
       tenantId: primaryTenant.id,
     };
+  }
+
+  private async dispatchRealSms(phone: string, otp: string): Promise<void> {
+    const cleanNoCountry = phone.replace(/\D/g, '').slice(-10);
+    
+    // 1. Fast2SMS Integration (Popular & Easy in India)
+    const fast2smsKey = process.env.FAST2SMS_API_KEY;
+    if (fast2smsKey) {
+      try {
+        const url = `https://www.fast2sms.com/dev/bulkV2?authorization=${encodeURIComponent(fast2smsKey)}&route=otp&variables_values=${encodeURIComponent(otp)}&flash=0&numbers=${encodeURIComponent(cleanNoCountry)}`;
+        const res = await fetch(url);
+        const data = await res.json();
+        console.log('[SMS Gateway] Fast2SMS response:', data);
+        return;
+      } catch (err) {
+        console.error('[SMS Gateway] Fast2SMS dispatch failed:', err);
+      }
+    }
+
+    // 2. 2Factor.in Integration
+    const twoFactorKey = process.env.TWOFACTOR_API_KEY;
+    if (twoFactorKey) {
+      try {
+        const url = `https://2factor.in/API/V1/${encodeURIComponent(twoFactorKey)}/SMS/${encodeURIComponent(cleanNoCountry)}/${encodeURIComponent(otp)}/AUTOGEN`;
+        const res = await fetch(url);
+        const data = await res.json();
+        console.log('[SMS Gateway] 2Factor response:', data);
+        return;
+      } catch (err) {
+        console.error('[SMS Gateway] 2Factor dispatch failed:', err);
+      }
+    }
+
+    // 3. Twilio Integration
+    const twilioSid = process.env.TWILIO_ACCOUNT_SID;
+    const twilioAuth = process.env.TWILIO_AUTH_TOKEN;
+    const twilioFrom = process.env.TWILIO_PHONE_NUMBER;
+    if (twilioSid && twilioAuth && twilioFrom) {
+      try {
+        const authHeader = 'Basic ' + Buffer.from(`${twilioSid}:${twilioAuth}`).toString('base64');
+        const body = new URLSearchParams({
+          To: phone.startsWith('+') ? phone : `+91${cleanNoCountry}`,
+          From: twilioFrom,
+          Body: `Your EduTrack SaaS verification OTP code is ${otp}. Valid for 5 minutes.`,
+        });
+        const res = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${twilioSid}/Messages.json`, {
+          method: 'POST',
+          headers: {
+            'Authorization': authHeader,
+            'Content-Type': 'application/x-www-form-urlencoded',
+          },
+          body: body.toString(),
+        });
+        const data = await res.json();
+        console.log('[SMS Gateway] Twilio response:', data);
+        return;
+      } catch (err) {
+        console.error('[SMS Gateway] Twilio dispatch failed:', err);
+      }
+    }
+
+    console.log(`[SMS Gateway] No SMS Gateway API key set in environment variables (FAST2SMS_API_KEY / TWOFACTOR_API_KEY / TWILIO_ACCOUNT_SID). Logged OTP locally.`);
   }
 
   async verifyOtp(phone: string, otp?: string, idToken?: string, portal?: string) {
