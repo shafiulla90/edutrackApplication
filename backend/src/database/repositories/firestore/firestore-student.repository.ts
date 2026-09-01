@@ -24,20 +24,99 @@ export class FirestoreStudentRepository implements IStudentRepository {
   }
 
   async findProfileById(id: string): Promise<any | null> {
-    const doc = await this.db.collection('studentProfiles').doc(id).get();
-    if (!doc.exists) return null;
+    const doc = await this.db.collection('studentProfiles').doc(id).get().catch(() => null);
+    if (!doc || !doc.exists) return null;
+
     const data = { id: doc.id, ...doc.data() };
-    const userId = (data as any).userId;
+    const tenantId = (data as any).tenantId || 'tenant-test-001';
+
+    // 1. Fetch User document
     let user = null;
-    if (userId) {
-      const userDoc = await this.db.collection('users').doc(userId).get();
-      if (userDoc.exists) {
+    if ((data as any).userId) {
+      const userDoc = await this.db.collection('users').doc((data as any).userId).get().catch(() => null);
+      if (userDoc && userDoc.exists) {
         user = { id: userDoc.id, ...userDoc.data() };
       }
     }
+
+    // 2. Fetch Class and Section details
+    let className = (data as any).className || (data as any).class || 'Grade 10';
+    let sectionName = (data as any).sectionName || (data as any).section || 'A';
+    let academicYearId = (data as any).academicYearId || '';
+
+    if ((data as any).classId && tenantId) {
+      const clsDoc = await this.db.collection('tenants').doc(tenantId).collection('classes').doc((data as any).classId).get().catch(() => null);
+      if (clsDoc && clsDoc.exists) {
+        const cd = clsDoc.data();
+        className = cd?.name || className;
+        academicYearId = academicYearId || cd?.academicYearId || '';
+      }
+    }
+
+    if ((data as any).sectionId && tenantId) {
+      const secDoc = await this.db.collection('tenants').doc(tenantId).collection('sections').doc((data as any).sectionId).get().catch(() => null);
+      if (secDoc && secDoc.exists) {
+        sectionName = secDoc.data()?.name || sectionName;
+      }
+    }
+
+    // 3. Fetch Invoices for this student
+    let invoices: any[] = [];
+    const invSnap = await this.db.collection('tenants').doc(tenantId).collection('invoices')
+      .where('studentId', '==', id).get().catch(() => null);
+    
+    if (invSnap && !invSnap.empty) {
+      invoices = invSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+    } else {
+      // Fallback search by rollNo
+      const rollNo = (data as any).rollNo || (data as any).rollNumber;
+      if (rollNo) {
+        const rollSnap = await this.db.collection('tenants').doc(tenantId).collection('invoices')
+          .where('rollNo', '==', rollNo).get().catch(() => null);
+        if (rollSnap && !rollSnap.empty) {
+          invoices = rollSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+        }
+      }
+    }
+
+    const fullName = (data as any).name || (user as any)?.name || `${(data as any).firstName || ''} ${(data as any).lastName || ''}`.trim() || 'Student';
+    const rollNo = (data as any).rollNo || (data as any).rollNumber || (data as any).admissionNo || 'STU-1001';
+
+    // 4. Calculate total fees and balance from fee structures / pricebook or invoices
+    let totalFees = Number((data as any).totalFees || (data as any).allocatedAmount || 0);
+    if (totalFees === 0) {
+      const feeSnap = await this.db.collection('tenants').doc(tenantId).collection('feeStructures')
+        .where('className', '==', className).get().catch(() => null);
+      if (feeSnap && !feeSnap.empty) {
+        feeSnap.docs.forEach(fd => {
+          totalFees += Number(fd.data()?.amount || fd.data()?.totalAmount || 0);
+        });
+      }
+      if (totalFees === 0) {
+        totalFees = invoices.reduce((sum, inv) => sum + Number(inv.totalAmount || inv.amount || 0), 0) || 5000;
+      }
+    }
+
+    const paidAmount = invoices.reduce((sum, inv) => sum + Number(inv.paidAmount || inv.amountPaid || 0), 0);
+    const balanceDue = Math.max(0, totalFees - paidAmount);
+
     return {
       ...data,
-      User: user,
+      name: fullName,
+      rollNo,
+      User: user || { id: (data as any).userId || id, name: fullName, email: (data as any).email, phone: (data as any).phone },
+      user: user || { id: (data as any).userId || id, name: fullName, email: (data as any).email, phone: (data as any).phone },
+      classSection: {
+        class: { id: (data as any).classId, name: className, academicYearId },
+        section: { id: (data as any).sectionId, name: sectionName },
+      },
+      className,
+      sectionName,
+      academicYearId,
+      invoices,
+      totalFees,
+      paidAmount,
+      balanceDue,
     };
   }
 

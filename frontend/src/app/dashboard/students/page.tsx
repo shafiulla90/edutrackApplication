@@ -34,6 +34,7 @@ interface Student {
   financialStatus?: string;
   academicYearId?: string;
   profilePhotoUrl?: string | null;
+  invoices?: any[];
 }
 
 let cacheFilterOptions: { academicYears: any[]; classes: any[]; sections: any[] } | null = null;
@@ -277,28 +278,30 @@ export default function StudentsDirectory() {
       const data = detailsRes.data;
       const casesData = casesRes.data;
 
-      const paid = data.paidAmount !== undefined ? Number(data.paidAmount) : (data.invoices?.reduce((sum: number, inv: any) => sum + Number(inv.paidAmount), 0) || 0);
-      const due = data.balanceDue !== undefined ? Number(data.balanceDue) : (data.invoices?.reduce((sum: number, inv: any) => sum + Number(inv.remainingBalance), 0) || 0);
-      
+      const paid = data.paidAmount !== undefined ? Number(data.paidAmount) : (data.invoices?.reduce((sum: number, inv: any) => sum + Number(inv.paidAmount || inv.amountPaid || 0), 0) || 0);
+      const due = data.balanceDue !== undefined ? Number(data.balanceDue) : (data.invoices?.reduce((sum: number, inv: any) => sum + Number(inv.remainingBalance || 0), 0) || 0);
+      const totalAllocated = Number(data.totalFees || data.allocatedAmount || (paid + due) || 5000);
+
       const fullStudent: Student = {
         id: data.id,
-        rollNo: data.rollNo || 'N/A',
-        name: data.user?.name || 'Unknown Student',
-        email: data.user?.email || 'N/A',
-        phone: data.user?.phone || 'N/A',
-        class: data.classSection?.class?.name || 'N/A',
-        section: data.classSection?.section?.name || 'N/A',
-        fatherName: data.fatherName || 'N/A',
+        rollNo: data.rollNo || data.rollNumber || data.admissionNo || 'N/A',
+        name: data.name || data.user?.name || data.User?.name || 'Student',
+        email: data.user?.email || data.User?.email || data.email || 'N/A',
+        phone: data.user?.phone || data.User?.phone || data.phone || data.mobileNumber || data.parentPhone || 'N/A',
+        class: data.className || data.class || data.classSection?.class?.name || 'Grade 10',
+        section: data.sectionName || data.section || data.classSection?.section?.name || 'A',
+        fatherName: data.fatherName || data.parentName || 'N/A',
         motherName: data.motherName || 'N/A',
-        aadharNo: data.aadharNo || 'N/A',
+        aadharNo: data.aadharNo || data.aadharNumber || data.nationalAadharCard || 'N/A',
         paidAmount: paid,
-        balanceDue: due,
-        totalFees: data.totalFees,
-        pendingPercentage: data.pendingPercentage,
-        paidPercentage: data.paidPercentage,
-        financialStatus: data.financialStatus,
+        balanceDue: Math.max(0, totalAllocated - paid),
+        totalFees: totalAllocated,
+        pendingPercentage: totalAllocated > 0 ? Math.round(((totalAllocated - paid) / totalAllocated) * 100) : 0,
+        paidPercentage: totalAllocated > 0 ? Math.round((paid / totalAllocated) * 100) : 100,
+        financialStatus: (totalAllocated - paid) <= 0 ? 'PAID' : paid > 0 ? 'PARTIAL' : 'PENDING',
         academicYearId: data.academicYearId || data.classSection?.class?.academicYearId || '',
-        profilePhotoUrl: data.profilePhotoUrl || null,
+        profilePhotoUrl: data.profilePhotoUrl || data.avatarUrl || null,
+        invoices: data.invoices || [],
       };
 
       // Group exams

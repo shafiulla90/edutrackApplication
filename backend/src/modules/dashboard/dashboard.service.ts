@@ -35,16 +35,32 @@ export class DashboardService {
     const { totalRevenue, recentPayments } = invoiceRes;
 
     // Format recent admissions
-    const recentAdmissions = students.slice(0, 10).map((s: any) => ({
-      id: s.id,
-      name: s.name || s.user?.name || 'Student',
-      rollNo: s.rollNo || 'N/A',
-      className: s.className || s.classSection?.class?.name || 'Grade 1',
-      sectionName: s.sectionName || s.classSection?.section?.name || 'Section A',
-      joiningDate: s.createdAt || new Date().toISOString().split('T')[0],
-      phone: s.user?.phone || s.phone || s.parentPhone || 'N/A',
-      status: s.status || 'Active',
-    }));
+    const formatDate = (isoStr: string) => {
+      if (!isoStr) return 'N/A';
+      try {
+        const d = new Date(isoStr);
+        if (isNaN(d.getTime())) return isoStr;
+        return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+      } catch {
+        return isoStr;
+      }
+    };
+
+    const recentAdmissions = students.slice(0, 10).map((s: any) => {
+      const clsName = s.className || s.class || s.classSection?.class?.name || 'Grade 10';
+      const secName = s.sectionName || s.section || s.classSection?.section?.name || 'A';
+      return {
+        id: s.id,
+        name: s.name || s.user?.name || 'Student',
+        rollNo: s.rollNo || s.admissionNo || 'N/A',
+        class: `${clsName}${secName ? ` - ${secName}` : ''}`,
+        className: clsName,
+        sectionName: secName,
+        joiningDate: formatDate(s.createdAt || s.joiningDate || new Date().toISOString()),
+        phone: s.user?.phone || s.phone || s.parentPhone || 'N/A',
+        status: s.status || 'Active',
+      };
+    });
 
     return {
       success: true,
@@ -82,26 +98,63 @@ export class DashboardService {
     let totalRevenue = 0;
     let recentPayments: any[] = [];
 
+    const formatDate = (isoStr: string) => {
+      if (!isoStr) return 'N/A';
+      try {
+        const d = new Date(isoStr);
+        if (isNaN(d.getTime())) return isoStr;
+        return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+      } catch {
+        return isoStr;
+      }
+    };
+
     if (this.firebase) {
       const db = this.firebase.getFirestore();
       try {
-        const invSnap = await db.collection('tenants').doc(tid).collection('invoices').get();
-        invSnap.docs.forEach((doc) => {
-          const d = doc.data();
-          const paid = Number(d.paidAmount || d.amountPaid || 0);
-          totalRevenue += paid;
-          if (paid > 0) {
-            recentPayments.push({
-              id: doc.id,
-              studentName: d.studentName || d.name || 'Student',
-              rollNo: d.rollNo || d.studentRollNo || 'N/A',
-              amount: paid,
-              date: d.paymentDate || d.createdAt || new Date().toISOString(),
-              paymentMethod: d.paymentMethod || 'UPI / Cash',
-              status: 'COMPLETED',
-            });
-          }
-        });
+        const invSnap = await db.collection('tenants').doc(tid).collection('invoices').get().catch(() => null);
+        if (invSnap && !invSnap.empty) {
+          invSnap.docs.forEach((doc) => {
+            const d = doc.data();
+            const paid = Number(d.paidAmount || d.amountPaid || 0);
+            totalRevenue += paid;
+            if (paid > 0) {
+              const studentName = d.studentName || d.name || 'Fee Payment';
+              recentPayments.push({
+                id: doc.id,
+                type: 'Fee Payment',
+                name: studentName,
+                studentName,
+                rollNo: d.rollNo || d.studentRollNo || 'N/A',
+                amount: paid,
+                date: formatDate(d.paymentDate || d.createdAt || new Date().toISOString()),
+                paymentMethod: d.paymentMethod || 'UPI / Cash',
+                status: 'COMPLETED',
+              });
+            }
+          });
+        }
+
+        // Also fetch expenses for transactions
+        const expSnap = await db.collection('tenants').doc(tid).collection('expenses').get().catch(() => null);
+        if (expSnap && !expSnap.empty) {
+          expSnap.docs.forEach((doc) => {
+            const d = doc.data();
+            const amt = Number(d.amount || 0);
+            if (amt > 0) {
+              recentPayments.push({
+                id: doc.id,
+                type: 'Expense',
+                name: d.title || d.category || 'School Expense',
+                amount: amt,
+                date: formatDate(d.date || d.createdAt || new Date().toISOString()),
+                paymentMethod: d.paymentMethod || 'Cash / Bank',
+                status: 'COMPLETED',
+              });
+            }
+          });
+        }
+
         recentPayments.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
         return {
           totalRevenue,

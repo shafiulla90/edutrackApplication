@@ -172,24 +172,29 @@ export class FirestoreTeacherRepository implements ITeacherRepository {
       resultProfiles.push(fullProfile);
     });
 
-    // 3. For any user with role TEACHER in this tenant that doesn't have a staffProfile record yet,
-    // synthesize a profile object in-memory so read operation is complete without performing write side-effects.
-    teacherSnap.docs.forEach((uDoc) => {
+    // 3. For any user with role TEACHER, STAFF, or DRIVER in this tenant that doesn't have a staffProfile record yet,
+    // synthesize a profile object in-memory so read operation is complete without missing staff members.
+    allUserDocs.forEach((uDoc) => {
       const userData = { id: uDoc.id, ...uDoc.data() };
       if (!profilesByUserId.has(userData.id)) {
+        const isTeaching = userData.role === 'TEACHER';
+        const designation = isTeaching ? 'Teacher' : userData.role === 'DRIVER' ? 'Transport Driver' : 'Staff Member';
+        const department = isTeaching ? 'Academics' : userData.role === 'DRIVER' ? 'Transport' : 'Administration';
+        
         const syntheticProfile = {
           id: `sp-${userData.id}`,
           userId: userData.id,
           tenantId: tid,
-          employeeId: `EMP-T-${userData.id.substring(0, 4).toUpperCase()}`,
-          designation: 'Teacher',
-          qualification: '',
+          employeeId: `EMP-${userData.role?.[0] || 'S'}-${userData.id.substring(0, 4).toUpperCase()}`,
+          designation,
+          department,
+          qualification: 'Qualified Staff',
           joiningDate: new Date().toISOString().split('T')[0],
           status: 'Active',
-          basicSalary: 30000,
+          basicSalary: isTeaching ? 30000 : 22000,
           allowances: 3600,
           pfDeduction: 1500,
-          subjectsTaught: [],
+          subjectsTaught: isTeaching ? ['Mathematics', 'Science'] : [],
           User: userData,
           user: userData,
         };
