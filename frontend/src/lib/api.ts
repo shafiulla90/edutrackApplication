@@ -16,8 +16,10 @@ export function getActiveRole(): 'TEACHER' | 'SCHOOL_ADMIN' | 'PARENT' | 'DRIVER
   if (!role) {
     if (localStorage.getItem('parent_token')) {
       role = 'PARENT';
-    } else if (localStorage.getItem('teacher_token') && !localStorage.getItem('admin_token')) {
+    } else if (localStorage.getItem('teacher_token')) {
       role = 'TEACHER';
+    } else if (localStorage.getItem('admin_token')) {
+      role = 'SCHOOL_ADMIN';
     } else {
       role = 'SCHOOL_ADMIN';
     }
@@ -29,25 +31,28 @@ export function getActiveRole(): 'TEACHER' | 'SCHOOL_ADMIN' | 'PARENT' | 'DRIVER
 export function getStoredToken(): string | null {
   if (typeof window === 'undefined') return null;
   const role = getActiveRole();
-  if (role === 'PARENT') return localStorage.getItem('parent_token');
-  if (role === 'TEACHER' || role === 'DRIVER') return localStorage.getItem('teacher_token');
-  return localStorage.getItem('admin_token');
+  if (role === 'PARENT' && localStorage.getItem('parent_token')) return localStorage.getItem('parent_token');
+  if ((role === 'TEACHER' || role === 'DRIVER') && localStorage.getItem('teacher_token')) return localStorage.getItem('teacher_token');
+  if (role === 'SCHOOL_ADMIN' && localStorage.getItem('admin_token')) return localStorage.getItem('admin_token');
+  return localStorage.getItem('admin_token') || localStorage.getItem('teacher_token') || localStorage.getItem('parent_token') || null;
 }
 
 export function getStoredTenantId(): string | null {
   if (typeof window === 'undefined') return null;
   const role = getActiveRole();
-  if (role === 'PARENT') return localStorage.getItem('parent_tenantId');
-  if (role === 'TEACHER' || role === 'DRIVER') return localStorage.getItem('teacher_tenantId');
-  return localStorage.getItem('admin_tenantId');
+  if (role === 'PARENT' && localStorage.getItem('parent_tenantId')) return localStorage.getItem('parent_tenantId');
+  if ((role === 'TEACHER' || role === 'DRIVER') && localStorage.getItem('teacher_tenantId')) return localStorage.getItem('teacher_tenantId');
+  if (role === 'SCHOOL_ADMIN' && localStorage.getItem('admin_tenantId')) return localStorage.getItem('admin_tenantId');
+  return localStorage.getItem('admin_tenantId') || localStorage.getItem('teacher_tenantId') || localStorage.getItem('parent_tenantId') || null;
 }
 
 export function getStoredUserPhone(): string | null {
   if (typeof window === 'undefined') return null;
   const role = getActiveRole();
-  if (role === 'PARENT') return localStorage.getItem('parent_userPhone');
-  if (role === 'TEACHER' || role === 'DRIVER') return localStorage.getItem('teacher_userPhone');
-  return localStorage.getItem('admin_userPhone');
+  if (role === 'PARENT' && localStorage.getItem('parent_userPhone')) return localStorage.getItem('parent_userPhone');
+  if ((role === 'TEACHER' || role === 'DRIVER') && localStorage.getItem('teacher_userPhone')) return localStorage.getItem('teacher_userPhone');
+  if (role === 'SCHOOL_ADMIN' && localStorage.getItem('admin_userPhone')) return localStorage.getItem('admin_userPhone');
+  return localStorage.getItem('admin_userPhone') || localStorage.getItem('teacher_userPhone') || localStorage.getItem('parent_userPhone') || null;
 }
 
 export function clearStoredAuth() {

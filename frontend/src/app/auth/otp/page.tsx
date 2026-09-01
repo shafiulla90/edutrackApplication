@@ -23,10 +23,13 @@ function OtpContent() {
 
 
 
+  const [demoCode, setDemoCode] = useState('');
+
   useEffect(() => {
     if (typeof window !== 'undefined') {
       setSchoolName(sessionStorage.getItem('otp_schoolName') || searchParams.get('schoolName') || '');
       setLogoUrl(sessionStorage.getItem('otp_logoUrl') || searchParams.get('logoUrl') || '');
+      setDemoCode(sessionStorage.getItem('otp_demo_code') || '');
     }
   }, [searchParams]);
 
@@ -193,7 +196,11 @@ function OtpContent() {
     setLoading(true);
     try {
       // Call backend to resend OTP (backend sends the real SMS)
-      await api.post('/auth/send-otp', { phone, portal });
+      const res = await api.post('/auth/send-otp', { phone, portal });
+      if (res.data?.code) {
+        sessionStorage.setItem('otp_demo_code', res.data.code);
+        setDemoCode(res.data.code);
+      }
 
       // Reset confirmation result for backend-only verification
       setConfirmationResult({
@@ -262,6 +269,11 @@ function OtpContent() {
             <p className="text-slate-400 text-sm mt-1.5 font-light">
               We sent a 6-digit OTP code to <span className="text-slate-200 font-normal">{phone}</span>.
             </p>
+            {demoCode && (
+              <div className="mt-3 inline-flex items-center gap-2 px-3 py-1.5 bg-indigo-500/10 border border-indigo-500/30 rounded-full text-indigo-300 text-xs font-mono font-semibold animate-pulse">
+                <span>OTP Code: <strong className="text-white text-sm tracking-widest">{demoCode}</strong></span>
+              </div>
+            )}
           </div>
 
           {error && (

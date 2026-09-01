@@ -175,6 +175,11 @@ if (isSchoolSubdomain) {
 
       sessionStorage.setItem('otp_schoolName', schoolName);
       sessionStorage.setItem('otp_logoUrl', logoUrl);
+      if (data?.code) {
+        sessionStorage.setItem('otp_demo_code', data.code);
+      } else {
+        sessionStorage.removeItem('otp_demo_code');
+      }
 
       // Backend already sent the SMS OTP via Twilio/Firebase Admin SDK.
       // Set a backend-only confirmation result — no Firebase client phone auth needed.
