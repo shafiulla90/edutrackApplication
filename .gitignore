@@ -30,6 +30,8 @@ firebase-service-account.json
 edutrack-firebase-key.json
 scratch/
 
-# System files
+# System & Build files
 .DS_Store
 Thumbs.db
+*.tsbuildinfo
+
