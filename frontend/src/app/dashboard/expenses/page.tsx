@@ -70,16 +70,23 @@ export default function ExpensesPage() {
         api.get('/expenses'),
         api.get('/expenses/summary')
       ]);
-      setExpenses(expRes.data.map((e: any) => ({
+      setExpenses((expRes.data || []).map((e: any) => ({
         id: e.id,
-        category: e.category,
-        amount: Number(e.amount),
-        date: new Date(e.date).toISOString().split('T')[0],
-        status: e.status,
-        paymentMode: e.paymentMode,
+        category: e.category || 'Other',
+        amount: Number(e.amount) || 0,
+        date: (() => {
+          try {
+            const d = e.date ? new Date(e.date) : new Date();
+            return isNaN(d.getTime()) ? new Date().toISOString().split('T')[0] : d.toISOString().split('T')[0];
+          } catch {
+            return new Date().toISOString().split('T')[0];
+          }
+        })(),
+        status: e.status || 'PENDING',
+        paymentMode: e.paymentMode || 'Cash',
         description: e.description || ''
       })));
-      setSummary(sumRes.data);
+      setSummary(sumRes.data || { currentMonth: 0, prevMonth: 0, yearly: 0 });
     } catch (err) {
       console.error('Failed to load expenses:', err);
     } finally {
