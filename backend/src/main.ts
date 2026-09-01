@@ -27,14 +27,12 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
-  // Enable CORS for frontend Vercel & local development
   app.enableCors({
-    origin: (origin, callback) => {
-      // Allow requests with no origin (mobile apps, curl, server-to-server) or matching localhost/vercel
-      if (!origin || origin.includes('localhost') || origin.includes('vercel.app') || (process.env.FRONTEND_URL && origin.includes(process.env.FRONTEND_URL))) {
-        callback(null, true);
+    origin: (origin: string | undefined, callback: (err: Error | null, allow?: any) => void) => {
+      if (origin) {
+        callback(null, origin);
       } else {
-        callback(null, true); // Permissive CORS for deployed client
+        callback(null, true);
       }
     },
     credentials: true,
