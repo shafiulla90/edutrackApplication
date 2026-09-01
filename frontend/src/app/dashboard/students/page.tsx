@@ -638,7 +638,8 @@ export default function StudentsDirectory() {
                     filteredStudents.map((student) => {
                       const paidAmount = Number(student.paidAmount || 0);
                       const balanceDue = Number(student.balanceDue || 0);
-                      const totalFees = Number(student.totalFees || student.totalAmount || (paidAmount + balanceDue));
+                      const totalFees = Number(student.totalFees || (student as any).totalAmount || (paidAmount + balanceDue));
+
 
                       let paidPct = 0;
                       if (totalFees > 0) {
