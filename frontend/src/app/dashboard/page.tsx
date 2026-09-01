@@ -457,7 +457,7 @@ function AdminDashboardOverview() {
                           </div>
                         </td>
                         <td className="px-4 py-3 text-slate-500 font-mono">{adm.rollNo}</td>
-                        <td className="px-4 py-3 text-slate-500">{adm.class}</td>
+                        <td className="px-4 py-3 text-slate-500">{adm.class || adm.className || 'Grade 10'}</td>
                         <td className="px-4 py-3 text-slate-400 font-mono text-xs">{adm.joiningDate}</td>
                       </tr>
                     ))}
@@ -513,26 +513,30 @@ function AdminDashboardOverview() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 text-[13px] text-slate-600 font-medium">
-                    {displayPayments.map((pay) => (
-                      <tr key={pay.id} className="hover:bg-slate-50 transition-colors">
-                        <td className="px-4 py-3">
-                          <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded border uppercase ${
-                            pay.type === 'Fee Payment'
-                              ? 'bg-emerald-50 text-emerald-600 border-emerald-100'
-                              : 'bg-rose-50 text-rose-600 border-rose-100'
+                    {displayPayments.map((pay) => {
+                      const payType = pay.type || 'Fee Payment';
+                      const payName = pay.name || pay.studentName || pay.particulars || 'Fee Payment';
+                      return (
+                        <tr key={pay.id} className="hover:bg-slate-50 transition-colors">
+                          <td className="px-4 py-3">
+                            <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded border uppercase ${
+                              payType === 'Fee Payment'
+                                ? 'bg-emerald-50 text-emerald-600 border-emerald-100'
+                                : 'bg-rose-50 text-rose-600 border-rose-100'
+                            }`}>
+                              {payType}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-slate-800 truncate max-w-[150px]" title={payName}>{payName}</td>
+                          <td className={`px-4 py-3 font-bold font-mono text-right ${
+                            payType === 'Fee Payment' ? 'text-emerald-600' : 'text-rose-600'
                           }`}>
-                            {pay.type}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3 text-slate-800 truncate max-w-[150px]" title={pay.name}>{pay.name}</td>
-                        <td className={`px-4 py-3 font-bold font-mono text-right ${
-                          pay.type === 'Fee Payment' ? 'text-emerald-600' : 'text-rose-600'
-                        }`}>
-                          {pay.type === 'Fee Payment' ? '+' : '-'}{formatCurrency(pay.amount)}
-                        </td>
-                        <td className="px-4 py-3 text-slate-400 font-mono text-xs">{pay.date}</td>
-                      </tr>
-                    ))}
+                            {payType === 'Fee Payment' ? '+' : '-'}{formatCurrency(pay.amount)}
+                          </td>
+                          <td className="px-4 py-3 text-slate-400 font-mono text-xs">{pay.date}</td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               )}

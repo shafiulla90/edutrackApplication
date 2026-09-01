@@ -1,6 +1,7 @@
 import { Controller, Get, Post, Patch, Delete, Body, Param, Query, Request } from '@nestjs/common';
 import { BillingService } from './billing.service';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
+import { getTenantIdFromReq } from '../../common/utils/tenant.util';
 
 @ApiTags('Billing')
 @Controller('billing')
@@ -133,7 +134,14 @@ export class BillingController {
   @Get('options/sections')
   @ApiOperation({ summary: 'Get section options for admissions' })
   async getSectionsOptions(@Query('classId') classId: string, @Request() req: any) {
-    const tenantId = req?.user?.tenantId || 'tenant-test-001';
+    const tenantId = getTenantIdFromReq(req);
     return this.billingService.getSectionsOptions(classId, tenantId);
+  }
+
+  @Get('financial-command-center')
+  @ApiOperation({ summary: 'Get Financial Command Center analytics & metrics' })
+  async getFinancialCommandCenter(@Query() query: any, @Request() req: any) {
+    const tenantId = getTenantIdFromReq(req);
+    return this.billingService.getFinancialCommandCenter(tenantId, query);
   }
 }
