@@ -40,6 +40,9 @@ function normalizeUrl(url) {
     else if (path.startsWith('/api/index')) {
         path = path.substring(10);
     }
+    else if (path.startsWith('/api')) {
+        path = path.substring(4);
+    }
     if (!path || path === '')
         path = '/';
     if (!path.startsWith('/'))
@@ -47,6 +50,16 @@ function normalizeUrl(url) {
     return path + query;
 }
 async function handler(req, res) {
+    const origin = (req.headers && req.headers.origin) ? req.headers.origin : '*';
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, PUT, PATCH, POST, DELETE, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Accept, Authorization, X-Tenant-ID, X-Requested-With');
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+
+    if (req.method === 'OPTIONS') {
+        return res.status(200).end();
+    }
+
     try {
         await bootstrap();
         if (req.url) {
@@ -65,4 +78,3 @@ async function handler(req, res) {
 }
 module.exports = handler;
 module.exports.default = handler;
-//# sourceMappingURL=index.js.map
