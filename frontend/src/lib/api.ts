@@ -3,9 +3,12 @@ import axios from 'axios';
 // In production (Vercel): use the Next.js API proxy route /api/* which forwards to the backend.
 // In local dev: use NEXT_PUBLIC_API_URL env var, or fall back to localhost:3001 directly.
 const envApiUrl = process.env.NEXT_PUBLIC_API_URL;
-const BACKEND_URL = (envApiUrl && envApiUrl.startsWith('http') && !envApiUrl.includes('/backend') && !envApiUrl.includes('[SENSITIVE]'))
-  ? envApiUrl
-  : 'https://edutrack-backend-api-git-master-shafiulla90s-projects.vercel.app';
+const isBrowserVercel = typeof window !== 'undefined' && window.location.hostname.includes('vercel.app');
+const BACKEND_URL = isBrowserVercel
+  ? '/api'
+  : ((envApiUrl && envApiUrl.startsWith('http') && !envApiUrl.includes('/backend') && !envApiUrl.includes('[SENSITIVE]'))
+      ? envApiUrl
+      : 'https://edutrack-backend-api-git-master-shafiulla90s-projects.vercel.app');
 
 
 
