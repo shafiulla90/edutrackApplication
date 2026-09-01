@@ -269,11 +269,6 @@ function OtpContent() {
             <p className="text-slate-400 text-sm mt-1.5 font-light">
               We sent a 6-digit OTP code to <span className="text-slate-200 font-normal">{phone}</span>.
             </p>
-            {demoCode && (
-              <div className="mt-3 inline-flex items-center gap-2 px-3 py-1.5 bg-indigo-500/10 border border-indigo-500/30 rounded-full text-indigo-300 text-xs font-mono font-semibold animate-pulse">
-                <span>OTP Code: <strong className="text-white text-sm tracking-widest">{demoCode}</strong></span>
-              </div>
-            )}
           </div>
 
           {error && (
